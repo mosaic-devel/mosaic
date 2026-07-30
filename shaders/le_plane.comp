@@ -1,0 +1,118 @@
+#version 450
+
+// Coverage-PLANE ops for the layer-effects Vulkan lane (S60-e; render/layer_effects_gpu.cpp).
+// GPU mirror of the single-channel primitives the CPU reference lane runs over its effect ROI:
+// the field seeds in layer_effects_render.cpp (dilatedCov / its complement / the centre ramp) and
+// the two blurs in effect_primitives.cpp (`gaussianBlur`, `boxBlurApprox`). The CPU lane stays the
+// permanent reference; tests/test_layer_effects_gpu.cpp holds this shader to it.
+//
+// ⚠ THIS IS NOT blur_separable.comp, AND MUST NOT BECOME IT. That shader blurs PREMULTIPLIED RGBA
+// with a CLAMP edge policy, which is blur.cpp's content-edge convention. The effect blurs run on a
+// single-channel coverage plane with REFLECT-101 edges (effect_primitives.cpp's `reflect`), and the
+// large-radius regime is the 3-pass Kovesi box approximation, which that shader has no mode for.
+// The two disagree within one blur radius of the ROI border -- which is real geometry whenever the
+// layer's content reaches the buffer edge.
+//
+// DETERMINISM: a pure function of (push constants, tables, plane) -- no atomics, no shared memory,
+// no cross-invocation state. The box mode's running sum is per-LINE and lives entirely in one
+// invocation's registers, so it reproduces `boxPass`'s accumulation ORDER as well as its formula:
+// a data-parallel gather would have produced the same mathematical value by a different summation
+// and drifted from the reference along every long row.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer SrcPlane { float srcF[]; };
+layout(std430, binding = 1) writeonly buffer DstPlane { float dstF[]; };
+// The Gaussian half-kernel [0..r], baked host-side by layer_effects_gpu.cpp with the SAME
+// std::exp on the same floats effect_primitives.cpp tabulates -- so the table is bit-identical and
+// the only drift left is fused-multiply-add contraction. Unused by the seed and box modes.
+layout(std430, binding = 2) readonly buffer Kern { float kern[]; };
+
+layout(push_constant) uniform Push {
+    int w;        // ROI width, px
+    int h;        // ROI height, px
+    int mode;     // see the kMode* constants below
+    int dir;      // blur passes: 0 = along rows (x), 1 = along columns (y)
+    int r;        // blur passes: kernel support / box radius, taps
+    int kernOff;  // Gaussian: this pass's first weight in kern[]
+    float grow;   // seeds: the spread/choke dilation (px), signed
+    float inv;    // centre seed: 1 / max(1, size)
+} pc;
+
+// dilatedCov: shape coverage dilated by `grow` px from the signed distance (neg inside) -- a clean
+// 1px linear ramp at the shifted 0.5 contour.
+const int kSeedDilate = 0;      // dilatedCov(sd, grow)                     -- drop shadow / outer glow
+const int kSeedComplement = 1;  // 1 - dilatedCov(sd, grow)                 -- inner shadow / inner glow (Edge)
+const int kSeedCentre = 2;      // clamp((-sd - choke) * inv, 0, 1)         -- inner glow (Centre)
+const int kCopy = 3;            // dst = src                                -- satin blurs a copy of the alpha
+const int kGauss = 4;           // one separable Gaussian pass, reflect-101
+const int kBox = 5;             // one normalised box pass, clamp edges, running sum (per LINE)
+
+// effect_primitives.cpp's `reflect`: mirror without repeating the boundary sample. The CPU loops
+// until the index lands in range; a fixed bound serves identically here (each iteration folds the
+// excess back, so any |p| < a few n converges in one or two) and the trailing clamp guarantees a
+// legal index whatever the caller asked for.
+int reflect101(int p, int n) {
+    if (n == 1) return 0;
+    for (int it = 0; it < 32; ++it) {
+        if (p >= 0 && p < n) break;
+        if (p < 0) p = -p;
+        if (p >= n) p = 2 * (n - 1) - p;
+    }
+    return clamp(p, 0, n - 1);
+}
+
+void main() {
+    // The box mode dispatches one invocation per LINE (a row for dir 0, a column for dir 1) over a
+    // FLAT grid, so all 64 invocations of a workgroup carry a line; every other mode dispatches one
+    // invocation per pixel over the 2D grid. Hence the per-mode index derivation rather than one
+    // shared guard.
+    if (pc.mode == kBox) {
+        const int len = pc.dir == 0 ? pc.w : pc.h;
+        const int lines = pc.dir == 0 ? pc.h : pc.w;
+        const int l = int(gl_WorkGroupID.x) * 64 + int(gl_LocalInvocationIndex);
+        if (l >= lines || len == 0) return;
+        const int base = pc.dir == 0 ? l * pc.w : l;
+        const int stride = pc.dir == 0 ? 1 : pc.w;
+        // boxPass: seed the window with the clamped [-r, r] taps, then slide it. `r` is a push
+        // constant (dynamically uniform) and the caller never dispatches this with r <= 0.
+        const float norm = 1.0 / float(2 * pc.r + 1);
+        float acc = 0.0;
+        for (int k = -pc.r; k <= pc.r; ++k) acc += srcF[base + clamp(k, 0, len - 1) * stride];
+        dstF[base] = acc * norm;
+        for (int i = 1; i < len; ++i) {
+            acc += srcF[base + clamp(i + pc.r, 0, len - 1) * stride] -
+                   srcF[base + clamp(i - pc.r - 1, 0, len - 1) * stride];
+            dstF[base + i * stride] = acc * norm;
+        }
+        return;
+    }
+
+    const int x = int(gl_GlobalInvocationID.x);
+    const int y = int(gl_GlobalInvocationID.y);
+    if (x >= pc.w || y >= pc.h) return;
+    const int idx = y * pc.w + x;
+
+    if (pc.mode == kGauss) {
+        // gaussPass: centre tap, then symmetric pairs, edges mirrored. Single-level loop with a
+        // dynamically-uniform bound (the RADV/ACO rule blur_separable.comp states).
+        const int len = pc.dir == 0 ? pc.w : pc.h;
+        const int i = pc.dir == 0 ? x : y;
+        const int base = pc.dir == 0 ? y * pc.w : x;
+        const int stride = pc.dir == 0 ? 1 : pc.w;
+        float acc = srcF[base + i * stride] * kern[pc.kernOff];
+        for (int k = 1; k <= pc.r; ++k) {
+            const int lo = reflect101(i - k, len);
+            const int hi = reflect101(i + k, len);
+            acc += (srcF[base + lo * stride] + srcF[base + hi * stride]) * kern[pc.kernOff + k];
+        }
+        dstF[base + i * stride] = acc;
+        return;
+    }
+
+    const float sd = srcF[idx];
+    if (pc.mode == kSeedDilate) dstF[idx] = clamp(0.5 + pc.grow - sd, 0.0, 1.0);
+    else if (pc.mode == kSeedComplement) dstF[idx] = 1.0 - clamp(0.5 + pc.grow - sd, 0.0, 1.0);
+    else if (pc.mode == kSeedCentre) dstF[idx] = clamp((-sd - pc.grow) * pc.inv, 0.0, 1.0);
+    else dstF[idx] = sd;  // kCopy
+}

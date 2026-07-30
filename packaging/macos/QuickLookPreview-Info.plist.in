@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The Quick Look PREVIEW extension (space bar in Finder) -- the sibling of QuickLook-Info.plist.in.
+
+  Two bundles rather than one because NSExtensionPointIdentifier holds a single value: thumbnails
+  (com.apple.quicklook.thumbnail) and previews (com.apple.quicklook.preview) are separate extension
+  points, so each needs its own .appex. Both embed the SAME executable and differ only in the
+  principal class named here.
+
+  QLIsDataBasedPreview marks this a data-based provider -- the subclass returns a drawn reply rather
+  than presenting a view controller of its own, which is what QLPreviewProvider means.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Mosaic Quick Look Preview</string>
+    <key>CFBundleDisplayName</key>
+    <string>Mosaic Quick Look Preview</string>
+    <key>CFBundleIdentifier</key>
+    <string>org.mosaic.Mosaic.QuickLookPreview</string>
+    <key>CFBundleVersion</key>
+    <string>@MOSAIC_VERSION@</string>
+    <key>CFBundleShortVersionString</key>
+    <string>@MOSAIC_VERSION@</string>
+    <key>CFBundleExecutable</key>
+    <string>MosaicQuickLookPreview</string>
+    <key>CFBundlePackageType</key>
+    <string>XPC!</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.3</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Mosaic is free software under the GNU GPL v3.</string>
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.quicklook.preview</string>
+        <key>NSExtensionPrincipalClass</key>
+        <string>MosaicPreviewProvider</string>
+        <key>NSExtensionAttributes</key>
+        <dict>
+            <key>QLSupportedContentTypes</key>
+            <array>
+                <string>org.mosaic.document</string>
+            </array>
+            <key>QLIsDataBasedPreview</key>
+            <true/>
+        </dict>
+    </dict>
+</dict>
+</plist>

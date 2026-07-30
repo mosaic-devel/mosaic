@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The Quick Look thumbnail extension's bundle metadata (S58-e).
+
+  Three keys are load-bearing and each fails silently if wrong:
+    * CFBundleIdentifier MUST be prefixed by the host app's identifier, or LaunchServices refuses
+      to associate the extension with the app that ships it.
+    * CFBundlePackageType is XPC!, not APPL -- an extension is an XPC service, not an app.
+    * NSExtensionPrincipalClass must name the Objective-C class exactly as it is compiled
+      (MosaicThumbnailProvider, src/thumbnailer/quicklook_macos.mm); a mismatch loads a stub that
+      answers every request with nothing.
+
+  QLSupportedContentTypes names the UTI the HOST app exports (UTExportedTypeDeclarations in
+  Info.plist.in) -- the two must agree, because the system matches a file to an extension through
+  its type, never through its extension string.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Mosaic Quick Look</string>
+    <key>CFBundleDisplayName</key>
+    <string>Mosaic Quick Look</string>
+    <key>CFBundleIdentifier</key>
+    <string>org.mosaic.Mosaic.QuickLookThumbnail</string>
+    <key>CFBundleVersion</key>
+    <string>@MOSAIC_VERSION@</string>
+    <key>CFBundleShortVersionString</key>
+    <string>@MOSAIC_VERSION@</string>
+    <key>CFBundleExecutable</key>
+    <string>MosaicQuickLook</string>
+    <key>CFBundlePackageType</key>
+    <string>XPC!</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.3</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Mosaic is free software under the GNU GPL v3.</string>
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.quicklook.thumbnail</string>
+        <key>NSExtensionPrincipalClass</key>
+        <string>MosaicThumbnailProvider</string>
+        <key>NSExtensionAttributes</key>
+        <dict>
+            <key>QLSupportedContentTypes</key>
+            <array>
+                <string>org.mosaic.document</string>
+            </array>
+            <!-- 0 = answer at every size the system asks for. A floor here is a silent way to get
+                 "no thumbnails": Finder's list and column views ask at 16-32 px, and a provider
+                 that declines those looks broken everywhere except icon view. -->
+            <key>QLThumbnailMinimumDimension</key>
+            <integer>0</integer>
+        </dict>
+    </dict>
+</dict>
+</plist>

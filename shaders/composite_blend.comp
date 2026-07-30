@@ -1,0 +1,104 @@
+#version 450
+
+// GPU mirror of the CPU compositor's blend math (src/render/blend.hpp), per the W3C
+// "Compositing and Blending Level 1" spec. Composites one source layer over the accumulator
+// in place: acc = compositeOver(mode, acc, src, opacity). Both images are straight-alpha
+// RGBA float (rgba32f), in the document's encoded space (linear-light + ICC is S12). The mode
+// integer matches core::BlendMode's enum order (Normal=0 .. Luminosity=22). Keep this in sync
+// with blend.hpp -- the test suite checks GPU == CPU for every mode (S7-b).
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(binding = 0, rgba32f) uniform image2D uAcc;            // backdrop, read + written
+layout(binding = 1, rgba32f) uniform readonly image2D uSrc;   // source layer
+
+layout(push_constant) uniform Push {
+    int mode;
+    float opacity;
+} pc;
+
+// Separable (per-channel) blend modes (enum 0..18).
+float blendChannel(int m, float b, float s) {
+    if (m == 0) return s;                                   // Normal
+    if (m == 1) return min(b, s);                           // Darken
+    if (m == 2) return b * s;                               // Multiply
+    if (m == 3) return s <= 0.0 ? 0.0 : 1.0 - min(1.0, (1.0 - b) / s);  // ColorBurn
+    if (m == 4) return max(0.0, b + s - 1.0);              // LinearBurn
+    if (m == 5) return max(b, s);                           // Lighten
+    if (m == 6) return b + s - b * s;                      // Screen
+    if (m == 7) return s >= 1.0 ? 1.0 : min(1.0, b / (1.0 - s));        // ColorDodge
+    if (m == 8) return min(1.0, b + s);                    // LinearDodge
+    if (m == 9) return b <= 0.5 ? 2.0 * b * s : 1.0 - 2.0 * (1.0 - b) * (1.0 - s);  // Overlay
+    if (m == 10) {                                          // SoftLight
+        if (s <= 0.5) return b - (1.0 - 2.0 * s) * b * (1.0 - b);
+        float d = b <= 0.25 ? ((16.0 * b - 12.0) * b + 4.0) * b : sqrt(b);
+        return b + (2.0 * s - 1.0) * (d - b);
+    }
+    if (m == 11) return s <= 0.5 ? 2.0 * b * s : 1.0 - 2.0 * (1.0 - b) * (1.0 - s);  // HardLight
+    if (m == 12) {                                          // VividLight
+        if (s <= 0.5) { float d = 2.0 * s; return d <= 0.0 ? 0.0 : max(0.0, 1.0 - (1.0 - b) / d); }
+        float d = 2.0 * (1.0 - s);
+        return d <= 0.0 ? 1.0 : min(1.0, b / d);
+    }
+    if (m == 13) return clamp(b + 2.0 * s - 1.0, 0.0, 1.0);             // LinearLight
+    if (m == 14) return s <= 0.5 ? min(b, 2.0 * s) : max(b, 2.0 * s - 1.0);  // PinLight
+    if (m == 15) return abs(b - s);                        // Difference
+    if (m == 16) return b + s - 2.0 * b * s;               // Exclusion
+    if (m == 17) return max(0.0, b - s);                   // Subtract
+    if (m == 18) return s <= 0.0 ? 1.0 : min(1.0, b / s);  // Divide
+    return s;
+}
+
+float lum(vec3 c) { return 0.3 * c.r + 0.59 * c.g + 0.11 * c.b; }
+
+vec3 clipColor(vec3 c) {
+    float l = lum(c);
+    float n = min(min(c.r, c.g), c.b);
+    float x = max(max(c.r, c.g), c.b);
+    if (n < 0.0 && l - n > 0.0) c = l + (c - l) * (l / (l - n));
+    if (x > 1.0 && x - l > 0.0) c = l + (c - l) * ((1.0 - l) / (x - l));
+    return c;
+}
+
+vec3 setLum(vec3 c, float l) { return clipColor(c + (l - lum(c))); }
+
+float sat(vec3 c) { return max(max(c.r, c.g), c.b) - min(min(c.r, c.g), c.b); }
+
+vec3 setSat(vec3 c, float s) {
+    float mn = min(min(c.r, c.g), c.b);
+    float mx = max(max(c.r, c.g), c.b);
+    return mx <= mn ? vec3(0.0) : (c - mn) * (s / (mx - mn));
+}
+
+// Non-separable (HSL) blend modes (enum 19..22).
+vec3 blendNonSep(int m, vec3 b, vec3 s) {
+    if (m == 19) return setLum(setSat(s, sat(b)), lum(b));  // Hue
+    if (m == 20) return setLum(setSat(b, sat(s)), lum(b));  // Saturation
+    if (m == 21) return setLum(s, lum(b));                  // Color
+    if (m == 22) return setLum(b, lum(s));                  // Luminosity
+    return s;
+}
+
+// Source-over-with-blend (W3C), straight alpha.
+vec4 compositeOver(int m, vec4 cb, vec4 cs, float opacity) {
+    float asrc = cs.a * opacity;
+    if (asrc <= 0.0) return cb;
+    float ab = cb.a;
+    float ao = asrc + ab * (1.0 - asrc);
+    if (ao <= 0.0) return vec4(0.0);
+    vec3 bl = m <= 18 ? vec3(blendChannel(m, cb.r, cs.r), blendChannel(m, cb.g, cs.g),
+                             blendChannel(m, cb.b, cs.b))
+                      : blendNonSep(m, cb.rgb, cs.rgb);
+    vec3 mixed = (1.0 - ab) * cs.rgb + ab * bl;
+    vec3 co = (asrc * mixed + ab * (1.0 - asrc) * cb.rgb) / ao;
+    return vec4(co, ao);
+}
+
+void main() {
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(uAcc);
+    if (pos.x >= size.x || pos.y >= size.y) return;
+    vec4 cb = imageLoad(uAcc, pos);
+    vec4 cs = imageLoad(uSrc, pos);
+    imageStore(uAcc, pos, compositeOver(pc.mode, cb, cs, pc.opacity));
+}

@@ -1,0 +1,4 @@
+[Thumbnailer Entry]
+TryExec=mosaic-thumbnailer
+Exec=mosaic-thumbnailer -s %s %i %o
+MimeType=image/x-mosaic;

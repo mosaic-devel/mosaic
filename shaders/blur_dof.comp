@@ -1,0 +1,95 @@
+#version 450
+
+// The Depth-of-Field level interpolation for the S33 blur lane (docs/blur-filters.md §3/§8):
+// GPU mirror of src/render/blur.cpp dofBlurImage's per-pixel loop with the focus field of
+// compositor.cpp runBlurCpu folded in. Src is the ORIGINAL straight-alpha image (level 0);
+// bindings 3..6 hold the four pre-blurred levels (straight alpha, radii {1/4, 1/2, 3/4, 1} of
+// maxRadius). Each invocation computes its pixel's field value and lerps the two adjacent
+// levels in premultiplied space. Parity discipline as in blur_separable.comp.
+//
+// ⚠ TWO INVARIANTS ARE LOAD-BEARING HERE, GPU edition (the compositor.hpp seam note): every
+// level was blurred INDEPENDENTLY FROM THE SOURCE by blur_gpu.cpp -- never level k from level
+// k-1's result, i.e. never a step-dilated cascade -- and this shader stays strictly
+// interpolation-between-levels, NEVER "apply a blur kernel per pixel according to a per-pixel
+// radius mask". Do not "optimize" either property away, not even as a "better" GPU shortcut:
+// a per-pixel variable-radius gather here is a ship-blocker. They are hard constraints on the
+// DoF lane, not an oversight.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer Src { vec4 src[]; };
+layout(std430, binding = 1) writeonly buffer Dst { vec4 dst[]; };
+layout(std430, binding = 3) readonly buffer Lv1 { vec4 lv1[]; };
+layout(std430, binding = 4) readonly buffer Lv2 { vec4 lv2[]; };
+layout(std430, binding = 5) readonly buffer Lv3 { vec4 lv3[]; };
+layout(std430, binding = 6) readonly buffer Lv4 { vec4 lv4[]; };
+
+layout(push_constant) uniform Push {
+    int w;
+    int h;
+    float cx;         // focus-line point, buffer px
+    float cy;
+    float nx;         // the line's unit normal: (-dirY, dirX)
+    float ny;
+    float band;       // focus half-width, px
+    float feather;    // ramp length, px (>= 1, resolveBlurOp's floor)
+    float maxRadius;  // the top level's blur radius, px (> 0)
+} pc;
+
+// The pre-blurred pyramid, index 0..3 (blur.cpp's levels[]). lv varies per pixel; divergent
+// reads across four static bindings are fine (no descriptor indexing involved).
+vec4 levelAt(int lv, int idx) {
+    switch (lv) {
+        case 0: return lv1[idx];
+        case 1: return lv2[idx];
+        case 2: return lv3[idx];
+    }
+    return lv4[idx];
+}
+
+void main() {
+    const int x = int(gl_GlobalInvocationID.x);
+    const int y = int(gl_GlobalInvocationID.y);
+    if (x >= pc.w || y >= pc.h) return;
+    const int idx = y * pc.w + x;
+
+    // The field (compositor.cpp runBlurCpu): |signed distance from the focus line| at the
+    // pixel CENTRE, ramped past the band half-width. Inside the band it is exactly 0 -- and
+    // 0 / maxRadius stays exactly 0 even if the driver lowers the division to a reciprocal
+    // multiply (0 times anything finite), so the focus band returns the source pixel's exact
+    // bits (the §3 byte-identity pin survives the GPU lane).
+    const float px = float(x) + 0.5 - pc.cx;
+    const float py = float(y) + 0.5 - pc.cy;
+    const float d = abs(px * pc.nx + py * pc.ny);
+    const float field = clamp((d - pc.band) / pc.feather, 0.0, 1.0) * pc.maxRadius;
+    const float f = clamp(field, 0.0, pc.maxRadius);  // dofBlurImage's own clamp, kept
+    // ⚠ Reciprocal-lowered division (the trap pinned in texture_paper.comp): at the plateau
+    // f == maxRadius must land t == 4.0, but Vulkan allows 2.5 ULP on f / maxRadius, so clamp
+    // the top. A hair BELOW 4 is benign (the lerp below degenerates toward the top level
+    // within float noise); a hair ABOVE would index past the pyramid.
+    const float t = min(f / pc.maxRadius * 4.0, 4.0);
+    const vec4 o = src[idx];
+    const int lo = int(t);
+    const float fr = t - float(lo);
+    if (fr == 0.0) {
+        // The integer fast paths (blur.cpp): lo == 0 is the focus band -- the untouched
+        // source pixel, no round trip -- and 1..4 the level's own bytes.
+        dst[idx] = lo == 0 ? o : levelAt(lo - 1, idx);
+        return;
+    }
+    const vec4 pa = lo == 0 ? o : levelAt(lo - 1, idx);
+    const vec4 pb = levelAt(lo, idx);
+    // Lerp adjacent levels in premultiplied space (blur.cpp): coverage and colour interpolate
+    // together, so a soft alpha edge crossing the focus falloff cannot ring.
+    const float aa = pa.a;
+    const float ab = pb.a;
+    const float al = aa + (ab - aa) * fr;
+    vec3 rgb = vec3(0.0);
+    if (al > 0.0) {
+        const float inv = 1.0 / al;
+        const vec3 pma = pa.rgb * aa;
+        const vec3 pmb = pb.rgb * ab;
+        rgb = (pma + (pmb - pma) * fr) * inv;
+    }
+    dst[idx] = vec4(rgb, al);
+}

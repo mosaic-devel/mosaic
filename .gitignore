@@ -1,0 +1,65 @@
+# ── Build output ──────────────────────────────────────────────
+/build/
+/out/
+/install/
+# CLion / IDE CMake dirs
+/cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+# user-local presets (CMakePresets.json IS tracked)
+CMakeUserPresets.json
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+compile_commands.json
+
+# ── Generated artifacts ───────────────────────────────────────
+# Shaders are compiled GLSL->SPIR-V at build time; sources in shaders/ are tracked.
+*.spv
+# Rasterized app/tool icons generated from assets/*.svg at build time.
+/generated/
+# Extracted i18n machine catalogs (.po sources ARE tracked; .mo is built).
+*.mo
+
+# ── Non-static / downloaded dependencies (NOT project files) ──
+# We prefer system packages; only header-only libs are vendored in third_party/.
+# Anything fetched/built locally goes here and is ignored:
+/third_party/_downloads/
+/third_party/_build/
+/.deps/
+/vcpkg_installed/
+
+# ── Opt-in local ML models (downloaded on user action, never committed) ───────
+/models/
+*.onnx
+*.gguf
+*.safetensors
+
+# ── Test/dev scratch ──────────────────────────────────────────
+/tests/output/
+# written by the writePpm unit test when run from the repo root
+test_render_out.ppm
+# golden-test failure artifacts (references in tests/golden/ tracked)
+*.actual.png
+/coverage/
+*.profraw
+*.gcda
+*.gcno
+perf.data*
+
+# ── Editor / IDE / OS noise ───────────────────────────────────
+.vscode/
+.idea/
+.cache/
+.claude/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+__pycache__/

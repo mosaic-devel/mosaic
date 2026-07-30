@@ -1,0 +1,69 @@
+#version 450
+
+// The lens-blur aperture gather for the S33 blur lane (docs/blur-filters.md §8): GPU mirror of
+// src/render/blur.cpp lensBlurImage's gather loop and per-pixel tail. Src holds LINEAR
+// premultiplied RGBA (blur_convert.comp mode 2 ran first); every invocation sums the baked
+// aperture taps with CLAMP indexing (replicate), then un-premultiplies and encodes back to
+// sRGB. Parity discipline as in blur_separable.comp: the CPU lane runs its encode in double,
+// this lane in float -- inside the parity tolerance, never a formula divergence.
+//
+// ⚠ INVARIANT: tap weights are UNIFORM aperture coverage, baked host-side by the SAME
+// fx::makeApertureKernel the CPU lane calls -- never a function of a tap's highlight-ness /
+// background-ness / clipping-recovery estimate. The specular boost already happened as a
+// separate global pre-pass on pixel values (blur_convert.comp mode 2). Deliberate and hard:
+// do not make a weight depend on what the tap contains.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer Src { vec4 src[]; };
+layout(std430, binding = 1) writeonly buffer Dst { vec4 dst[]; };
+
+// The baked aperture taps: integer pixel offsets with weights summing to 1 (mass-conserving
+// even when subsampled, blur.hpp). DoF-iris levels concatenate their kernels into one buffer,
+// each dispatch addressing its own at tapOff.
+struct Tap {
+    int ox;
+    int oy;
+    float w;
+    float pad;
+};
+layout(std430, binding = 2) readonly buffer Taps { Tap taps[]; };
+
+layout(push_constant) uniform Push {
+    int w;
+    int h;
+    int tapCount;
+    int tapOff;
+} pc;
+
+// blur.cpp linearToSrgb: the exact analytic IEC 61966-2-1 encode (float here, double there).
+float linearToSrgb(float lin) {
+    const float l = clamp(lin, 0.0, 1.0);
+    const float e = l <= 0.0031308 ? l * 12.92 : 1.055 * pow(l, 1.0 / 2.4) - 0.055;
+    return clamp(e, 0.0, 1.0);
+}
+
+void main() {
+    const int x = int(gl_GlobalInvocationID.x);
+    const int y = int(gl_GlobalInvocationID.y);
+    if (x >= pc.w || y >= pc.h) return;
+    vec4 acc = vec4(0.0);
+    // ⚠ RADV/ACO: one flat loop with a dynamically-uniform bound (tapCount is a push
+    // constant) -- see texture_sky.comp's pinned miscompile note for what NOT to do.
+    for (int t = 0; t < pc.tapCount; ++t) {
+        const Tap tap = taps[pc.tapOff + t];
+        const int sx = clamp(x + tap.ox, 0, pc.w - 1);
+        const int sy = clamp(y + tap.oy, 0, pc.h - 1);
+        acc += src[sy * pc.w + sx] * tap.w;
+    }
+    // The CPU tail verbatim: un-premultiply in linear (RGB pins to 0 at zero coverage), encode,
+    // clamp coverage into [0, 1].
+    const float a = acc.a;
+    vec3 rgb = vec3(0.0);
+    if (a > 0.0) {
+        const float inv = 1.0 / a;
+        rgb = vec3(linearToSrgb(acc.r * inv), linearToSrgb(acc.g * inv),
+                   linearToSrgb(acc.b * inv));
+    }
+    dst[y * pc.w + x] = vec4(rgb, clamp(a, 0.0, 1.0));
+}

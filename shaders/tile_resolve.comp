@@ -1,0 +1,52 @@
+#version 450
+
+// The RESOLVE pass (S60-a item 11, docs/s60-performance-plan.md §3.3).
+//
+// One macrotile of the resident accumulator -> the 8-bit document texture the present pass
+// samples. It exists to delete a chain, not to add a step:
+//
+//   before  composite -> ImageF -> toImage8 -> m_lastComposite -> m_documentImage ->
+//           m_pendingCanvas -> staging memcpy -> vkCmdCopyBufferToImage
+//   after   composite -> THIS -> the same VkImage
+//
+// docs/s60-readback-consumers.md §5 counts three CPU-side copies before the staging write on a
+// single dab frame. All of them, plus the readback that would have fed them, are this dispatch.
+//
+// It is a separate kernel rather than a tail on composite_tile.comp on purpose: the accumulator is
+// written once per LAYER and read once per FRAME, so folding the conversion into the composite
+// would run it L times and would also make the last layer's dispatch decide the picture. Here it
+// runs once per dirty macrotile whatever the stack depth, and only for macrotiles that changed.
+//
+// VULKAN 1.0 FLOOR (§2): plain `#version 450`, no `#extension`, no descriptor indexing.
+// 2 storage images (guaranteed 4), 24 bytes of push constants (guaranteed 128), one descriptor
+// set (guaranteed 4), 8x8x1 = 64 invocations (guaranteed 128). rgba16f and rgba8 are both
+// guaranteed STORAGE_IMAGE formats, so nothing here is conditional on a tier.
+//
+// PARITY: `common::toImage8` is `clamp(v,0,1) * 255 + 0.5` truncated. A UNORM imageStore performs
+// the same conversion but its rounding is implementation-defined within the spec's tolerance, so
+// this can differ from the CPU reference by one least-significant bit -- inside the 1/255 tolerance
+// every GPU lane in this project is held to, and the reason export/save keep the CPU walk
+// (docs/s60-readback-consumers.md B1-B3).
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// uAcc  the macrotile accumulator atlas image, straight alpha, GpuCaps::workingFormat.
+// uDst  the document-space 8-bit texture, straight alpha (common::Image byte order).
+layout(binding = 0, rgba16f) uniform image2D uAcc;
+layout(binding = 1, rgba8) uniform image2D uDst;
+
+layout(push_constant) uniform Push {
+    ivec2 uAccOrigin;  //  0  this macrotile's origin inside the atlas image
+    ivec2 uDstOrigin;  //  8  ... and in the destination (document space)
+    ivec2 uExtent;     // 16  its valid extent -- edge macrotiles are partial
+};
+
+void main() {
+    ivec2 lp = ivec2(gl_GlobalInvocationID.xy);
+    if (lp.x >= uExtent.x || lp.y >= uExtent.y) return;  // partial edge tiles
+    vec4 c = imageLoad(uAcc, uAccOrigin + lp);
+    // Clamp explicitly rather than relying on the UNORM conversion's own clamp: it mirrors
+    // toImage8 line for line, and a compositor that ever produces an out-of-range value should
+    // land in the same place on both lanes.
+    imageStore(uDst, uDstOrigin + lp, clamp(c, vec4(0.0), vec4(1.0)));
+}

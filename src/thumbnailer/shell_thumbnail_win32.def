@@ -1,0 +1,21 @@
+; Module-definition file for MosaicThumbnail.dll -- the .mosaic IThumbnailProvider shell extension
+; (src/thumbnailer/shell_thumbnail_win32.cpp, PLAN.md S57). This file is the ONLY thing that gives
+; the DLL an export table, and it does two jobs that a shell extension cannot do without:
+;
+;   1. It exports the four COM entry points the shell and regsvr32 look up BY NAME. There is no
+;      __declspec(dllexport) in the .cpp on purpose -- <combaseapi.h> pre-declares two of these four
+;      without the attribute, so adding it there is an error on the clang/aarch64 toolchain, while
+;      GCC accepts it. Naming them here works identically on both.
+;   2. It SUPPRESSES the auto-export fallback. Handed a DLL with no explicit exports, GNU ld exports
+;      every global symbol in the image -- which, for a module that statically links mosaic_io, means
+;      publishing a table full of Mosaic internals to anything that cares to look.
+;
+; No LIBRARY statement: the internal module name then follows the real output file name, so renaming
+; the target in CMakeLists.txt cannot leave a stale name embedded in the PE export directory. No
+; ordinals either -- COM resolves these by name, always, and an ordinal would be one more thing that
+; has to stay in step with nothing.
+EXPORTS
+    DllGetClassObject
+    DllCanUnloadNow
+    DllRegisterServer
+    DllUnregisterServer

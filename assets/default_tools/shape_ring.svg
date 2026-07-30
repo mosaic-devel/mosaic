@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Mosaic original (CC0): Ring / pie shape tool. One filled primitive in the tango blues so the
+     shape family sits beside the GIMP color icons; the hole is a second subpath under the even-odd
+     fill rule, which is what the geometry's concentric contours amount to.
+     nanosvg-safe: shapes + gradients + fill-rule only. -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="16" height="16" viewBox="0 0 16 16">
+  <defs>
+    <linearGradient id="shapeFill" gradientUnits="userSpaceOnUse" x1="8" y1="1.5" x2="8" y2="14.5">
+      <stop offset="0" style="stop-color:#9cbde0"/>
+      <stop offset="1" style="stop-color:#4d7fb8"/>
+    </linearGradient>
+  </defs>
+  <path d="M 1.5,8 A 6.5,6.5 0 0 1 14.5,8 A 6.5,6.5 0 0 1 1.5,8 Z M 5,8 A 3,3 0 0 1 11,8 A 3,3 0 0 1 5,8 Z"
+        style="fill:url(#shapeFill);fill-rule:evenodd;stroke:#204a87;stroke-width:1;stroke-linejoin:round"/>
+</svg>

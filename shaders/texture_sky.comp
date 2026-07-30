@@ -1,0 +1,1133 @@
+#version 450
+
+// GPU mirror of the CPU sky renderer's PER-PIXEL path (S55-h; docs/texture-generator.md §8.4).
+// Transcribed function-for-function from src/core/texture/sky_render.cpp (+ its per-pixel
+// dependencies: noise.cpp, cloud_volume.cpp, atmosphere.cpp, common/dither.hpp) -- the CPU lane
+// stays the permanent reference, and tests/test_texture_gpu.cpp holds this shader to it with
+// tolerance-based parity (the two lanes share every formula but differ in precision: double CPU
+// vs float GPU, so the bar is "the same picture", never the same bits -- see the test's header
+// for the tolerance rationale). Everything host-cookable is cooked by render/texture_gpu.cpp on
+// the CPU in DOUBLE (Hosek-Wilkie configs, the atmosphere tables, the projected star field, the
+// moon frame, the deck constants), so only the genuinely per-pixel math runs in float here.
+//
+// DETERMINISM: a pure function of (params, frame pixel) -- no atomics, no shared memory, no
+// reduction-order dependence -- so a given device produces identical bytes for identical inputs
+// at any dispatch/band split (the §8.3 contract, GPU edition).
+//
+// The one deliberate formula deviation: angles between near-parallel unit vectors use the CHORD
+// form 2*asin(|a-b|/2) instead of acos(dot). In exact arithmetic they are the same function; in
+// float, acos loses half the mantissa exactly at solar/lunar-disc scale where the CPU's double
+// acos is still exact, so the chord form is the parity-faithful choice.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// One cooked cloud deck (mirrors render/texture_gpu.cpp's DeckGpu; the constants inside come
+// from sky_render.cpp's golden-pinned CloudTypeSpec table and cloud_volume.cpp's
+// cloudVolumeSpec(), cooked host-side).
+struct Deck {
+    vec4 a;    // altitudeM, featureM, coverage, opacity
+    vec4 b;    // softness, worleyMix, baseGrey, warpAmp
+    vec4 c;    // fbm octaves, fbm gain (spec.detail), erodeAmp (0.11*detail/0.5), shearStretch
+    vec4 f;    // isVolumetric, pad, pad, pad
+    uvec4 s0;  // seedBody (xy), seedWarpChX (zw)     -- 2D lane sub-stream seeds, cooked exactly
+    uvec4 s1;  // seedWarpChY (xy), seedErode (zw)       on the CPU (integer math, bit-identical)
+    uvec4 s2;  // seedWorley (xy), vSeedBody (zw)
+    uvec4 s3;  // vSeedWarpX (xy), vSeedWarpY (zw)
+    uvec4 s4;  // vSeedWarpZ (xy), vSeedPuff (zw)
+    uvec4 s5;  // vSeedErode (xy), pad
+    vec4 v0;   // vBaseM, vThicknessM, vFeatureM, vCoverage
+    vec4 v1;   // vExtinction, vWorleyMix, vErosion, vWarp
+    vec4 v2;   // vAnvil, vBaseSoft, vTopSoft, vShearStretch
+    vec4 v3;   // vHgG, vPowder, vPrimarySteps, vLightSteps
+    vec4 v4;   // vBodyOctaves, pad, pad, pad
+};
+
+layout(std430, binding = 0) readonly buffer Params {
+    ivec4 pFrame;      // frameW, frameH, winX, winY
+    ivec4 pWin;        // winW, winH, deckCount, starCount
+    ivec4 pFlags;      // enableDome, enableSun, enableHaze, moonOn
+    ivec4 pFlags2;     // twilightActive, starGridCols, starGridRows, atmo viewSteps
+    vec4 pCamRight;    // xyz, halfTanX
+    vec4 pCamUp;       // xyz, halfTanY
+    vec4 pCamForward;  // xyz, shiftY
+    vec4 pCamMisc;     // invW, invH, exposureScale, scatterScale
+    vec4 pSunDir;      // xyz, sunDiscRad
+    vec4 pSunHoriz;    // xyz, wind cos
+    vec4 pSunTint;     // rgb, wind sin
+    vec4 pDiscColor;   // rgb, haze01
+    vec4 pLitBase;     // rgb, visibilityM
+    vec4 pAmbBase;     // rgb, star grid cell size
+    vec4 pNight;       // night01, twiW, starVis, nightFloor
+    vec4 pMoonDir;     // xyz, moonDiscRad
+    vec4 pMoonToObs;   // xyz, moonPhaseIllum
+    vec4 pMoonRight;   // xyz, moonUp01
+    vec4 pMoonUp;      // xyz, moonLibLonDeg
+    vec4 pMoonNorth;   // xyz, pad
+    vec4 pMoonLight;   // xyz, pad
+    vec4 pAtmo;        // betaMieScatter, betaMieExtinct, mieG, pad
+    vec4 pFlare0;      // sun screen x/y, frame centre x/y
+    vec4 pFlare1;      // diag, haloR, haloSigma, burstLen
+    vec4 pFlare2;      // burstRot, vis, on, pad
+    vec4 pFlareHue;    // the sun's unit-peak hue, pad
+    float pHwConfig[28];  // Hosek-Wilkie configs, 9 per channel (R,G,B), padded to 28
+    float pHwRad[4];      // Hosek-Wilkie radiances (R,G,B) + pad
+    Deck pDecks[];        // deckCount entries, far-to-near (altitude descending)
+};
+
+layout(binding = 1, rgba32f) uniform writeonly image2D uOut;
+
+// Baked atmosphere tables (atmosphere.cpp, cooked host-side only when twilightActive):
+// odRayleigh[32*256] | odMie[32*256] | msTable[16*64*3]. A 1-float dummy rides otherwise.
+layout(std430, binding = 2) readonly buffer Atmo { float atmoTab[]; };
+
+// The projected star field (sky_render.cpp buildStarField, cooked host-side in double):
+// per star (sx, sy, core.rg) and (core.b, glow.rgb).
+struct Star {
+    vec4 a;
+    vec4 b;
+};
+layout(std430, binding = 3) readonly buffer Stars { Star pStars[]; };
+
+// Star screen-bin CSR: binStart[cols*rows + 1] then the star indices.
+layout(std430, binding = 4) readonly buffer StarBins { uint pBins[]; };
+
+// LRO albedo (moon_texture.hpp): 1024x512 bytes packed 4-per-uint, row-major.
+layout(std430, binding = 5) readonly buffer MoonAlb { uint pMoonAlb[]; };
+// LOLA elevation (moon_elevation.hpp): 1024x512 int16 metres packed 2-per-uint, row-major.
+layout(std430, binding = 6) readonly buffer MoonElev { uint pMoonElev[]; };
+
+layout(push_constant) uniform Push {
+    uint rowOff;  // the dispatch band's first window row (cancel/progress granularity)
+} pc;
+
+const float PI = 3.14159265358979323846;
+const float kDegToRad = PI / 180.0;
+const float kRadToDeg = 180.0 / PI;
+
+float clamp01(float v) { return clamp(v, 0.0, 1.0); }
+
+// ------------------------------------------------------------------------------------------
+// 64-bit hashing (noise.hpp's avalanche/hashCoords/hashToUnit/subSeed) on uvec2 (lo, hi) --
+// exact integer transcription, so lattice identities match the CPU bit-for-bit; only the
+// [0,1) conversion truncates to float's 24-bit mantissa (inside the parity tolerance).
+// ------------------------------------------------------------------------------------------
+
+uvec2 u64shr(uvec2 a, uint k) {
+    if (k < 32u) return uvec2((a.x >> k) | (a.y << (32u - k)), a.y >> k);
+    if (k == 32u) return uvec2(a.y, 0u);
+    return uvec2(a.y >> (k - 32u), 0u);
+}
+
+uvec2 u64mul(uvec2 a, uvec2 b) {
+    uint hi, lo;
+    umulExtended(a.x, b.x, hi, lo);
+    return uvec2(lo, hi + a.x * b.y + a.y * b.x);
+}
+
+uvec2 u64add(uvec2 a, uvec2 b) {
+    uint carry;
+    uint lo = uaddCarry(a.x, b.x, carry);
+    return uvec2(lo, a.y + b.y + carry);
+}
+
+uvec2 u64fromI32(int v) { return uvec2(uint(v), v < 0 ? 0xFFFFFFFFu : 0u); }
+
+const uvec2 kMix1 = uvec2(0xed558ccdu, 0xff51afd7u);  // 0xff51afd7ed558ccd
+const uvec2 kMix2 = uvec2(0x1a85ec53u, 0xc4ceb9feu);  // 0xc4ceb9fe1a85ec53
+const uvec2 kGold = uvec2(0x7f4a7c15u, 0x9e3779b9u);  // 0x9e3779b97f4a7c15
+
+uvec2 avalanche(uvec2 z) {
+    z ^= u64shr(z, 33u);
+    z = u64mul(z, kMix1);
+    z ^= u64shr(z, 33u);
+    z = u64mul(z, kMix2);
+    z ^= u64shr(z, 33u);
+    return z;
+}
+
+uvec2 hashCoords(uvec2 seed, int x, int y, int z) {
+    uvec2 h = seed ^ kGold;
+    h = avalanche(h ^ u64fromI32(x));
+    h = avalanche(h ^ u64fromI32(y));
+    h = avalanche(h ^ u64fromI32(z));
+    return h;
+}
+
+float hashToUnit(uvec2 h) {
+    // CPU: (h >> 11) * 2^-53 in double; float keeps the top 24 bits (equal within 2^-24).
+    return float(u64shr(h, 40u).x) * (1.0 / 16777216.0);
+}
+
+uvec2 subSeedO(uvec2 seed, uint o) { return avalanche(seed ^ u64mul(uvec2(o, 0u), kGold)); }
+
+// ------------------------------------------------------------------------------------------
+// Noise kit (noise.cpp): quintic-fade Perlin 2D/3D, exact-ring Worley 2D/3D, fBm.
+// ------------------------------------------------------------------------------------------
+
+float fadeQ(float t) { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
+
+float grad2(uvec2 seed, int cx, int cy, float dx, float dy) {
+    float a = hashToUnit(hashCoords(seed, cx, cy, 0)) * (2.0 * PI);
+    return cos(a) * dx + sin(a) * dy;
+}
+
+float perlin2(uvec2 seed, vec2 p) {
+    vec2 fl = floor(p);
+    int ix = int(fl.x), iy = int(fl.y);
+    float fx = p.x - fl.x, fy = p.y - fl.y;
+    float u = fadeQ(fx), v = fadeQ(fy);
+    float n00 = grad2(seed, ix, iy, fx, fy);
+    float n10 = grad2(seed, ix + 1, iy, fx - 1.0, fy);
+    float n01 = grad2(seed, ix, iy + 1, fx, fy - 1.0);
+    float n11 = grad2(seed, ix + 1, iy + 1, fx - 1.0, fy - 1.0);
+    return mix(mix(n00, n10, u), mix(n01, n11, u), v) * 1.4142135623730951;  // kNorm2
+}
+
+uint u64mod12(uvec2 h) {
+    // h mod 12 with 2^32 mod 12 == 4: ((hi%12)*4 + lo%12) % 12 -- exact.
+    return ((h.y % 12u) * 4u + (h.x % 12u)) % 12u;
+}
+
+const vec3 kGrad3[12] = vec3[12](vec3(1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0), vec3(-1, -1, 0),
+                                 vec3(1, 0, 1), vec3(-1, 0, 1), vec3(1, 0, -1), vec3(-1, 0, -1),
+                                 vec3(0, 1, 1), vec3(0, -1, 1), vec3(0, 1, -1), vec3(0, -1, -1));
+
+float grad3(uvec2 seed, int cx, int cy, int cz, float dx, float dy, float dz) {
+    vec3 g = kGrad3[u64mod12(hashCoords(seed, cx, cy, cz))];
+    return g.x * dx + g.y * dy + g.z * dz;
+}
+
+float perlin3(uvec2 seed, vec3 p) {
+    vec3 fl = floor(p);
+    int ix = int(fl.x), iy = int(fl.y), iz = int(fl.z);
+    float fx = p.x - fl.x, fy = p.y - fl.y, fz = p.z - fl.z;
+    float u = fadeQ(fx), v = fadeQ(fy), w = fadeQ(fz);
+    float lo = mix(mix(grad3(seed, ix, iy, iz, fx, fy, fz),
+                       grad3(seed, ix + 1, iy, iz, fx - 1.0, fy, fz), u),
+                   mix(grad3(seed, ix, iy + 1, iz, fx, fy - 1.0, fz),
+                       grad3(seed, ix + 1, iy + 1, iz, fx - 1.0, fy - 1.0, fz), u),
+                   v);
+    float hi = mix(mix(grad3(seed, ix, iy, iz + 1, fx, fy, fz - 1.0),
+                       grad3(seed, ix + 1, iy, iz + 1, fx - 1.0, fy, fz - 1.0), u),
+                   mix(grad3(seed, ix, iy + 1, iz + 1, fx, fy - 1.0, fz - 1.0),
+                       grad3(seed, ix + 1, iy + 1, iz + 1, fx - 1.0, fy - 1.0, fz - 1.0), u),
+                   v);
+    return mix(lo, hi, w);  // kNorm3 == 1
+}
+
+float fbm2(uvec2 seed, vec2 p, int octaves, float gain) {
+    float sum = 0.0, norm = 0.0, amp = 1.0, freq = 1.0;
+    for (int o = 0; o < octaves; ++o) {
+        sum += amp * perlin2(subSeedO(seed, uint(o)), p * freq);
+        norm += amp;
+        amp *= gain;
+        freq *= 2.0;  // the sky decks always run lacunarity 2
+    }
+    return norm > 0.0 ? sum / norm : 0.0;
+}
+
+float fbm3(uvec2 seed, vec3 p, int octaves, float gain) {
+    float sum = 0.0, norm = 0.0, amp = 1.0, freq = 1.0;
+    for (int o = 0; o < octaves; ++o) {
+        sum += amp * perlin3(subSeedO(seed, uint(o)), p * freq);
+        norm += amp;
+        amp *= gain;
+        freq *= 2.0;
+    }
+    return norm > 0.0 ? sum / norm : 0.0;
+}
+
+struct Worley2R {
+    float f1;
+    float f2;
+};
+
+void scanCell2(uvec2 seed, int cx, int cy, vec2 p, inout Worley2R r) {
+    uvec2 h = hashCoords(seed, cx, cy, 0);
+    vec2 fp = vec2(float(cx) + hashToUnit(h), float(cy) + hashToUnit(avalanche(h)));
+    float d = length(fp - p);
+    if (d < r.f1) {
+        r.f2 = r.f1;
+        r.f1 = d;
+    } else if (d < r.f2) {
+        r.f2 = d;
+    }
+}
+
+float cellBoxDist2(int cx, int cy, vec2 p) {
+    float dx = max(max(float(cx) - p.x, 0.0), p.x - float(cx + 1));
+    float dy = max(max(float(cy) - p.y, 0.0), p.y - float(cy + 1));
+    return length(vec2(dx, dy));
+}
+
+// ⚠ The exact ring expansion is deliberately written as straight-line GUARDED SHELLS instead of
+// noise.cpp's data-dependent `for (ring = 2; ring-1 < f2 && ring <= 4; ...)`. Semantically
+// identical (a ring-r shell runs iff r-1 < f2, exactly the CPU loop's entry condition), but the
+// data-dependent loop bound wrapping these nested shell scans MISCOMPILES on RADV/ACO (Mesa
+// 26.1.2, RDNA2): with two such loops inlined into the volumetric march, whole waves' image
+// stores silently vanished for some dispatch geometries (bisected 2026-07-16 via a sentinel
+// clear -- see test_texture_gpu.cpp's window test, which pins the fix).
+void worleyShell2(uvec2 seed, int ix, int iy, vec2 p, int ring, inout Worley2R r) {
+    for (int dy = -ring; dy <= ring; ++dy)
+        for (int dx = -ring; dx <= ring; ++dx) {
+            if (max(abs(dx), abs(dy)) != ring) continue;
+            if (cellBoxDist2(ix + dx, iy + dy, p) >= r.f2) continue;
+            scanCell2(seed, ix + dx, iy + dy, p, r);
+        }
+}
+
+Worley2R worley2(uvec2 seed, vec2 p) {
+    int ix = int(floor(p.x)), iy = int(floor(p.y));
+    Worley2R r;
+    r.f1 = 1e30;
+    r.f2 = 1e30;
+    for (int dy = -1; dy <= 1; ++dy)
+        for (int dx = -1; dx <= 1; ++dx) scanCell2(seed, ix + dx, iy + dy, p, r);
+    if (1.0 < r.f2) worleyShell2(seed, ix, iy, p, 2, r);
+    if (2.0 < r.f2) worleyShell2(seed, ix, iy, p, 3, r);
+    if (3.0 < r.f2) worleyShell2(seed, ix, iy, p, 4, r);
+    return r;
+}
+
+struct Worley3R {
+    float f1;
+    float f2;
+};
+
+void scanCell3(uvec2 seed, int cx, int cy, int cz, vec3 p, inout Worley3R r) {
+    uvec2 h = hashCoords(seed, cx, cy, cz);
+    uvec2 h2 = avalanche(h);
+    vec3 fp = vec3(float(cx) + hashToUnit(h), float(cy) + hashToUnit(h2),
+                   float(cz) + hashToUnit(avalanche(h2)));
+    float d = length(fp - p);
+    if (d < r.f1) {
+        r.f2 = r.f1;
+        r.f1 = d;
+    } else if (d < r.f2) {
+        r.f2 = d;
+    }
+}
+
+float cellBoxDist3(int cx, int cy, int cz, vec3 p) {
+    float dx = max(max(float(cx) - p.x, 0.0), p.x - float(cx + 1));
+    float dy = max(max(float(cy) - p.y, 0.0), p.y - float(cy + 1));
+    float dz = max(max(float(cz) - p.z, 0.0), p.z - float(cz + 1));
+    return length(vec3(dx, dy, dz));
+}
+
+// Guarded shells, not a data-dependent ring loop -- the worley2 note above applies verbatim.
+void worleyShell3(uvec2 seed, int ix, int iy, int iz, vec3 p, int ring, inout Worley3R r) {
+    for (int dz = -ring; dz <= ring; ++dz)
+        for (int dy = -ring; dy <= ring; ++dy)
+            for (int dx = -ring; dx <= ring; ++dx) {
+                if (max(max(abs(dx), abs(dy)), abs(dz)) != ring) continue;
+                if (cellBoxDist3(ix + dx, iy + dy, iz + dz, p) >= r.f2) continue;
+                scanCell3(seed, ix + dx, iy + dy, iz + dz, p, r);
+            }
+}
+
+Worley3R worley3(uvec2 seed, vec3 p) {
+    int ix = int(floor(p.x)), iy = int(floor(p.y)), iz = int(floor(p.z));
+    Worley3R r;
+    r.f1 = 1e30;
+    r.f2 = 1e30;
+    for (int dz = -1; dz <= 1; ++dz)
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx) scanCell3(seed, ix + dx, iy + dy, iz + dz, p, r);
+    if (1.0 < r.f2) worleyShell3(seed, ix, iy, iz, p, 2, r);
+    if (2.0 < r.f2) worleyShell3(seed, ix, iy, iz, p, 3, r);
+    if (3.0 < r.f2) worleyShell3(seed, ix, iy, iz, p, 4, r);
+    return r;
+}
+
+// ------------------------------------------------------------------------------------------
+// Deterministic per-frame-pixel hashes (common/dither.hpp ditherTPDF + sky_render.cpp
+// marchJitter01) -- exact integer transcription.
+// ------------------------------------------------------------------------------------------
+
+const uvec2 kSm1 = uvec2(0x1ce4e5b9u, 0xbf58476du);  // 0xbf58476d1ce4e5b9
+const uvec2 kSm2 = uvec2(0x133111ebu, 0x94d049bbu);  // 0x94d049bb133111eb
+
+float splitmixUnit(uvec2 v) {
+    v ^= u64shr(v, 30u);
+    v = u64mul(v, kSm1);
+    v ^= u64shr(v, 27u);
+    v = u64mul(v, kSm2);
+    v ^= u64shr(v, 31u);
+    return float(u64shr(v, 40u).x) * (1.0 / 16777216.0);
+}
+
+float ditherTPDF(uint px, uint py, uint ch) {
+    uvec2 key = uvec2((py << 3u) ^ ch, px);  // (px<<32) ^ (py<<3) ^ ch
+    uvec2 k2 = u64add(key, key);
+    return splitmixUnit(u64add(k2, uvec2(1u, 0u))) + splitmixUnit(u64add(k2, uvec2(2u, 0u))) - 1.0;
+}
+
+float marchJitter01(uint px, uint py) {
+    uvec2 v = uvec2((py << 3u) ^ 3u, px);  // (px<<32) ^ (py<<3) ^ 3
+    v = u64add(u64add(v, v), uvec2(1u, 0u));
+    return splitmixUnit(v);
+}
+
+// ------------------------------------------------------------------------------------------
+// Angles & compositing
+// ------------------------------------------------------------------------------------------
+
+// The chord form of acos(dot(a, b)) for unit vectors -- see the header note.
+float angleBetween(vec3 a, vec3 b) { return 2.0 * asin(min(1.0, 0.5 * distance(a, b))); }
+
+// Straight-alpha source-over (sky_render.cpp over()/overRgb -- the CPU computes this in float
+// too, so given equal inputs the composite matches exactly).
+vec4 overRgb(vec3 src, float srcA, vec4 dst) {
+    float a = srcA + dst.a * (1.0 - srcA);
+    if (a <= 0.0) return vec4(0.0);
+    vec3 c = (src * srcA + dst.rgb * dst.a * (1.0 - srcA)) / a;
+    return vec4(c, a);
+}
+
+// ------------------------------------------------------------------------------------------
+// Camera (sky_camera.hpp SkyCamera::rayAt)
+// ------------------------------------------------------------------------------------------
+
+vec3 rayAt(float px, float py) {
+    float nx = 2.0 * px * pCamMisc.x - 1.0;
+    float ny = 1.0 - 2.0 * py * pCamMisc.y + pCamForward.w;
+    return normalize(pCamForward.xyz + nx * pCamRight.w * pCamRight.xyz +
+                     ny * pCamUp.w * pCamUp.xyz);
+}
+
+// ------------------------------------------------------------------------------------------
+// Hosek-Wilkie RGB radiance (third_party/hosekwilkie ArHosekSkyModel_GetRadianceInternal),
+// evaluated on the host-cooked 9-coefficient configs.
+// ------------------------------------------------------------------------------------------
+
+float hwRadiance(int ch, float cosTheta, float gamma, float cosGamma) {
+    int o = ch * 9;
+    float expM = exp(pHwConfig[o + 4] * gamma);
+    float rayM = cosGamma * cosGamma;
+    float mieM = (1.0 + cosGamma * cosGamma) /
+                 pow(1.0 + pHwConfig[o + 8] * pHwConfig[o + 8] - 2.0 * pHwConfig[o + 8] * cosGamma,
+                     1.5);
+    float zen = sqrt(cosTheta);
+    return (1.0 + pHwConfig[o + 0] * exp(pHwConfig[o + 1] / (cosTheta + 0.01))) *
+           (pHwConfig[o + 2] + pHwConfig[o + 3] * expM + pHwConfig[o + 5] * rayM +
+            pHwConfig[o + 6] * mieM + pHwConfig[o + 7] * zen) *
+           pHwRad[ch];
+}
+
+vec3 dayRadiance(vec3 dir) {
+    float cosTheta = clamp(dir.z, 0.0, 1.0);
+    float theta = acos(cosTheta);
+    float cosGamma = clamp(dot(dir, pSunDir.xyz), -1.0, 1.0);
+    float gamma = angleBetween(dir, pSunDir.xyz);
+    return vec3(hwRadiance(0, cosTheta, gamma, cosGamma), hwRadiance(1, cosTheta, gamma, cosGamma),
+                hwRadiance(2, cosTheta, gamma, cosGamma)) *
+           pCamMisc.z;
+}
+
+// ------------------------------------------------------------------------------------------
+// Physical single-scattering twilight (atmosphere.cpp Atmosphere::radiance over the baked
+// tables). Constants are the same measured physical values; the float lane's altitude error
+// (~0.4 m out of a 60 km shell) sits far inside the parity tolerance.
+// ------------------------------------------------------------------------------------------
+
+const float kEarthRadius = 6360.0e3;
+const float kAtmosphereRadius = 6420.0e3;
+const float kHRayleigh = 8000.0;
+const float kHMie = 1200.0;
+const vec3 kBetaR = vec3(5.802e-6, 13.558e-6, 33.100e-6);
+const float kSunIntensity = 22.0;
+const float kCameraRadius = kEarthRadius + 2.0;
+const float kBlockedOd = 1.0e12;
+const int kRSteps = 32;
+const int kMuSteps = 256;
+const int kMsRSteps = 16;
+const int kMsMuSteps = 64;
+const int kOdMieOff = kRSteps * kMuSteps;
+const int kMsOff = 2 * kRSteps * kMuSteps;
+
+float distanceToSphere(float r, float mu, float sphere) {
+    float disc = sphere * sphere - r * r * (1.0 - mu * mu);
+    if (disc < 0.0) return -1.0;
+    return -r * mu + sqrt(disc);
+}
+
+void sampleOd(float r, float mu, out float odR, out float odM) {
+    float fr = clamp01((r - kEarthRadius) / (kAtmosphereRadius - kEarthRadius)) * float(kRSteps - 1);
+    float fmu = clamp01((mu + 1.0) * 0.5) * float(kMuSteps - 1);
+    int ir0 = clamp(int(floor(fr)), 0, kRSteps - 2);
+    int imu0 = clamp(int(floor(fmu)), 0, kMuSteps - 2);
+    float tr = fr - float(ir0);
+    float tmu = fmu - float(imu0);
+    int i00 = ir0 * kMuSteps + imu0;
+    int i10 = i00 + kMuSteps;
+    float r00 = atmoTab[i00], r01 = atmoTab[i00 + 1];
+    float r10 = atmoTab[i10], r11 = atmoTab[i10 + 1];
+    float m00 = atmoTab[kOdMieOff + i00], m01 = atmoTab[kOdMieOff + i00 + 1];
+    float m10 = atmoTab[kOdMieOff + i10], m11 = atmoTab[kOdMieOff + i10 + 1];
+    if (r00 >= kBlockedOd || r01 >= kBlockedOd || r10 >= kBlockedOd || r11 >= kBlockedOd) {
+        odR = kBlockedOd;
+        odM = kBlockedOd;
+        return;
+    }
+    odR = (r00 * (1.0 - tmu) + r01 * tmu) * (1.0 - tr) + (r10 * (1.0 - tmu) + r11 * tmu) * tr;
+    odM = (m00 * (1.0 - tmu) + m01 * tmu) * (1.0 - tr) + (m10 * (1.0 - tmu) + m11 * tmu) * tr;
+}
+
+vec3 sampleMs(float r, float muS) {
+    float fr =
+        clamp01((r - kEarthRadius) / (kAtmosphereRadius - kEarthRadius)) * float(kMsRSteps - 1);
+    float fmu = clamp01((muS + 1.0) * 0.5) * float(kMsMuSteps - 1);
+    int ir0 = min(int(fr), kMsRSteps - 2);
+    int imu0 = min(int(fmu), kMsMuSteps - 2);
+    float tr = fr - float(ir0);
+    float tmu = fmu - float(imu0);
+    float w00 = (1.0 - tr) * (1.0 - tmu), w01 = (1.0 - tr) * tmu;
+    float w10 = tr * (1.0 - tmu), w11 = tr * tmu;
+    int p0 = kMsOff + (ir0 * kMsMuSteps + imu0) * 3;
+    int p1 = p0 + kMsMuSteps * 3;
+    return vec3(w00 * atmoTab[p0 + 0] + w01 * atmoTab[p0 + 3] + w10 * atmoTab[p1 + 0] +
+                    w11 * atmoTab[p1 + 3],
+                w00 * atmoTab[p0 + 1] + w01 * atmoTab[p0 + 4] + w10 * atmoTab[p1 + 1] +
+                    w11 * atmoTab[p1 + 4],
+                w00 * atmoTab[p0 + 2] + w01 * atmoTab[p0 + 5] + w10 * atmoTab[p1 + 2] +
+                    w11 * atmoTab[p1 + 5]);
+}
+
+float rayleighPhase(float cosT) { return (3.0 / (16.0 * PI)) * (1.0 + cosT * cosT); }
+
+float miePhase(float cosT, float g) {
+    float g2 = g * g;
+    float num = (1.0 - g2) * (1.0 + cosT * cosT);
+    float den = (2.0 + g2) * pow(1.0 + g2 - 2.0 * g * cosT, 1.5);
+    return (3.0 / (8.0 * PI)) * num / max(1e-6, den);
+}
+
+vec3 atmoRadiance(vec3 viewDir) {
+    vec3 V = normalize(viewDir);
+    float r0 = kCameraRadius;
+    float mu0 = V.z;
+    float tMax = distanceToSphere(r0, mu0, kAtmosphereRadius);
+    if (tMax <= 0.0) return vec3(0.0);
+    float discG = kEarthRadius * kEarthRadius - r0 * r0 * (1.0 - mu0 * mu0);
+    if (discG >= 0.0) {
+        float tG = -r0 * mu0 - sqrt(discG);
+        if (tG > 1.0) tMax = min(tMax, tG);
+    }
+    int N = pFlags2.w;
+    float dt = tMax / float(N);
+    float rmu0 = r0 * mu0;
+    float cosT = dot(V, pSunDir.xyz);
+    float phaseR = rayleighPhase(cosT);
+    float phaseM = miePhase(cosT, pAtmo.z);
+    vec3 sumR = vec3(0.0), sumM = vec3(0.0), sumMs = vec3(0.0);
+    float viewOdR = 0.0, viewOdM = 0.0;
+    for (int k = 0; k < N; ++k) {
+        float t = (float(k) + 0.5) * dt;
+        float rr = sqrt(r0 * r0 + 2.0 * rmu0 * t + t * t);
+        float h = max(0.0, rr - kEarthRadius);
+        float dR = exp(-h / kHRayleigh);
+        float dM = exp(-h / kHMie);
+        viewOdR += dR * dt;
+        viewOdM += dM * dt;
+        float sx = V.x * t, sy = V.y * t, sz = r0 + V.z * t;
+        float muSun = (sx * pSunDir.x + sy * pSunDir.y + sz * pSunDir.z) / rr;
+        float odsR, odsM;
+        sampleOd(rr, muSun, odsR, odsM);
+        bool sunlit = odsR < kBlockedOd;
+        vec3 psi = sampleMs(rr, muSun);
+        bool anyMs = psi.x + psi.y + psi.z > 0.0;
+        if (!sunlit && !anyMs) continue;
+        vec3 tauView = kBetaR * viewOdR + pAtmo.y * viewOdM;
+        vec3 tView = exp(-tauView);
+        if (anyMs) sumMs += psi * (kBetaR * dR + pAtmo.x * dM) * tView * dt;
+        if (sunlit) {
+            vec3 trans = tView * exp(-(kBetaR * odsR + pAtmo.y * odsM));
+            sumR += dR * trans * dt;
+            sumM += dM * trans * dt;
+        }
+    }
+    return max(vec3(0.0),
+               kSunIntensity * (kBetaR * phaseR * sumR + pAtmo.x * phaseM * sumM + sumMs));
+}
+
+vec3 scatterDisplay(vec3 dir) {
+    vec3 c = atmoRadiance(dir) * pCamMisc.w;
+    c += pNight.w * vec3(0.55, 0.72, 1.00);
+    if (pFlags.w != 0) {
+        float lift = 0.010 * pMoonRight.w * pMoonToObs.w * pNight.y;
+        c += lift * vec3(0.75, 0.85, 1.15);
+    }
+    return c;
+}
+
+vec3 domeRadiance(vec3 dir) {
+    vec3 day = dayRadiance(dir);
+    if (pFlags2.x == 0) return day;  // sun at/above the horizon: pure Hosek-Wilkie
+    return mix(day, scatterDisplay(dir), pNight.y);
+}
+
+// ------------------------------------------------------------------------------------------
+// Star field splat (sky_render.cpp StarField::sampleAt over the host-projected catalogue)
+// ------------------------------------------------------------------------------------------
+
+const float kStarCoreSigma = 0.72;
+const float kStarGlowSigma = 2.6;
+
+vec3 sampleStars(float fx, float fy) {
+    vec3 sum = vec3(0.0);
+    if (pWin.w == 0) return sum;
+    int cols = pFlags2.y, rows = pFlags2.z;
+    float cell = pAmbBase.w;
+    int cx = clamp(int(floor(fx / cell)), 0, cols - 1);
+    int cy = clamp(int(floor(fy / cell)), 0, rows - 1);
+    for (int gy = cy - 1; gy <= cy + 1; ++gy)
+        for (int gx = cx - 1; gx <= cx + 1; ++gx) {
+            if (gx < 0 || gy < 0 || gx >= cols || gy >= rows) continue;
+            int bin = gy * cols + gx;
+            uint from = pBins[bin];
+            uint to = pBins[bin + 1];
+            for (uint i = from; i < to; ++i) {
+                Star s = pStars[pBins[uint(cols * rows + 1) + i]];
+                float dx = fx - s.a.x, dy = fy - s.a.y;
+                float d2 = dx * dx + dy * dy;
+                float core = exp(-d2 / (2.0 * kStarCoreSigma * kStarCoreSigma));
+                sum += vec3(s.a.z, s.a.w, s.b.x) * core;
+                vec3 glow = s.b.yzw;
+                if (glow.x > 0.0 || glow.y > 0.0 || glow.z > 0.0) {
+                    float gl = exp(-d2 / (2.0 * kStarGlowSigma * kStarGlowSigma));
+                    sum += glow * gl;
+                }
+            }
+        }
+    return sum;
+}
+
+// ------------------------------------------------------------------------------------------
+// The Moon (sky_render.cpp's discEmit): LRO albedo sphere-mapped, LOLA relief,
+// Lommel-Seeliger terminator, manual bilinear so the filtering matches the CPU's.
+// ------------------------------------------------------------------------------------------
+
+const int kMoonW = 1024;
+const int kMoonH = 512;
+const float kMoonRadiusM = 1737.4e3;
+const float kMoonEastSign = -1.0;
+
+float moonAlbTexel(int x, int y) {
+    int idx = y * kMoonW + x;
+    uint w = pMoonAlb[idx >> 2];
+    return float((w >> uint(8 * (idx & 3))) & 0xFFu) * (1.0 / 255.0);
+}
+
+float moonElevTexel(int x, int y) {
+    int idx = y * kMoonW + x;
+    uint w = pMoonElev[idx >> 1];
+    uint h16 = (w >> uint(16 * (idx & 1))) & 0xFFFFu;
+    return float(int(h16 << 16u) >> 16);  // sign-extend int16 metres
+}
+
+float sampleMoonAlbedo(float u, float v) {
+    u -= floor(u);
+    float fu = u * float(kMoonW) - 0.5;
+    float fv = clamp01(v) * float(kMoonH) - 0.5;
+    int x0 = int(floor(fu));
+    int y0 = int(floor(fv));
+    float tx = fu - float(x0), ty = fv - float(y0);
+    int x0w = x0 & (kMoonW - 1), x1w = (x0 + 1) & (kMoonW - 1);
+    int y0c = clamp(y0, 0, kMoonH - 1), y1c = clamp(y0 + 1, 0, kMoonH - 1);
+    float top = moonAlbTexel(x0w, y0c) * (1.0 - tx) + moonAlbTexel(x1w, y0c) * tx;
+    float bot = moonAlbTexel(x0w, y1c) * (1.0 - tx) + moonAlbTexel(x1w, y1c) * tx;
+    return top * (1.0 - ty) + bot * ty;
+}
+
+float sampleMoonElevation(float u, float v) {
+    u -= floor(u);
+    float fu = u * float(kMoonW) - 0.5;
+    float fv = clamp01(v) * float(kMoonH) - 0.5;
+    int x0 = int(floor(fu));
+    int y0 = int(floor(fv));
+    float tx = fu - float(x0), ty = fv - float(y0);
+    int x0w = x0 & (kMoonW - 1), x1w = (x0 + 1) & (kMoonW - 1);
+    int y0c = clamp(y0, 0, kMoonH - 1), y1c = clamp(y0 + 1, 0, kMoonH - 1);
+    float top = moonElevTexel(x0w, y0c) * (1.0 - tx) + moonElevTexel(x1w, y0c) * tx;
+    float bot = moonElevTexel(x0w, y1c) * (1.0 - tx) + moonElevTexel(x1w, y1c) * tx;
+    return top * (1.0 - ty) + bot * ty;
+}
+
+// The emitted disc colour + coverage for one sample ray; false past the limb.
+bool moonDiscEmit(vec3 sdir, out vec3 emit, out float cov) {
+    emit = vec3(0.0);
+    cov = 0.0;
+    float moonDiscRad = pMoonDir.w;
+    float gm = angleBetween(sdir, pMoonDir.xyz);
+    float dn = gm / moonDiscRad;
+    if (dn >= 1.03) return false;
+    cov = 1.0 - smoothstep(0.975, 1.03, dn);
+    if (cov <= 0.0) return false;
+    float a = dot(sdir, pMoonRight.xyz) / moonDiscRad;
+    float bb = dot(sdir, pMoonUp.xyz) / moonDiscRad;
+    float r2 = min(1.0, a * a + bb * bb);
+    float zc = sqrt(1.0 - r2);
+    vec3 n = normalize(a * pMoonRight.xyz + bb * pMoonUp.xyz - zc * pMoonDir.xyz);
+    vec3 moonNorth = pMoonNorth.xyz;
+    vec3 moonToObs = pMoonToObs.xyz;
+    float lat = asin(clamp(dot(n, moonNorth), -1.0, 1.0));
+    float wN = dot(moonToObs, moonNorth), nN = dot(n, moonNorth);
+    vec3 wEq = moonToObs - wN * moonNorth;
+    vec3 nEq = n - nN * moonNorth;
+    float relLon = atan(dot(moonNorth, cross(wEq, nEq)), dot(wEq, nEq));
+    float lonDeg = pMoonUp.w + relLon * kRadToDeg;
+    float u = 0.5 + kMoonEastSign * lonDeg / 360.0;
+    float v = 0.5 - lat * kRadToDeg / 180.0;
+    float albedo = sampleMoonAlbedo(u, v);
+    // LOLA relief: differentiate through the SAME (u, v) mapping; tilt fades at the limb.
+    vec3 nS = n;
+    {
+        const float dU = 1.0 / float(kMoonW);
+        const float dV = 1.0 / float(kMoonH);
+        float dhdu = (sampleMoonElevation(u + dU, v) - sampleMoonElevation(u - dU, v)) / (2.0 * dU);
+        float dhdv = (sampleMoonElevation(u, v + dV) - sampleMoonElevation(u, v - dV)) / (2.0 * dV);
+        float dhdLon = dhdu * kMoonEastSign / (2.0 * PI);
+        float dhdLat = -dhdv / PI;
+        vec3 eastRaw = cross(moonNorth, n);
+        float el2 = dot(eastRaw, eastRaw);
+        if (el2 > 1e-12) {
+            vec3 east = normalize(eastRaw);
+            vec3 north = cross(n, east);
+            float cosLat = max(0.05, cos(lat));
+            float limbFade = smoothstep(0.05, 0.30, zc);
+            float se = limbFade * dhdLon / (kMoonRadiusM * cosLat);
+            float sn = limbFade * dhdLat / kMoonRadiusM;
+            nS = normalize(n - se * east - sn * north);
+        }
+    }
+    float cosI = dot(nS, pMoonLight.xyz);
+    float cosE = dot(nS, moonToObs);
+    float illumination = cosI > 0.0 ? clamp01(2.0 * cosI / (cosI + cosE + 1e-3)) : 0.0;
+    float earthshine = 0.02 * pNight.x;
+    float kMoon = 0.35 + 3.05 * pNight.x;
+    float lum = albedo * (kMoon * illumination + earthshine);
+    emit = vec3(lum * 0.99, lum * 0.985, lum * 0.94);
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------
+// The 2D cloud deck density (sky_render.cpp deckDensity)
+// ------------------------------------------------------------------------------------------
+
+float deckDensity(int di, vec2 wM) {
+    float ca = pSunHoriz.w, sa = pSunTint.w;  // cos/sin of the wind compass angle
+    float along = wM.x * sa + wM.y * ca;
+    float across = wM.x * ca - wM.y * sa;
+    float featureM = pDecks[di].a.y;
+    vec2 p = vec2(along / (featureM * pDecks[di].c.w), across / featureM);
+    vec2 q = p * 1.9;
+    vec2 warped = p + pDecks[di].b.w * vec2(fbm2(pDecks[di].s0.zw, q, 3, 0.5),
+                                            fbm2(pDecks[di].s1.xy, q, 3, 0.5));
+    float body = 0.5 + 0.5 * fbm2(pDecks[di].s0.xy, warped, int(pDecks[di].c.x), pDecks[di].c.y);
+    float erode = fbm2(pDecks[di].s1.zw, warped * 4.3, 2, 0.6) * pDecks[di].c.z;
+    float worleyMix = pDecks[di].b.y;
+    if (worleyMix <= 0.0) return clamp01(body + erode);
+    Worley2R cell = worley2(pDecks[di].s2.xy, warped * 0.9);
+    float puff = clamp01(1.0 - cell.f1 * 0.95);
+    return clamp01(body * (1.0 - worleyMix) + puff * worleyMix + erode);
+}
+
+// ------------------------------------------------------------------------------------------
+// The volumetric lane (cloud_volume.cpp): implicit Perlin-Worley field, Beer-Lambert march,
+// dual-lobe HG + powder, light-march self-shadow, slant-scaled steps + per-pixel jitter.
+// ------------------------------------------------------------------------------------------
+
+const float kSunGain = 2.6;
+const float kSlantStepCap = 3.0;
+
+float remapC(float v, float lo, float hi, float a, float b) {
+    if (hi <= lo) return a;
+    return a + clamp01((v - lo) / (hi - lo)) * (b - a);
+}
+
+float heightGradient(float h, int di) {
+    float base = smoothstep(0.0, pDecks[di].v2.y, h);
+    float top = 1.0 - smoothstep(pDecks[di].v2.z, 1.0, h);
+    float g = base * top;
+    float anvil = pDecks[di].v2.x;
+    if (anvil > 0.0) {
+        float anvilLobe = anvil * smoothstep(0.55, 0.75, h) * (1.0 - smoothstep(0.92, 1.0, h));
+        g = max(g, anvilLobe * base);
+    }
+    return clamp01(g);
+}
+
+float cloudDensity(int di, vec3 w, bool cheap) {
+    float baseM = pDecks[di].v0.x, thicknessM = pDecks[di].v0.y;
+    float h = (w.z - baseM) / thicknessM;
+    if (h < 0.0 || h > 1.0) return 0.0;
+    float ca = pSunHoriz.w, sa = pSunTint.w;
+    float along = w.x * sa + w.y * ca;
+    float across = w.x * ca - w.y * sa;
+    float featureM = pDecks[di].v0.z;
+    vec3 p = vec3(along / (featureM * pDecks[di].v2.w), across / featureM, w.z / featureM);
+    vec3 q = p * 1.9;
+    vec3 wp = p + pDecks[di].v1.w * vec3(fbm3(pDecks[di].s3.xy, q, 3, 0.5),
+                                         fbm3(pDecks[di].s3.zw, q, 3, 0.5),
+                                         fbm3(pDecks[di].s4.xy, q, 3, 0.5));
+    int bodyOct = int(pDecks[di].v4.x);
+    int oct = cheap ? max(2, bodyOct / 2) : bodyOct;
+    float billow = 0.5 + 0.5 * fbm3(pDecks[di].s2.zw, wp, oct, 0.5);
+    float baseShape = billow;
+    float worleyMix = pDecks[di].v1.y;
+    if (!cheap && worleyMix > 0.0) {
+        float f1 = worley3(pDecks[di].s4.zw, wp * 0.9).f1;
+        float puff = clamp01(1.0 - f1 * 0.95);
+        baseShape = clamp01(billow * (1.0 - worleyMix) + puff * worleyMix);
+    }
+    float d = remapC(baseShape, 1.0 - pDecks[di].v0.w, 1.0, 0.0, 1.0) * heightGradient(h, di);
+    if (d <= 0.0) return 0.0;
+    float erosion = pDecks[di].v1.z;
+    if (!cheap && erosion > 0.0) {
+        float e = worley3(pDecks[di].s5.xy, wp * 3.4).f1;
+        d = remapC(d, clamp01(e) * erosion, 1.0, 0.0, 1.0);
+    }
+    return clamp01(d);
+}
+
+float henyeyGreenstein(float cosT, float g) {
+    float gg = g * g;
+    float denom = max(1e-4, 1.0 + gg - 2.0 * g * cosT);
+    return (1.0 - gg) / (denom * sqrt(denom));
+}
+
+float phaseFn(float cosT, float g) {
+    return max(henyeyGreenstein(cosT, g), 0.7 * henyeyGreenstein(cosT, -0.15));
+}
+
+struct VolSample {
+    vec3 scatter;
+    float coverage;
+    float firstHitM;
+};
+
+VolSample marchCloud(int di, vec3 rayDir, float jitter01) {
+    VolSample o;
+    o.scatter = vec3(0.0);
+    o.coverage = 0.0;
+    o.firstHitM = 0.0;
+    float baseM = pDecks[di].v0.x, thicknessM = pDecks[di].v0.y;
+    float topM = baseM + thicknessM;
+    if (rayDir.z <= 1e-3 || pDecks[di].v0.w <= 1e-4 || thicknessM <= 0.0) return o;
+    float tEnter = baseM / rayDir.z;
+    float tExit = topM / rayDir.z;
+    float slant = (tExit - tEnter) / thicknessM;
+    // CPU lround (half away from zero, positive domain) == floor(x + 0.5).
+    int steps = max(8, int(floor(pDecks[di].v3.z * min(kSlantStepCap, slant) + 0.5)));
+    float dt = (tExit - tEnter) / float(steps);
+    float cosT = dot(rayDir, pSunDir.xyz);
+    float phase = phaseFn(cosT, pDecks[di].v3.x);
+    int lightSteps = int(pDecks[di].v3.w);
+    float lightStepM = thicknessM / float(max(1, lightSteps));
+    float extinction = pDecks[di].v1.x;
+    float powder = pDecks[di].v3.y;
+    float transmittance = 1.0;
+    vec3 scatter = vec3(0.0);
+    bool hit = false;
+    for (int i = 0; i < steps; ++i) {
+        float t = tEnter + (float(i) + jitter01) * dt;
+        vec3 w = rayDir * t;
+        float dens = cloudDensity(di, w, false);
+        if (dens <= 1e-3) continue;
+        if (!hit) {
+            hit = true;
+            o.firstHitM = t;
+        }
+        float stepTau = dens * extinction * dt;
+        float tauL = 0.0;
+        for (int j = 0; j < lightSteps; ++j) {
+            float ls = (float(j) + 0.5) * lightStepM;
+            tauL += cloudDensity(di, w + pSunDir.xyz * ls, true) * extinction * lightStepM;
+        }
+        float beer = exp(-tauL);
+        float beerPowder = 2.0 * beer * (1.0 - exp(-2.0 * tauL));
+        float lightEnergy = beer + (beerPowder - beer) * powder;
+        float h = clamp01((w.z - baseM) / thicknessM);
+        float ambFactor = 0.15 + 0.85 * h;
+        float sun = kSunGain * lightEnergy * phase;
+        vec3 radiance = pLitBase.rgb * sun + pAmbBase.rgb * ambFactor;
+        float stepTrans = exp(-stepTau);
+        scatter += transmittance * (1.0 - stepTrans) * radiance;
+        transmittance *= stepTrans;
+        if (transmittance < 0.01) break;
+    }
+    if (!hit) return o;
+    o.scatter = scatter;
+    o.coverage = clamp01(1.0 - transmittance);
+    return o;
+}
+
+// ------------------------------------------------------------------------------------------
+// Lens flare (sky_render.cpp's screen-space flare, transcribed): the FROZEN 7-ghost train +
+// centre halo + starburst, every term a pure analytic function of the frame pixel over
+// host-cooked constants. The no-lens-prescription-simulation posture rides over
+// unchanged -- this is the same published-art mechanism, per-pixel.
+// ------------------------------------------------------------------------------------------
+
+const int kFlareSpikes = 6;
+const float kFlareFringe = 0.055;
+
+// t, size, energy per ghost; the coating tint alongside.
+const vec3 kFlareGhost[7] = vec3[7](vec3(0.62, 0.024, 0.34), vec3(0.44, 0.040, 0.16),
+                                    vec3(0.21, 0.015, 0.44), vec3(-0.08, 0.056, 0.11),
+                                    vec3(-0.32, 0.028, 0.22), vec3(-0.60, 0.078, 0.09),
+                                    vec3(-1.05, 0.048, 0.15));
+const vec3 kFlareTint[7] = vec3[7](vec3(1.00, 0.86, 0.58), vec3(0.70, 0.85, 1.00),
+                                   vec3(1.00, 0.78, 0.52), vec3(0.58, 0.80, 1.00),
+                                   vec3(0.62, 1.00, 0.80), vec3(0.86, 0.62, 1.00),
+                                   vec3(1.00, 0.70, 0.78));
+
+float flareNgon(float dx, float dy, float radius, float rot) {
+    float r = length(vec2(dx, dy));
+    if (r <= 1e-9) return 0.68;
+    const float seg = 2.0 * PI / float(kFlareSpikes);
+    float th = atan(dy, dx) - rot;
+    th -= seg * floor(th / seg);
+    float polyR = cos(0.5 * seg) / cos(th - 0.5 * seg);
+    float d = r / (radius * polyR);
+    float body = 1.0 - smoothstep(0.82, 1.0, d);
+    return body * (0.68 + 0.32 * smoothstep(0.30, 0.92, d));
+}
+
+vec3 lensFlareAt(float fx, float fy) {
+    float ax = pFlare0.x - pFlare0.z, ay = pFlare0.y - pFlare0.w;
+    float vis = pFlare2.y;
+    vec3 hue = pFlareHue.xyz;
+    vec3 sum = vec3(0.0);
+    for (int i = 0; i < 7; ++i) {
+        float gx = pFlare0.z + kFlareGhost[i].x * ax;
+        float gy = pFlare0.w + kFlareGhost[i].x * ay;
+        float radius = kFlareGhost[i].y * pFlare1.x;
+        float reach = radius * (1.0 + kFlareFringe);
+        float dx = fx - gx, dy = fy - gy;
+        if (abs(dx) > reach || abs(dy) > reach) continue;  // the common case
+        float rot = pFlare2.x + kFlareGhost[i].x;
+        float e = kFlareGhost[i].z * vis;
+        sum.r += e * kFlareTint[i].r * hue.r * flareNgon(dx, dy, reach, rot);
+        sum.g += e * kFlareTint[i].g * hue.g * flareNgon(dx, dy, radius, rot);
+        sum.b += e * kFlareTint[i].b * hue.b *
+                 flareNgon(dx, dy, radius * (1.0 - kFlareFringe), rot);
+    }
+    {
+        float r = length(vec2(fx - pFlare0.z, fy - pFlare0.w));
+        float s2 = 2.0 * pFlare1.z * pFlare1.z;
+        float e = 0.085 * vis;
+        float dR = r - pFlare1.y * 1.045;
+        float dG = r - pFlare1.y;
+        float dB = r - pFlare1.y * 0.955;
+        sum.r += e * hue.r * exp(-dR * dR / s2);
+        sum.g += e * hue.g * exp(-dG * dG / s2);
+        sum.b += e * hue.b * exp(-dB * dB / s2);
+    }
+    {
+        float dx = fx - pFlare0.x, dy = fy - pFlare0.y;
+        float r = length(vec2(dx, dy));
+        if (r > 1e-9 && r < 4.0 * pFlare1.w) {
+            float phi = atan(dy, dx);
+            float lobe = pow(0.5 + 0.5 * cos(float(kFlareSpikes) * (phi - pFlare2.x)), 26.0);
+            float e = 0.60 * vis * lobe * exp(-r / pFlare1.w);
+            sum += e * hue;
+        }
+    }
+    return sum;
+}
+
+// ------------------------------------------------------------------------------------------
+// Display mapping (§4.4): extended Reinhard (white 6) -> sRGB encode -> TPDF dither.
+// ------------------------------------------------------------------------------------------
+
+const float kTonemapWhite = 6.0;
+
+float tonemap(float lin) {
+    float x = max(0.0, lin);
+    return x * (1.0 + x / (kTonemapWhite * kTonemapWhite)) / (1.0 + x);
+}
+
+float srgbEncode(float lin) {
+    if (lin <= 0.0031308) return max(0.0, lin) * 12.92;
+    return 1.055 * pow(lin, 1.0 / 2.4) - 0.055;
+}
+
+// ------------------------------------------------------------------------------------------
+
+void main() {
+    uint lx = gl_GlobalInvocationID.x;
+    uint ly = gl_GlobalInvocationID.y + pc.rowOff;
+    if (lx >= uint(pWin.x) || ly >= uint(pWin.y)) return;
+    float fx = float(pFrame.z) + float(lx);  // frame pixel (window origin + window-local)
+    float fy = float(pFrame.w) + float(ly);
+    uint pxi = uint(pFrame.z + int(lx));
+    uint pyi = uint(pFrame.w + int(ly));
+
+    vec3 dir = rayAt(fx + 0.5, fy + 0.5);
+    float elev = asin(clamp(dir.z, -1.0, 1.0));
+    vec4 acc = vec4(0.0);
+
+    // Horizon-direction radiance, cooked lazily (shared by the ground band, haze and decks).
+    vec3 horizDir = normalize(vec3(dir.x, dir.y, 0.035));
+    vec3 horizonRgb = vec3(0.0);
+    bool horizonCooked = false;
+
+    if (pFlags.x != 0) {  // enableDome
+        if (dir.z >= 0.0) {
+            acc = vec4(domeRadiance(dir), 1.0);
+        } else {
+            float depth = -elev / kDegToRad;
+            float fade = 0.10 + 0.90 * exp(-depth / 2.6);
+            if (!horizonCooked) {
+                horizonRgb = domeRadiance(horizDir);
+                horizonCooked = true;
+            }
+            acc = vec4(horizonRgb * fade * vec3(0.80, 0.83, 0.90), 1.0);
+        }
+    }
+
+    if (pNight.z > 0.0 && pFlags.x != 0 && dir.z >= 0.0) {
+        acc.rgb += sampleStars(fx + 0.5, fy + 0.5);
+    }
+
+    if (pFlags.z != 0 && acc.a > 0.0 && dir.z >= 0.0) {  // enableHaze
+        float haze01 = pDiscColor.w;
+        float amt = haze01 * pow(1.0 - clamp01(sin(elev) / 0.35), 2.5) * 0.32;
+        if (amt > 1e-4) {
+            if (!horizonCooked) {
+                horizonRgb = domeRadiance(horizDir);
+                horizonCooked = true;
+            }
+            acc.rgb += (horizonRgb - acc.rgb) * amt;
+        }
+    }
+
+    if (pFlags.y != 0 && dir.z >= 0.0) {  // enableSun
+        float haze01 = pDiscColor.w;
+        float gamma = angleBetween(dir, pSunDir.xyz);
+        float dNorm = gamma / pSunDir.w;
+        float disc = 1.0 - smoothstep(0.86, 1.22, dNorm);
+        float aur = exp(-(dNorm * dNorm) / (2.0 * 30.25)) * (0.42 + 0.55 * haze01);
+        float glow = exp(-gamma / (0.13 + 0.30 * haze01)) * (0.12 + 0.34 * haze01);
+        float cov = clamp01(disc + aur + glow);
+        if (cov > 1e-4) {
+            float t = clamp01(disc + 0.58 * aur);
+            vec3 c = mix(vec3(1.35 * pSunTint.x + 0.10, 1.32 * pSunTint.y + 0.10,
+                              1.25 * pSunTint.z + 0.10),
+                         pDiscColor.rgb, t);
+            acc = overRgb(c, cov, acc);
+        }
+    }
+
+    if (pFlags.w != 0 && dir.z >= 0.0) {  // the moon
+        float moonDiscRad = pMoonDir.w;
+        float gammaM = angleBetween(dir, pMoonDir.xyz);
+        float dN = gammaM / moonDiscRad;
+        if (dN < 7.0 && pNight.x > 0.0) {
+            float halo = exp(-(dN * dN) / (2.0 * 6.25)) * 0.055 * pNight.x *
+                         (0.25 + 0.75 * pMoonToObs.w);
+            if (halo > 1e-4) {
+                vec3 c = vec3(halo + acc.r, halo * 1.02 + acc.g, halo * 1.12 + acc.b);
+                acc = overRgb(c, clamp01(halo * 2.5), acc);
+            }
+        }
+        if (dN < 1.4) {
+            // 4x rotated-grid supersampling, exactly the CPU's kRG offsets.
+            const vec2 kRG[4] = vec2[4](vec2(0.125, 0.375), vec2(0.375, -0.125),
+                                        vec2(-0.125, -0.375), vec2(-0.375, 0.125));
+            vec3 premul = vec3(0.0);
+            float covSum = 0.0;
+            for (int s = 0; s < 4; ++s) {
+                vec3 emit;
+                float cov;
+                if (moonDiscEmit(rayAt(fx + 0.5 + kRG[s].x, fy + 0.5 + kRG[s].y), emit, cov)) {
+                    premul += emit * cov;
+                    covSum += cov;
+                }
+            }
+            if (covSum > 1e-4) {
+                vec3 c = premul / covSum + acc.rgb;
+                acc = overRgb(c, covSum / 4.0, acc);
+            }
+        }
+    }
+
+    int deckCount = pWin.z;
+    if (deckCount > 0 && dir.z > 1e-4) {
+        float visibilityM = pLitBase.w;
+        for (int di = 0; di < deckCount; ++di) {
+            float coverage = pDecks[di].a.z;
+            if (coverage <= 1e-4) continue;
+
+            if (pDecks[di].f.x > 0.5) {  // the volumetric lane
+                float tEnterGuess = pDecks[di].a.x / dir.z;
+                if (exp(-tEnterGuess / visibilityM) <= 1e-3) continue;
+                VolSample s = marchCloud(di, dir, marchJitter01(pxi, pyi));
+                if (s.coverage <= 1e-4) continue;
+                float fade = exp(-s.firstHitM / visibilityM);
+                if (fade <= 1e-3) continue;
+                vec3 c = s.scatter / s.coverage;
+                float cov = s.coverage * fade;
+                if (acc.a > 0.0) {
+                    if (!horizonCooked) {
+                        horizonRgb = domeRadiance(horizDir);
+                        horizonCooked = true;
+                    }
+                    c = mix(horizonRgb, c, 0.25 + 0.75 * fade);
+                    cov = s.coverage * (0.25 + 0.75 * fade);
+                }
+                acc = overRgb(c, cov, acc);
+                continue;
+            }
+
+            float t = pDecks[di].a.x / dir.z;
+            vec2 wM = dir.xy * t;
+            float n01 = deckDensity(di, wM);
+            float thr = 1.0 - coverage;
+            float covRaw = smoothstep(thr, thr + pDecks[di].b.x, n01) * pDecks[di].a.w;
+            if (covRaw <= 1e-4) continue;
+            float fade = exp(-t / visibilityM);
+            if (fade <= 1e-3) continue;
+            float thick = smoothstep(thr, 1.0, n01);
+            float featureM = pDecks[di].a.y;
+            float nLit = deckDensity(di, wM + pSunHoriz.xy * featureM * 0.35);
+            float edgeLit = clamp((n01 - nLit) * 2.8, -0.45, 0.9);
+            float gamma = angleBetween(dir, pSunDir.xyz);
+            float fwdScat = exp(-gamma / 0.45);
+            float light = 0.72 + 0.5 * edgeLit - (1.0 - pDecks[di].b.z) * thick;
+            light = clamp01(light) * (0.85 + 0.45 * fwdScat);
+            vec3 c = mix(pAmbBase.rgb, pLitBase.rgb, clamp01(light));
+            float cov = covRaw * fade;
+            if (acc.a > 0.0) {
+                if (!horizonCooked) {
+                    horizonRgb = domeRadiance(horizDir);
+                    horizonCooked = true;
+                }
+                c = mix(horizonRgb, c, 0.25 + 0.75 * fade);
+                cov = covRaw * (0.25 + 0.75 * fade);
+            }
+            acc = overRgb(c, cov, acc);
+        }
+    }
+
+    if (pFlare2.z > 0.5) {
+        // Lens light rides OVER the decks; over transparency it carries its own coverage
+        // (sky_render.cpp's additive-reconstruction idiom).
+        vec3 fl = lensFlareAt(fx + 0.5, fy + 0.5);
+        float fmax = max(fl.r, max(fl.g, fl.b));
+        if (fmax > 1e-5) {
+            float cov = clamp01(3.0 * fmax);
+            vec3 c = fl / cov + acc.rgb;
+            acc = overRgb(c, cov, acc);
+        }
+    }
+
+    const float kDitherLsb = 1.0 / 255.0;
+    vec4 outc =
+        vec4(max(0.0, srgbEncode(tonemap(acc.r)) + ditherTPDF(pxi, pyi, 0u) * kDitherLsb),
+             max(0.0, srgbEncode(tonemap(acc.g)) + ditherTPDF(pxi, pyi, 1u) * kDitherLsb),
+             max(0.0, srgbEncode(tonemap(acc.b)) + ditherTPDF(pxi, pyi, 2u) * kDitherLsb), acc.a);
+    imageStore(uOut, ivec2(int(lx), int(ly)), outc);
+}

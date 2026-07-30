@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Mosaic</string>
+    <key>CFBundleDisplayName</key>
+    <string>Mosaic</string>
+    <key>CFBundleIdentifier</key>
+    <string>org.mosaic.Mosaic</string>
+    <key>CFBundleVersion</key>
+    <string>@MOSAIC_VERSION@</string>
+    <key>CFBundleShortVersionString</key>
+    <string>@MOSAIC_VERSION@</string>
+    <key>CFBundleExecutable</key>
+    <string>mosaic</string>
+    <key>CFBundleIconFile</key>
+    <string>mosaic.icns</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.3</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>Mosaic is free software under the GNU GPL v3.</string>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Mosaic Document</string>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>mosaic</string></array>
+            <!-- The UTI, not just the extension: the Quick Look extension is matched to a file by
+                 TYPE, so a document type that names only its suffix never reaches it. -->
+            <key>LSItemContentTypes</key>
+            <array><string>org.mosaic.document</string></array>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+        </dict>
+    </array>
+    <!-- Mosaic OWNS the .mosaic type, so it EXPORTS the declaration rather than importing one.
+         ⚠ It conforms to public.data and public.content, NOT public.image. Declaring public.image
+         would be a claim that ImageIO can decode the file: the system then hands it to its OWN
+         built-in image thumbnailer and previewer, which fail on a container they cannot parse --
+         and having claimed the file, they never fall through to our Quick Look extension. The
+         result is exactly no thumbnail plus an error from the space-bar preview. public.content is
+         what makes it a document to Spotlight and the Open panel without that claim. -->
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>org.mosaic.document</string>
+            <key>UTTypeDescription</key>
+            <string>Mosaic Document</string>
+            <key>UTTypeIconFile</key>
+            <string>mosaic.icns</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.data</string>
+                <string>public.content</string>
+            </array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array><string>mosaic</string></array>
+                <!-- Matches data/desktop/mosaic.xml, so both desktops name the same type. -->
+                <key>public.mime-type</key>
+                <array><string>image/x-mosaic</string></array>
+            </dict>
+        </dict>
+    </array>
+</dict>
+</plist>

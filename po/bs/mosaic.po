@@ -1,0 +1,6552 @@
+# Mosaic -- Bosnian translation.
+# Copyright (C) 2026 The Mosaic contributors
+# This file is distributed under the same license as the Mosaic package.
+#
+# Machine-assisted first draft (S54). It is a starting point, not a finished
+# translation: corrections from native speakers are welcome and expected. Entries
+# left as msgstr "" fall back to the English text, which is intended.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Mosaic 0.2.17\n"
+"Report-Msgid-Bugs-To: https://github.com/mosaic-devel/mosaic/issues\n"
+"POT-Creation-Date: 2026-07-29 10:08+0200\n"
+"PO-Revision-Date: 2026-07-24 12:00+0000\n"
+"Last-Translator: Mosaic i18n bootstrap <noreply@localhost>\n"
+"Language-Team: Bosnian\n"
+"Language: bs\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: src/core/commands.hpp:73
+msgid "Add Layer"
+msgstr ""
+
+#: src/core/commands.hpp:89 src/ui/layer_panel.cpp:2025
+msgid "Delete Layer"
+msgstr "Obriši sloj"
+
+#: src/core/commands.hpp:131
+msgid "Move Layer"
+msgstr ""
+
+#: src/core/commands.hpp:147
+msgid "Rename Layer"
+msgstr ""
+
+#: src/core/commands.hpp:170 src/ui/app_window.cpp:4045
+msgid "Rename Document"
+msgstr "Preimenuj dokument"
+
+#: src/core/commands.hpp:183
+msgid "Toggle Visibility"
+msgstr ""
+
+#: src/core/commands.hpp:215
+msgid "Set Blend Mode"
+msgstr ""
+
+#: src/core/commands.hpp:229
+msgid "Clip to Layer Below"
+msgstr ""
+
+#: src/core/commands.hpp:246 src/core/commands.hpp:337
+msgid "Set Opacity"
+msgstr ""
+
+#: src/core/commands.hpp:268 src/ui/layer_effects_dialog.cpp:270
+msgid "Layer Effects"
+msgstr "Efekti sloja"
+
+#: src/core/commands.hpp:285
+msgid "Transform Layer"
+msgstr ""
+
+#: src/core/commands.hpp:310
+msgid "Transform Layers"
+msgstr ""
+
+#: src/core/commands.hpp:366 src/core/commands.hpp:401
+msgid "Edit Pixels"
+msgstr ""
+
+#: src/core/commands.hpp:431 src/ui/fill_dialog.cpp:73
+#: src/ui/fill_dialog.cpp:210 src/ui/image_ops_panel.cpp:757
+#: src/ui/layer_effects_dialog.cpp:533 src/ui/tool.cpp:307 src/ui/tool.cpp:503
+msgid "Fill"
+msgstr "Popuni"
+
+#: src/core/commands.hpp:512
+msgid "Paint Mask"
+msgstr ""
+
+#: src/core/commands.hpp:642
+msgid "Resize Canvas"
+msgstr ""
+
+#: src/core/commands.hpp:689
+msgid "Add Guide"
+msgstr ""
+
+#: src/core/commands.hpp:702
+msgid "Remove Guide"
+msgstr ""
+
+#: src/core/commands.hpp:719
+msgid "Move Guide"
+msgstr ""
+
+#: src/core/commands.hpp:735
+msgid "Clear Guides"
+msgstr ""
+
+#: src/core/commands.hpp:752
+msgid "Move Guides"
+msgstr ""
+
+#: src/core/inpaint/backends/he_sun/offset_stats_backend.hpp:19
+msgid "Offset statistics (He & Sun)"
+msgstr ""
+
+#: src/core/inpaint/backends/pde/pde_backend.hpp:23
+msgid "Diffusion (PDE)"
+msgstr ""
+
+#: src/core/inpaint/backends/resynth/resynth_backend.hpp:42
+msgid "Resynthesizer"
+msgstr ""
+
+#: src/core/inpaint/backends/script/script_backend.hpp:31
+msgid "Script provider"
+msgstr ""
+
+#: src/ui/about_dialog.cpp:258 src/ui/app_window.cpp:13556
+msgid "About Mosaic"
+msgstr "O programu Mosaic"
+
+#: src/ui/about_dialog.cpp:275 src/ui/brush_editor.cpp:1151
+msgid "Close"
+msgstr "Zatvori"
+
+#: src/ui/about_dialog.cpp:428
+msgid "Version "
+msgstr "Verzija "
+
+#: src/ui/about_dialog.cpp:452
+msgid "copied ✓"
+msgstr "kopirano ✓"
+
+#: src/ui/about_dialog.cpp:457
+msgid "by "
+msgstr "autor: "
+
+#: src/ui/about_dialog.cpp:508
+msgid "A professional, GPU-accelerated image editor."
+msgstr "Profesionalni uređivač slika ubrzan grafičkim procesorom."
+
+#: src/ui/about_dialog.cpp:512
+msgid "Licensed under "
+msgstr "Licenca: "
+
+#: src/ui/adjustment_panel.cpp:537
+msgid "Channel"
+msgstr ""
+
+#: src/ui/adjustment_panel.cpp:605 src/ui/app_window.cpp:9556
+#: src/ui/layer_effects_dialog.cpp:990
+msgid "Gradient"
+msgstr "Gradijent"
+
+#: src/ui/adjustment_panel.cpp:772
+msgid "Filter color"
+msgstr ""
+
+#: src/ui/adjustment_panel.cpp:789 src/ui/brush_editor.cpp:1115
+#: src/ui/settings_dialog.cpp:1853
+msgid "Reset"
+msgstr "Vrati na početno"
+
+#: src/ui/adjustment_panel.cpp:920
+msgid "Click to choose the filter color"
+msgstr ""
+
+#: src/ui/app_window.cpp:592 src/ui/app_window.cpp:3466
+#: src/ui/app_window.cpp:3966 src/ui/app_window.cpp:4073
+#: src/ui/app_window.cpp:11359 src/ui/brush_editor.cpp:1911
+#: src/ui/export_dialog.cpp:1135 src/ui/fill_dialog.cpp:213
+#: src/ui/image_ops_panel.cpp:865 src/ui/layer_effects_dialog.cpp:584
+#: src/ui/new_document_dialog.cpp:1932 src/ui/select_modify_dialog.cpp:116
+#: src/ui/select_morph_panel.cpp:155 src/ui/texture_generator_dialog.cpp:1017
+#: src/ui/tool.cpp:319
+msgid "Cancel"
+msgstr "Otkaži"
+
+#: src/ui/app_window.cpp:615
+msgid "&File/&New..."
+msgstr "&Datoteka/&Nova..."
+
+#: src/ui/app_window.cpp:616
+msgid "&File/&Open..."
+msgstr "&Datoteka/&Otvori..."
+
+#: src/ui/app_window.cpp:619
+msgid "&File/Open &Recent/&Clear Recents"
+msgstr "&Datoteka/Otvori &nedavne/&Očisti spisak"
+
+#: src/ui/app_window.cpp:620
+msgid "&File/Open as &Layer..."
+msgstr "&Datoteka/Otvori kao &sloj..."
+
+#: src/ui/app_window.cpp:621
+msgid "&File/&Save"
+msgstr "&Datoteka/&Sačuvaj"
+
+#: src/ui/app_window.cpp:622
+msgid "&File/Save &As..."
+msgstr "&Datoteka/Sačuvaj &kao..."
+
+#: src/ui/app_window.cpp:624
+msgid "&File/Rena&me Document..."
+msgstr "&Datoteka/&Preimenuj dokument..."
+
+#: src/ui/app_window.cpp:627
+msgid "&File/Flatten &History..."
+msgstr "&Datoteka/Spljošti &historiju..."
+
+#: src/ui/app_window.cpp:631
+msgid "&File/&Export As..."
+msgstr "&Datoteka/&Izvezi kao..."
+
+#: src/ui/app_window.cpp:634
+msgid "&File/Export to Last File"
+msgstr "&Datoteka/Export to Last File"
+
+#: src/ui/app_window.cpp:635
+msgid "&File/&Quick Export as PNG"
+msgstr "&Datoteka/&Brzi izvoz u PNG"
+
+#: src/ui/app_window.cpp:636
+msgid "&File/Quick Export as &JPEG"
+msgstr "&Datoteka/Brzi izvoz u &JPEG"
+
+#: src/ui/app_window.cpp:639
+msgid "&File/Quick Export as JPEG &XL"
+msgstr "&Datoteka/Brzi izvoz u JPEG &XL"
+
+#: src/ui/app_window.cpp:641 src/ui/app_window.cpp:645
+msgid "&File/&Close"
+msgstr "&Datoteka/&Zatvori"
+
+#: src/ui/app_window.cpp:646
+msgid "&File/&Quit"
+msgstr "&Datoteka/Iza&đi"
+
+#: src/ui/app_window.cpp:649
+msgid "&Edit/&Undo"
+msgstr "&Uredi/&Poništi"
+
+#: src/ui/app_window.cpp:650
+msgid "&Edit/&Redo"
+msgstr "&Uredi/Po&novi"
+
+#: src/ui/app_window.cpp:651
+msgid "&Edit/Cu&t"
+msgstr "&Uredi/&Isijeci"
+
+#: src/ui/app_window.cpp:652
+msgid "&Edit/&Copy"
+msgstr "&Uredi/&Kopiraj"
+
+#: src/ui/app_window.cpp:653
+msgid "&Edit/Copy &Merged"
+msgstr "&Uredi/Kopiraj &spojeno"
+
+#: src/ui/app_window.cpp:654
+msgid "&Edit/&Paste"
+msgstr "&Uredi/&Umetni"
+
+#: src/ui/app_window.cpp:658
+msgid "&Edit/Paste in P&lace"
+msgstr "&Uredi/Paste in P&lace"
+
+#: src/ui/app_window.cpp:662
+msgid "&Edit/Cl&ear"
+msgstr "&Uredi/Cl&ear"
+
+#: src/ui/app_window.cpp:664 src/ui/app_window.cpp:666
+msgid "&Edit/Fi&ll..."
+msgstr "&Uredi/Po&puni..."
+
+#: src/ui/app_window.cpp:667
+msgid "&Edit/&Settings..."
+msgstr "&Uredi/Pos&tavke..."
+
+#: src/ui/app_window.cpp:676
+msgid "&Image/Image Si&ze..."
+msgstr "&Slika/&Veličina slike..."
+
+#: src/ui/app_window.cpp:677
+msgid "&Image/&Canvas Size..."
+msgstr "&Slika/Veličina &platna..."
+
+#: src/ui/app_window.cpp:679
+msgid "&Image/&Rotate/&90° Clockwise"
+msgstr "&Slika/&Rotate/&90° Clockwise"
+
+#: src/ui/app_window.cpp:680
+msgid "&Image/&Rotate/9&0° Counter-Clockwise"
+msgstr "&Slika/&Rotate/9&0° Counter-Clockwise"
+
+#: src/ui/app_window.cpp:682
+msgid "&Image/&Rotate/&180°"
+msgstr "&Slika/&Rotate/&180°"
+
+#: src/ui/app_window.cpp:686
+msgid "&Image/&Rotate/&Arbitrary..."
+msgstr "&Slika/&Rotate/&Arbitrary..."
+
+#: src/ui/app_window.cpp:687
+msgid "&Image/&Flip/&Horizontal"
+msgstr "&Slika/&Flip/&Horizontal"
+
+#: src/ui/app_window.cpp:688
+msgid "&Image/&Flip/&Vertical"
+msgstr "&Slika/&Flip/&Vertical"
+
+#: src/ui/app_window.cpp:689
+msgid "&Image/&Trim to Content"
+msgstr "&Slika/&Trim to Content"
+
+#: src/ui/app_window.cpp:693
+msgid "&Layer/Layer &Effects..."
+msgstr "&Sloj/&Efekti sloja..."
+
+#: src/ui/app_window.cpp:694
+msgid "&Layer/Text&ure Generator..."
+msgstr "&Sloj/Generator &tekstura..."
+
+#: src/ui/app_window.cpp:695
+msgid "&Layer/&New Layer"
+msgstr "&Sloj/&Novi sloj"
+
+#: src/ui/app_window.cpp:696
+msgid "&Layer/&Duplicate Layer"
+msgstr "&Sloj/&Dupliciraj sloj"
+
+#: src/ui/app_window.cpp:697
+msgid "&Layer/&Delete Layer"
+msgstr "&Sloj/O&briši sloj"
+
+#: src/ui/app_window.cpp:698
+msgid "&Layer/Rena&me Layer..."
+msgstr "&Sloj/Rena&me Layer..."
+
+#: src/ui/app_window.cpp:699
+msgid "&Layer/&Group Layers"
+msgstr "&Sloj/&Grupiši slojeve"
+
+#: src/ui/app_window.cpp:700
+msgid "&Layer/Merge &Down"
+msgstr "&Sloj/Spoji sa &donjim"
+
+#: src/ui/app_window.cpp:706
+msgid "&Layer/Co&mbine Paths/&Add"
+msgstr "&Sloj/Co&mbine Paths/&Add"
+
+#: src/ui/app_window.cpp:707
+msgid "&Layer/Co&mbine Paths/&Subtract"
+msgstr "&Sloj/Co&mbine Paths/&Subtract"
+
+#: src/ui/app_window.cpp:709
+msgid "&Layer/Co&mbine Paths/&Intersect"
+msgstr "&Sloj/Co&mbine Paths/&Intersect"
+
+#: src/ui/app_window.cpp:711
+msgid "&Layer/Co&mbine Paths/&Exclude"
+msgstr "&Sloj/Co&mbine Paths/&Exclude"
+
+#: src/ui/app_window.cpp:713
+msgid "&Layer/&Flatten to Path"
+msgstr "&Sloj/&Flatten to Path"
+
+#: src/ui/app_window.cpp:716
+msgid "&Layer/Bring &Forward"
+msgstr "&Sloj/Bring &Forward"
+
+#: src/ui/app_window.cpp:717
+msgid "&Layer/Send Back&ward"
+msgstr "&Sloj/Send Back&ward"
+
+#: src/ui/app_window.cpp:720
+msgid "&Layer/&Rasterize"
+msgstr "&Sloj/&Rasterize"
+
+#: src/ui/app_window.cpp:721
+msgid "&Layer/Con&vert to Path"
+msgstr "&Sloj/Con&vert to Path"
+
+#: src/ui/app_window.cpp:722
+msgid "&Layer/Add Mas&k"
+msgstr "&Sloj/Add Mas&k"
+
+#: src/ui/app_window.cpp:723
+msgid "&Layer/Delete Mas&k"
+msgstr "&Sloj/Delete Mas&k"
+
+#: src/ui/app_window.cpp:726
+msgid "&Layer/Disable Mask"
+msgstr "&Sloj/Disable Mask"
+
+#: src/ui/app_window.cpp:727
+msgid "&Layer/Unlink Mask"
+msgstr "&Sloj/Unlink Mask"
+
+#: src/ui/app_window.cpp:728
+msgid "&Layer/Hide Layer"
+msgstr "&Sloj/Hide Layer"
+
+#: src/ui/app_window.cpp:729
+msgid "&Layer/Lock Layer"
+msgstr "&Sloj/Lock Layer"
+
+#: src/ui/app_window.cpp:736
+msgid "&Type/&Rasterize Type"
+msgstr "&Tekst/&Rasterize Type"
+
+#: src/ui/app_window.cpp:737
+msgid "&Type/Convert to &Shape"
+msgstr "&Tekst/Convert to &Shape"
+
+#: src/ui/app_window.cpp:738
+msgid "&Type/&Character && Paragraph..."
+msgstr "&Tekst/&Character && Paragraph..."
+
+#: src/ui/app_window.cpp:739
+msgid "&Type/&3D Type..."
+msgstr "&Tekst/&3D Type..."
+
+#: src/ui/app_window.cpp:743
+msgid "&Type/&Orientation/&Horizontal"
+msgstr "&Tekst/&Orientation/&Horizontal"
+
+#: src/ui/app_window.cpp:745
+msgid "&Type/&Orientation/Vertical (&right to left)"
+msgstr "&Tekst/&Orientation/Vertical (&right to left)"
+
+#: src/ui/app_window.cpp:747
+msgid "&Type/&Orientation/Vertical (&left to right)"
+msgstr "&Tekst/&Orientation/Vertical (&left to right)"
+
+#: src/ui/app_window.cpp:749
+msgid "&Type/&Anti-Alias/&None"
+msgstr "&Tekst/&Anti-Alias/&None"
+
+#: src/ui/app_window.cpp:751
+msgid "&Type/&Anti-Alias/&Grayscale"
+msgstr "&Tekst/&Anti-Alias/&Grayscale"
+
+#: src/ui/app_window.cpp:753
+msgid "&Type/&Kerning/&Metric"
+msgstr "&Tekst/&Kerning/&Metric"
+
+#: src/ui/app_window.cpp:755
+msgid "&Type/&Kerning/&Optical"
+msgstr "&Tekst/&Kerning/&Optical"
+
+#: src/ui/app_window.cpp:757
+msgid "&Type/&Kerning/N&one"
+msgstr "&Tekst/&Kerning/N&one"
+
+#: src/ui/app_window.cpp:759
+msgid "&Type/&Direction/&Automatic"
+msgstr "&Tekst/&Direction/&Automatic"
+
+#: src/ui/app_window.cpp:761
+msgid "&Type/&Direction/&Left to Right"
+msgstr "&Tekst/&Direction/&Left to Right"
+
+#: src/ui/app_window.cpp:767
+msgid "&Type/&Direction/&Right to Left"
+msgstr "&Tekst/&Direction/&Right to Left"
+
+#: src/ui/app_window.cpp:769
+msgid "&Type/Convert to &Point Text"
+msgstr "&Tekst/Convert to &Point Text"
+
+#: src/ui/app_window.cpp:770
+msgid "&Type/Convert to Area Te&xt"
+msgstr "&Tekst/Convert to Area Te&xt"
+
+#: src/ui/app_window.cpp:771
+msgid "&Type/Text on Selected Pat&h"
+msgstr "&Tekst/Text on Selected Pat&h"
+
+#: src/ui/app_window.cpp:772
+msgid "&Type/Release from Path"
+msgstr "&Tekst/Release from Path"
+
+#: src/ui/app_window.cpp:773
+msgid "&Type/Create &Work Path"
+msgstr "&Tekst/Create &Work Path"
+
+#: src/ui/app_window.cpp:774
+msgid "&Type/&Update All Text Layers"
+msgstr "&Tekst/&Update All Text Layers"
+
+#: src/ui/app_window.cpp:776
+msgid "&Select/Select &All"
+msgstr "&Izbor/Izaberi &sve"
+
+#: src/ui/app_window.cpp:777
+msgid "&Select/&Deselect"
+msgstr "&Izbor/&Poništi izbor"
+
+#: src/ui/app_window.cpp:781
+msgid "&Select/&Reselect"
+msgstr "&Izbor/&Reselect"
+
+#: src/ui/app_window.cpp:782
+msgid "&Select/&Inverse"
+msgstr "&Izbor/&Obrni"
+
+#: src/ui/app_window.cpp:786
+msgid "&Select/&Grow..."
+msgstr "&Izbor/&Proširi..."
+
+#: src/ui/app_window.cpp:787
+msgid "&Select/S&hrink..."
+msgstr "&Izbor/&Suzi..."
+
+#: src/ui/app_window.cpp:788
+msgid "&Select/&Feather..."
+msgstr "&Izbor/&Ublaži..."
+
+#: src/ui/app_window.cpp:789
+msgid "&Select/S&mooth..."
+msgstr "&Izbor/&Izgladi..."
+
+#: src/ui/app_window.cpp:792
+msgid "&Select/&Mask from Selection"
+msgstr "&Izbor/&Maska iz izbora"
+
+#: src/ui/app_window.cpp:793
+msgid "&Select/Mask from I&nverse Selection"
+msgstr "&Izbor/Maska iz o&brnutog izbora"
+
+#: src/ui/app_window.cpp:797
+msgid "&Select/Add &to Mask"
+msgstr "&Izbor/&Dodaj u masku"
+
+#: src/ui/app_window.cpp:798
+msgid "&Select/&Subtract from Mask"
+msgstr "&Izbor/O&duzmi od maske"
+
+#: src/ui/app_window.cpp:802
+msgid "&Select/Select All &Layers"
+msgstr "&Izbor/Select All &Layers"
+
+#: src/ui/app_window.cpp:812
+msgid "Filte&r/&Last Filter"
+msgstr ""
+
+#: src/ui/app_window.cpp:814
+msgid "Filte&r/&Adjustments/&Brightness\\/Contrast..."
+msgstr "Filte&r/&Korekcije/&Svjetlina\\/Kontrast..."
+
+#: src/ui/app_window.cpp:816
+msgid "Filte&r/&Adjustments/&Levels..."
+msgstr "Filte&r/&Korekcije/&Nivoi..."
+
+#: src/ui/app_window.cpp:818
+msgid "Filte&r/&Adjustments/Cur&ves..."
+msgstr "Filte&r/&Korekcije/Cur&ves..."
+
+#: src/ui/app_window.cpp:820
+msgid "Filte&r/&Adjustments/&Exposure..."
+msgstr "Filte&r/&Korekcije/&Ekspozicija..."
+
+#: src/ui/app_window.cpp:822
+msgid "Filte&r/&Adjustments/&Hue\\/Saturation..."
+msgstr "Filte&r/&Korekcije/&Nijansa\\/Zasićenost..."
+
+#: src/ui/app_window.cpp:826
+msgid "Filte&r/&Adjustments/Vibr&ance..."
+msgstr "Filte&r/&Korekcije/Vibr&ance..."
+
+#: src/ui/app_window.cpp:828
+msgid "Filte&r/&Adjustments/&Color Balance..."
+msgstr "Filte&r/&Korekcije/&Balans boja..."
+
+#: src/ui/app_window.cpp:830
+msgid "Filte&r/&Adjustments/Photo &Filter..."
+msgstr "Filte&r/&Korekcije/Photo &Filter..."
+
+#: src/ui/app_window.cpp:832
+msgid "Filte&r/&Adjustments/&Posterize..."
+msgstr "Filte&r/&Korekcije/&Posterizacija..."
+
+#: src/ui/app_window.cpp:834
+msgid "Filte&r/&Adjustments/&Threshold..."
+msgstr "Filte&r/&Korekcije/P&rag..."
+
+#: src/ui/app_window.cpp:836
+msgid "Filte&r/&Adjustments/&Grayscale..."
+msgstr "Filte&r/&Korekcije/&Sivi tonovi..."
+
+#: src/ui/app_window.cpp:839
+msgid "Filte&r/&Adjustments/Gradie&nt Map..."
+msgstr "Filte&r/&Korekcije/Gradie&nt Map..."
+
+#: src/ui/app_window.cpp:841
+msgid "Filte&r/&Adjustments/&Invert"
+msgstr "Filte&r/&Korekcije/&Obrni"
+
+#: src/ui/app_window.cpp:846
+msgid "Filte&r/&Adjustments/Shado&ws\\/Highlights..."
+msgstr "Filte&r/&Korekcije/Shado&ws\\/Highlights..."
+
+#: src/ui/app_window.cpp:848
+msgid "Filte&r/&Adjustments/Ha&ze Removal..."
+msgstr "Filte&r/&Korekcije/Ha&ze Removal..."
+
+#: src/ui/app_window.cpp:850
+msgid "Filte&r/&Adjustments/&Defringe..."
+msgstr "Filte&r/&Korekcije/&Defringe..."
+
+#: src/ui/app_window.cpp:852
+msgid "Filte&r/&Adjustments/&Matte Removal..."
+msgstr "Filte&r/&Korekcije/&Matte Removal..."
+
+#: src/ui/app_window.cpp:857
+msgid "Filte&r/&Blur/&Gaussian Blur..."
+msgstr "Filte&r/&Zamućenje/&Gaussovo zamućenje..."
+
+#: src/ui/app_window.cpp:859
+msgid "Filte&r/&Blur/Bo&x Blur..."
+msgstr "Filte&r/&Zamućenje/&Kutijasto zamućenje..."
+
+#: src/ui/app_window.cpp:861
+msgid "Filte&r/&Blur/&Motion Blur..."
+msgstr "Filte&r/&Zamućenje/Zamućenje &pokretom..."
+
+#: src/ui/app_window.cpp:863
+msgid "Filte&r/&Blur/&Radial Blur..."
+msgstr "Filte&r/&Zamućenje/Ra&dijalno zamućenje..."
+
+#: src/ui/app_window.cpp:865
+msgid "Filte&r/&Blur/&Surface Blur..."
+msgstr "Filte&r/&Zamućenje/Zamućenje &površine..."
+
+#: src/ui/app_window.cpp:867
+msgid "Filte&r/&Blur/&Lens Blur..."
+msgstr "Filte&r/&Zamućenje/Zamućenje &objektiva..."
+
+#: src/ui/app_window.cpp:869
+msgid "Filte&r/&Blur/&Depth of Field..."
+msgstr "Filte&r/&Zamućenje/Dubinska o&štrina..."
+
+#: src/ui/app_window.cpp:874
+msgid "Filte&r/&Stylize/&Sharpen..."
+msgstr ""
+
+#: src/ui/app_window.cpp:876
+msgid "Filte&r/&Stylize/&Unsharp Mask..."
+msgstr ""
+
+#: src/ui/app_window.cpp:880
+msgid "Filte&r/&Stylize/&High Pass..."
+msgstr ""
+
+#: src/ui/app_window.cpp:882
+msgid "Filte&r/&Stylize/&Add Noise..."
+msgstr ""
+
+#: src/ui/app_window.cpp:884
+msgid "Filte&r/&Stylize/&Denoise..."
+msgstr ""
+
+#: src/ui/app_window.cpp:886
+msgid "Filte&r/&Stylize/&Pixelate..."
+msgstr ""
+
+#: src/ui/app_window.cpp:888
+msgid "Filte&r/&Stylize/&Emboss..."
+msgstr ""
+
+#: src/ui/app_window.cpp:890
+msgid "Filte&r/&Stylize/&Oil Paint..."
+msgstr ""
+
+#: src/ui/app_window.cpp:892
+msgid "Filte&r/&Stylize/&Wave..."
+msgstr ""
+
+#: src/ui/app_window.cpp:894
+msgid "Filte&r/&Stylize/&Vignette..."
+msgstr ""
+
+#: src/ui/app_window.cpp:904
+msgid "&Arrange/Align &Left"
+msgstr "&Rasporedi/Poravnaj &lijevo"
+
+#: src/ui/app_window.cpp:905
+msgid "&Arrange/Align &Center"
+msgstr "&Rasporedi/Poravnaj po &sredini"
+
+#: src/ui/app_window.cpp:906
+msgid "&Arrange/Align &Right"
+msgstr "&Rasporedi/Poravnaj &desno"
+
+#: src/ui/app_window.cpp:907
+msgid "&Arrange/Align &Top"
+msgstr "&Rasporedi/Poravnaj na &vrh"
+
+#: src/ui/app_window.cpp:908
+msgid "&Arrange/Align Mi&ddle"
+msgstr "&Rasporedi/Poravnaj po sredini &vertikalno"
+
+#: src/ui/app_window.cpp:909
+msgid "&Arrange/Align &Bottom"
+msgstr "&Rasporedi/Poravnaj na d&no"
+
+#: src/ui/app_window.cpp:910
+msgid "&Arrange/Distribute &Horizontally"
+msgstr "&Rasporedi/Rasporedi &horizontalno"
+
+#: src/ui/app_window.cpp:912
+msgid "&Arrange/Distribute &Vertically"
+msgstr "&Rasporedi/Rasporedi &vertikalno"
+
+#: src/ui/app_window.cpp:915
+msgid "&View/Zoom &In"
+msgstr "&Prikaz/&Uvećaj"
+
+#: src/ui/app_window.cpp:916
+msgid "&View/Zoom &Out"
+msgstr "&Prikaz/&Umanji"
+
+#: src/ui/app_window.cpp:917
+msgid "&View/&Fit on Screen"
+msgstr "&Prikaz/&Uklopi u ekran"
+
+#: src/ui/app_window.cpp:918
+msgid "&View/Actual Pi&xels"
+msgstr "&Prikaz/&Stvarni pikseli"
+
+#: src/ui/app_window.cpp:922
+msgid "&View/Zoom &200%"
+msgstr "&Prikaz/Zoom &200%"
+
+#: src/ui/app_window.cpp:923
+msgid "&View/Zoom &50%"
+msgstr "&Prikaz/Zoom &50%"
+
+#: src/ui/app_window.cpp:924
+msgid "&View/Rotate View &Clockwise"
+msgstr "&Prikaz/Rotate View &Clockwise"
+
+#: src/ui/app_window.cpp:925
+msgid "&View/Rotate View Counter-Clock&wise"
+msgstr "&Prikaz/Rotate View Counter-Clock&wise"
+
+#: src/ui/app_window.cpp:926
+msgid "&View/Reset Rotatio&n"
+msgstr "&Prikaz/Reset Rotatio&n"
+
+#: src/ui/app_window.cpp:927
+msgid "&View/Reset Vie&w"
+msgstr "&Prikaz/Reset Vie&w"
+
+#: src/ui/app_window.cpp:930
+msgid "&View/Show Pi&xel Grid"
+msgstr "&Prikaz/Prikaži &mrežu piksela"
+
+#: src/ui/app_window.cpp:934
+msgid "&View/&Rulers"
+msgstr "&Prikaz/&Lenjiri"
+
+#: src/ui/app_window.cpp:938
+msgid "&View/Show &Guides"
+msgstr "&Prikaz/Prikaži &vodilice"
+
+#: src/ui/app_window.cpp:940
+msgid "&View/C&lear Guides"
+msgstr "&Prikaz/&Ukloni vodilice"
+
+#: src/ui/app_window.cpp:941
+msgid "&View/Loc&k Guides"
+msgstr "&Prikaz/&Zaključaj vodilice"
+
+#: src/ui/app_window.cpp:943
+msgid "&View/&Snap"
+msgstr "&Prikaz/&Prianjanje"
+
+#: src/ui/app_window.cpp:944
+msgid "&View/Snap &To/&Guides"
+msgstr "&Prikaz/Prianjaj &uz/&Vodilice"
+
+#: src/ui/app_window.cpp:945
+msgid "&View/Snap &To/&Canvas"
+msgstr "&Prikaz/Prianjaj &uz/&Platno"
+
+#: src/ui/app_window.cpp:946
+msgid "&View/Snap &To/&Layer Bounds"
+msgstr "&Prikaz/Prianjaj &uz/&Granice sloja"
+
+#: src/ui/app_window.cpp:949
+msgid "&View/S&mart Guides"
+msgstr "&Prikaz/Pa&metne vodilice"
+
+#: src/ui/app_window.cpp:974 src/ui/app_window.cpp:990
+msgid "&Help/&About Mosaic"
+msgstr "&Pomoć/&O programu Mosaic"
+
+#: src/ui/app_window.cpp:1311
+msgid ""
+"Ctrl-click to pick what the clone stamp copies, then paint over the target"
+msgstr ""
+
+#: src/ui/app_window.cpp:1375
+msgid "This layer is locked. Unlock it to move or transform it."
+msgstr ""
+"Ovaj sloj je zaključan. Otključajte ga da biste ga pomjerili ili "
+"transformisali."
+
+#: src/ui/app_window.cpp:1428
+msgid "The layer is locked — unlock it to paint"
+msgstr "Sloj je zaključan — otključajte ga da biste crtali"
+
+#: src/ui/app_window.cpp:1431
+msgid "Can’t brush a vector layer — rasterize it first to paint on it"
+msgstr "Po vektorskom sloju se ne može crtati četkicom — prvo ga rasterizujte"
+
+#: src/ui/app_window.cpp:1475 src/ui/app_window.cpp:1945
+msgid "Edit Shape"
+msgstr "Uredi oblik"
+
+#: src/ui/app_window.cpp:1505
+msgid "Edit Path"
+msgstr ""
+
+#: src/ui/app_window.cpp:1524 src/ui/app_window.cpp:9678
+#: src/ui/app_window.cpp:9686 src/ui/app_window.cpp:9750
+msgid "Edit Gradient"
+msgstr "Uredi gradijent"
+
+#: src/ui/app_window.cpp:1542
+msgid "Edit Text"
+msgstr "Uredi tekst"
+
+#: src/ui/app_window.cpp:1882
+msgid "Settings…"
+msgstr ""
+
+#: src/ui/app_window.cpp:2717
+msgid "No Recent Files"
+msgstr "Nema nedavnih datoteka"
+
+#: src/ui/app_window.cpp:2743
+msgid "Recent files cleared"
+msgstr "Spisak nedavnih datoteka je očišćen"
+
+#: src/ui/app_window.cpp:2756
+msgid "Could not open the file"
+msgstr "Datoteka se nije mogla otvoriti"
+
+#: src/ui/app_window.cpp:2757
+msgid "It may have been moved or deleted; it was removed from the recent list."
+msgstr "Možda je premještena ili obrisana; uklonjena je sa spiska nedavnih."
+
+#: src/ui/app_window.cpp:2962 src/ui/app_window.cpp:2969
+msgid "Could not open the template"
+msgstr "Šablon se nije mogao otvoriti"
+
+#: src/ui/app_window.cpp:2962 src/ui/app_window.cpp:3411
+msgid "The file could not be read."
+msgstr "Datoteka se nije mogla pročitati."
+
+#: src/ui/app_window.cpp:2983
+msgid "The clipboard no longer holds an image"
+msgstr "U međuspremniku više nema slike"
+
+#: src/ui/app_window.cpp:3048 src/ui/app_window.cpp:3519
+#: src/ui/app_window.cpp:3532 src/ui/app_window.cpp:3605
+#: src/ui/app_window.cpp:3620 src/ui/new_document_dialog.cpp:1212
+#: src/ui/shape_designer.cpp:1158
+msgid "Open"
+msgstr "Otvori"
+
+#: src/ui/app_window.cpp:3059
+msgid "Images, Mosaic documents"
+msgstr "Slike, dokumenti Mosaic"
+
+#: src/ui/app_window.cpp:3060 src/ui/app_window.cpp:3174
+#: src/ui/app_window.cpp:3321 src/ui/app_window.cpp:4125
+#: src/ui/app_window.cpp:4812 src/ui/app_window.cpp:4913
+#: src/ui/app_window.cpp:4959 src/ui/brush_editor.cpp:1824
+#: src/ui/export_dialog.cpp:1204
+msgid "All files"
+msgstr "Sve datoteke"
+
+#: src/ui/app_window.cpp:3079 src/ui/app_window.cpp:3083
+#: src/ui/layer_effects_dialog.cpp:582 src/ui/new_document_dialog.cpp:1691
+#: src/ui/select_modify_dialog.cpp:113 src/ui/settings_dialog.cpp:2863
+msgid "OK"
+msgstr "U redu"
+
+#: src/ui/app_window.cpp:3083
+msgid "Copy details"
+msgstr "Kopiraj detalje"
+
+#: src/ui/app_window.cpp:3127 src/ui/app_window.cpp:3232
+msgid "Could not open the image"
+msgstr "Slika se nije mogla otvoriti"
+
+#: src/ui/app_window.cpp:3132
+msgid "Placed image"
+msgstr "Postavljena slika"
+
+#: src/ui/app_window.cpp:3168
+msgid "Open as Layer"
+msgstr "Otvori kao sloj"
+
+#: src/ui/app_window.cpp:3174
+msgid "Images"
+msgstr "Slike"
+
+#: src/ui/app_window.cpp:3214
+msgid "Saving -- finishing the save first"
+msgstr "Čuvanje je u toku — prvo sačekajte da se završi"
+
+#: src/ui/app_window.cpp:3284
+msgid " and "
+msgstr " i "
+
+#: src/ui/app_window.cpp:3289
+#, c-format
+msgid " Affected: the %s layer."
+msgstr " Odnosi se na sloj %s."
+
+#: src/ui/app_window.cpp:3290
+#, c-format
+msgid " Affected: the %s layers."
+msgstr " Odnosi se na slojeve %s."
+
+#: src/ui/app_window.cpp:3316
+msgid "Save other version as"
+msgstr "Sačuvaj drugu verziju kao"
+
+#: src/ui/app_window.cpp:3317 src/ui/app_window.cpp:4121
+#: src/ui/app_window.cpp:11359 src/ui/brush_editor.cpp:996
+msgid "Save"
+msgstr "Sačuvaj"
+
+#: src/ui/app_window.cpp:3321 src/ui/app_window.cpp:4125
+msgid "Mosaic document"
+msgstr "Dokument Mosaic"
+
+#: src/ui/app_window.cpp:3341
+msgid "Could not save the other version"
+msgstr "Druga verzija se nije mogla sačuvati"
+
+#: src/ui/app_window.cpp:3345
+#, c-format
+msgid "Saved the other version to %s"
+msgstr "Druga verzija je sačuvana u %s"
+
+#: src/ui/app_window.cpp:3362 src/ui/app_window.cpp:3393
+msgid "Saved change"
+msgstr "Izmjena sačuvana"
+
+#: src/ui/app_window.cpp:3367
+#, c-format
+msgid "Edited %s"
+msgstr "Izmijenjeno %s"
+
+#: src/ui/app_window.cpp:3411 src/ui/app_window.cpp:3421
+msgid "Could not open the document"
+msgstr "Dokument se nije mogao otvoriti"
+
+#: src/ui/app_window.cpp:3458
+#, c-format
+msgid ""
+"Another Mosaic window already has \"%s\" open. Opening it here too could let "
+"the two windows overwrite each other's work.\n"
+"\n"
+"You can open it read-only to look at it -- saving will ask for a new file."
+msgstr ""
+"Datoteka \"%s\" je već otvorena u drugom prozoru Mosaica. Ako je otvorite i "
+"ovdje, prozori bi mogli jedan drugom prepisati rad.\n"
+"\n"
+"Možete je otvoriti samo za čitanje da biste je pogledali — pri čuvanju će "
+"biti zatražena nova datoteka."
+
+#: src/ui/app_window.cpp:3465
+msgid "This document is already open in another Mosaic window"
+msgstr "Ovaj dokument je već otvoren u drugom prozoru Mosaica"
+
+#: src/ui/app_window.cpp:3466
+msgid "Open read-only"
+msgstr "Otvori samo za čitanje"
+
+#: src/ui/app_window.cpp:3508
+#, c-format
+msgid ", and %zu area(s) could not be read"
+msgstr ", a %zu oblasti se nisu mogle pročitati"
+
+#: src/ui/app_window.cpp:3511
+#, c-format
+msgid ""
+"The file's structure was destroyed. Mosaic rebuilt the document from the "
+"pieces it could find -- %zu layer(s) recovered%s. The file's index and its "
+"save history are gone, so what you see may be older than the last save.\n"
+"\n"
+"Nothing is written to your file until you save. Saving a copy now protects "
+"what was found."
+msgstr ""
+"Struktura datoteke je uništena. Mosaic je sastavio dokument od dijelova koje "
+"je uspio pronaći — obnovljeno slojeva: %zu%s. Indeks datoteke i njena "
+"historija čuvanja su nestali, pa ono što vidite može biti starije od "
+"posljednjeg čuvanja.\n"
+"\n"
+"U vašu datoteku se ništa ne upisuje dok ne sačuvate. Čuvanje kopije sada "
+"štiti ono što je pronađeno."
+
+#: src/ui/app_window.cpp:3518
+msgid "This file is badly damaged"
+msgstr "Ova datoteka je teško oštećena"
+
+#: src/ui/app_window.cpp:3527
+msgid "Two programs saved into this file"
+msgstr "Dva programa su čuvala u ovu datoteku"
+
+#: src/ui/app_window.cpp:3528
+msgid ""
+"This file holds two separate save histories -- it was open and saved in two "
+"places at once. Both survived intact.\n"
+"\n"
+"Mosaic will open the version that was saved first. To keep the second one "
+"too, save it as its own file now -- a later save may discard it."
+msgstr ""
+"Ova datoteka sadrži dvije odvojene historije čuvanja — bila je otvorena i "
+"čuvana na dva mjesta istovremeno. Obje su ostale netaknute.\n"
+"\n"
+"Mosaic će otvoriti verziju koja je sačuvana prva. Ako želite zadržati i "
+"drugu, sačuvajte je sada kao zasebnu datoteku — kasnije čuvanje je može "
+"odbaciti."
+
+#: src/ui/app_window.cpp:3532
+msgid "Save other version as..."
+msgstr "Sačuvaj drugu verziju kao..."
+
+#: src/ui/app_window.cpp:3553
+msgid "Could not rebuild the other version"
+msgstr "Druga verzija se nije mogla obnoviti"
+
+#: src/ui/app_window.cpp:3567
+msgid " Part of the record was destroyed, so this list may be incomplete."
+msgstr " Dio zapisa je uništen, pa ovaj spisak možda nije potpun."
+
+#: src/ui/app_window.cpp:3570
+#, c-format
+msgid ""
+"Part of \"%s\" can't be read.\n"
+"\n"
+"Mosaic can open it as it was at the last complete save, or open the "
+"recovered version: %llu newer save(s) came back, and %zu area(s) that "
+"couldn't be read show older content instead.%s%s\n"
+"\n"
+"Nothing is written to your file until you save."
+msgstr ""
+"Dio datoteke \"%s\" se ne može pročitati.\n"
+"\n"
+"Mosaic je može otvoriti u stanju posljednjeg potpunog čuvanja ili otvoriti "
+"obnovljenu verziju: vratilo se %llu novijih čuvanja, a %zu oblasti koje se "
+"nisu mogle pročitati prikazuju stariji sadržaj.%s%s\n"
+"\n"
+"U vašu datoteku se ništa ne upisuje dok ne sačuvate."
+
+#: src/ui/app_window.cpp:3578 src/ui/app_window.cpp:3619
+msgid "This file is damaged"
+msgstr "Ova datoteka je oštećena"
+
+#: src/ui/app_window.cpp:3579
+msgid "Open last complete save"
+msgstr "Otvori posljednje potpuno čuvanje"
+
+#: src/ui/app_window.cpp:3579
+msgid "Open recovered version"
+msgstr "Otvori obnovljenu verziju"
+
+#: src/ui/app_window.cpp:3590
+msgid "Could not open the recovered version"
+msgstr "Obnovljena verzija se nije mogla otvoriti"
+
+#: src/ui/app_window.cpp:3599
+#, c-format
+msgid ""
+"\"%s\" ends in an unfinished save -- whatever was writing it stopped "
+"partway. The unfinished part was set aside; this file opens at the last "
+"complete save."
+msgstr ""
+"Datoteka \"%s\" se završava nedovršenim čuvanjem — ono što ju je zapisivalo "
+"stalo je na pola puta. Nedovršeni dio je odložen; ova datoteka se otvara na "
+"posljednjem potpunom čuvanju."
+
+#: src/ui/app_window.cpp:3604
+msgid "The last save didn't finish"
+msgstr "Posljednje čuvanje nije završeno"
+
+#: src/ui/app_window.cpp:3612
+#, c-format
+msgid ""
+"%zu areas of \"%s\" can't be read, even after repair. Where an earlier "
+"version survived in the file's history it is shown in its place; anything "
+"else is left blank.\n"
+"\n"
+"Nothing is written to your file until you save. Saving a copy now protects "
+"everything that remains."
+msgstr ""
+"%zu oblasti datoteke \"%s\" se ne mogu pročitati ni nakon popravke. Tamo "
+"gdje je u historiji datoteke preživjela ranija verzija, prikazana je ona; "
+"sve ostalo je ostavljeno prazno.\n"
+"\n"
+"U vašu datoteku se ništa ne upisuje dok ne sačuvate. Čuvanje kopije sada "
+"štiti sve što je preostalo."
+
+#: src/ui/app_window.cpp:3657
+msgid "this file's save history could not be read"
+msgstr "historija čuvanja ove datoteke se nije mogla pročitati"
+
+#: src/ui/app_window.cpp:3660
+#, c-format
+msgid "%zu earlier undo state(s) could not be read"
+msgstr "%zu ranijih stanja poništavanja se nije moglo pročitati"
+
+#: src/ui/app_window.cpp:3663
+#, c-format
+msgid "Repaired %zu damaged block(s); %s"
+msgstr "Popravljeno oštećenih blokova: %zu; %s"
+
+#: src/ui/app_window.cpp:3666
+#, c-format
+msgid "Repaired %zu damaged block(s) while opening"
+msgstr "Pri otvaranju je popravljeno %zu oštećenih blokova"
+
+#: src/ui/app_window.cpp:3677
+msgid "Opened read-only -- this document is open in another window"
+msgstr "Otvoreno samo za čitanje — ovaj dokument je otvoren u drugom prozoru"
+
+#: src/ui/app_window.cpp:3954 src/ui/app_window.cpp:4174
+#: src/ui/app_window.cpp:4322 src/ui/app_window.cpp:4333
+msgid "Could not save the document"
+msgstr "Dokument se nije mogao sačuvati"
+
+#: src/ui/app_window.cpp:3960
+#, c-format
+msgid ""
+"\"%s\" changed on disk since you opened it -- another program saved over it. "
+"Mosaic won't overwrite those changes.\n"
+"\n"
+"Save your version as a separate copy to keep it."
+msgstr ""
+"Datoteka \"%s\" se promijenila na disku otkako ste je otvorili — preko nje "
+"je sačuvao drugi program. Mosaic neće prepisati te izmjene.\n"
+"\n"
+"Sačuvajte svoju verziju kao zasebnu kopiju da biste je zadržali."
+
+#: src/ui/app_window.cpp:3965
+msgid "This file changed on disk"
+msgstr "Ova datoteka se promijenila na disku"
+
+#: src/ui/app_window.cpp:3966
+msgid "Save a copy..."
+msgstr "Sačuvaj kopiju..."
+
+#: src/ui/app_window.cpp:4016
+#, c-format
+msgid "Saved %s"
+msgstr "Sačuvano %s"
+
+#: src/ui/app_window.cpp:4045 src/ui/new_document_dialog.cpp:1820
+msgid "Name"
+msgstr "Naziv"
+
+#: src/ui/app_window.cpp:4045
+msgid "Rename"
+msgstr "Preimenuj"
+
+#: src/ui/app_window.cpp:4067
+msgid ""
+"This discards the document's saved undo history -- every earlier state kept "
+"in the file -- and saves the current content without it. The image itself "
+"does not change.\n"
+"\n"
+"This cannot be undone."
+msgstr ""
+"Ovo odbacuje sačuvanu historiju poništavanja dokumenta — svako ranije stanje "
+"čuvano u datoteci — i čuva trenutni sadržaj bez nje. Sama slika se ne "
+"mijenja.\n"
+"\n"
+"Ovo se ne može poništiti."
+
+#: src/ui/app_window.cpp:4070
+msgid ""
+"This discards this session's undo history. The image itself does not "
+"change.\n"
+"\n"
+"This cannot be undone."
+msgstr ""
+"Ovo odbacuje historiju poništavanja iz ove sesije. Sama slika se ne "
+"mijenja.\n"
+"\n"
+"Ovo se ne može poništiti."
+
+#: src/ui/app_window.cpp:4072
+msgid "Flatten History?"
+msgstr "Spljoštiti historiju?"
+
+#: src/ui/app_window.cpp:4073
+msgid "Flatten History"
+msgstr "Spljošti historiju"
+
+#: src/ui/app_window.cpp:4097
+msgid "History flattened"
+msgstr "Historija spljoštena"
+
+#: src/ui/app_window.cpp:4120
+msgid "Save As"
+msgstr "Sačuvaj kao"
+
+#: src/ui/app_window.cpp:4260 src/ui/app_window.cpp:4281
+msgid "Saving"
+msgstr "Čuvanje"
+
+#: src/ui/app_window.cpp:4281
+msgid "Writing"
+msgstr "Upisivanje"
+
+#: src/ui/app_window.cpp:4530 src/ui/app_window.cpp:4542
+msgid "earlier"
+msgstr "ranije"
+
+#: src/ui/app_window.cpp:4587
+msgid "Old unsaved changes no longer match this file"
+msgstr "Stare nesačuvane izmjene više ne odgovaraju ovoj datoteci"
+
+#: src/ui/app_window.cpp:4588
+msgid ""
+"Mosaic kept unsaved changes for this document from an earlier session, but "
+"the file has since been changed or replaced outside Mosaic, so they can no "
+"longer be restored into it.\n"
+"\n"
+"Keep the recovery file if you want to inspect it later; otherwise it can be "
+"discarded."
+msgstr ""
+"Mosaic je sačuvao nesačuvane izmjene ovog dokumenta iz ranije sesije, ali "
+"datoteka je od tada izmijenjena ili zamijenjena izvan Mosaica, pa se one "
+"više ne mogu vratiti u nju.\n"
+"\n"
+"Zadržite datoteku za obnovu ako želite da je pogledate kasnije; u suprotnom "
+"se može odbaciti."
+
+#: src/ui/app_window.cpp:4592
+msgid "Discard"
+msgstr "Odbaci"
+
+#: src/ui/app_window.cpp:4592
+msgid "Keep the file"
+msgstr "Zadrži datoteku"
+
+#: src/ui/app_window.cpp:4607 src/ui/app_window.cpp:4721
+msgid " The very last change was cut off and couldn't be kept."
+msgstr " Sasvim posljednja izmjena je presječena i nije se mogla sačuvati."
+
+#: src/ui/app_window.cpp:4610
+#, c-format
+msgid ""
+"Mosaic didn't close cleanly the last time this document was open. Your "
+"unsaved work -- %zu change(s), the last from %s -- was kept safe.%s\n"
+"\n"
+"Restore picks up exactly where you left off. Nothing is written to your file "
+"until you save."
+msgstr ""
+"Mosaic se prošli put, dok je ovaj dokument bio otvoren, nije uredno "
+"zatvorio. Vaš nesačuvani rad — %zu izmjena, posljednja od %s — sačuvan je na "
+"sigurnom.%s\n"
+"\n"
+"Obnova nastavlja tačno tamo gdje ste stali. U vašu datoteku se ništa ne "
+"upisuje dok ne sačuvate."
+
+#: src/ui/app_window.cpp:4617
+msgid "Unsaved changes found"
+msgstr "Pronađene nesačuvane izmjene"
+
+#: src/ui/app_window.cpp:4618 src/ui/app_window.cpp:4731
+msgid "Discard changes"
+msgstr "Odbaci izmjene"
+
+#: src/ui/app_window.cpp:4618 src/ui/app_window.cpp:4731
+msgid "Restore"
+msgstr "Obnovi"
+
+#: src/ui/app_window.cpp:4630
+msgid "Could not restore the unsaved changes"
+msgstr "Nesačuvane izmjene se nisu mogle obnoviti"
+
+#: src/ui/app_window.cpp:4641
+#, c-format
+msgid "Restored %zu of %zu unsaved changes -- the last was incomplete"
+msgstr ""
+"Obnovljeno %zu od %zu nesačuvanih izmjena — posljednja je bila nepotpuna"
+
+#: src/ui/app_window.cpp:4644
+#, c-format
+msgid "Restored %zu unsaved change(s)"
+msgstr "Obnovljeno nesačuvanih izmjena: %zu"
+
+#: src/ui/app_window.cpp:4724
+#, c-format
+msgid ""
+"Mosaic didn't close cleanly with an untitled document open. Your unsaved "
+"work -- %zu change(s), the last from %s -- was kept safe.%s\n"
+"\n"
+"Restore opens it in a new window. Nothing is written to disk until you save."
+msgstr ""
+"Mosaic se nije uredno zatvorio dok je bio otvoren neimenovani dokument. Vaš "
+"nesačuvani rad — %zu izmjena, posljednja od %s — sačuvan je na sigurnom.%s\n"
+"\n"
+"Obnova ga otvara u novom prozoru. Na disk se ništa ne upisuje dok ne "
+"sačuvate."
+
+#: src/ui/app_window.cpp:4730
+msgid "Unsaved untitled document found"
+msgstr "Pronađen nesačuvani neimenovani dokument"
+
+#: src/ui/app_window.cpp:4743
+msgid "Could not restore the untitled document"
+msgstr "Neimenovani dokument se nije mogao obnoviti"
+
+#: src/ui/app_window.cpp:4750
+msgid "Restored unsaved untitled document"
+msgstr "Nesačuvani neimenovani dokument je obnovljen"
+
+#: src/ui/app_window.cpp:4807 src/ui/app_window.cpp:4808
+#: src/ui/app_window.cpp:4907 src/ui/app_window.cpp:4908
+#: src/ui/app_window.cpp:4954 src/ui/app_window.cpp:4955
+#: src/ui/brush_editor.cpp:1854 src/ui/export_dialog.cpp:907
+#: src/ui/export_dialog.cpp:1132 src/ui/export_dialog.cpp:1867
+#: src/ui/export_dialog.cpp:1868
+msgid "Export"
+msgstr "Izvoz"
+
+#: src/ui/app_window.cpp:4812
+msgid "PNG image"
+msgstr "PNG slika"
+
+#: src/ui/app_window.cpp:4837 src/ui/app_window.cpp:4844
+#: src/ui/app_window.cpp:4931 src/ui/app_window.cpp:4936
+#: src/ui/app_window.cpp:4949 src/ui/app_window.cpp:4977
+#: src/ui/app_window.cpp:4982 src/ui/app_window.cpp:5018
+#: src/ui/app_window.cpp:5052 src/ui/app_window.cpp:5065
+msgid "Could not export the image"
+msgstr "Slika se nije mogla izvesti"
+
+#: src/ui/app_window.cpp:4912
+msgid "JPEG image"
+msgstr "JPEG slika"
+
+#: src/ui/app_window.cpp:4950
+msgid "JPEG XL support was not compiled into this build."
+msgstr "Podrška za JPEG XL nije ugrađena u ovu verziju."
+
+#: src/ui/app_window.cpp:4959
+msgid "JPEG XL image"
+msgstr "JPEG XL slika"
+
+#: src/ui/app_window.cpp:5003
+#, c-format
+msgid "Exported %s"
+msgstr "Izvezeno %s"
+
+#. TRANSLATORS: File menu item, greyed until the document has been exported once.
+#: src/ui/app_window.cpp:5085
+msgid "Export to Last File"
+msgstr ""
+
+#. TRANSLATORS: File menu item; %s is a file name. One-click re-export of the last
+#. export target (GIMP's "Overwrite <file>").
+#: src/ui/app_window.cpp:5097
+#, c-format
+msgid "Export to %s"
+msgstr ""
+
+#: src/ui/app_window.cpp:5295 src/ui/layer_panel.cpp:2067
+msgid "Disable Mask"
+msgstr "Onemogući masku"
+
+#: src/ui/app_window.cpp:5295 src/ui/layer_panel.cpp:2067
+msgid "Enable Mask"
+msgstr "Omogući masku"
+
+#: src/ui/app_window.cpp:5296 src/ui/layer_panel.cpp:2069
+msgid "Link Mask"
+msgstr "Poveži masku"
+
+#: src/ui/app_window.cpp:5296 src/ui/layer_panel.cpp:2069
+msgid "Unlink Mask"
+msgstr "Odveži masku"
+
+#: src/ui/app_window.cpp:5297 src/ui/layer_panel.cpp:2033
+msgid "Hide Layer"
+msgstr "Sakrij sloj"
+
+#: src/ui/app_window.cpp:5297 src/ui/layer_panel.cpp:2033
+msgid "Show Layer"
+msgstr "Prikaži sloj"
+
+#: src/ui/app_window.cpp:5298 src/ui/layer_panel.cpp:2035
+msgid "Lock Layer"
+msgstr "Zaključaj sloj"
+
+#: src/ui/app_window.cpp:5298 src/ui/layer_panel.cpp:2035
+msgid "Unlock Layer"
+msgstr "Otključaj sloj"
+
+#: src/ui/app_window.cpp:5317
+msgid "No filter has been applied yet"
+msgstr ""
+
+#: src/ui/app_window.cpp:5395 src/ui/app_window.cpp:5429
+#: src/ui/app_window.cpp:5642 src/ui/app_window.cpp:5764
+#: src/ui/app_window.cpp:7135 src/ui/app_window.cpp:8075
+msgid "Analyzing"
+msgstr "Analiza"
+
+#: src/ui/app_window.cpp:5431
+msgid "Solving"
+msgstr "Računanje"
+
+#: src/ui/app_window.cpp:5433 src/ui/fill_dialog.cpp:158
+msgid "Blending"
+msgstr "Stapanje"
+
+#: src/ui/app_window.cpp:5564 src/ui/app_window.cpp:5724
+#: src/ui/app_window.cpp:8150
+msgid "Inpaint failed"
+msgstr "Retuširanje nije uspjelo"
+
+#: src/ui/app_window.cpp:5565 src/ui/app_window.cpp:5725
+#: src/ui/app_window.cpp:8151
+msgid "Inpaint failed: "
+msgstr "Retuširanje nije uspjelo: "
+
+#: src/ui/app_window.cpp:5567 src/ui/app_window.cpp:5721
+#: src/ui/app_window.cpp:8147
+msgid "Inpaint cancelled"
+msgstr "Retuširanje otkazano"
+
+#: src/ui/app_window.cpp:5610 src/ui/app_window.cpp:8030
+msgid "Try again in a moment (the canvas is refreshing)"
+msgstr "Pokušajte ponovo za trenutak (platno se osvježava)"
+
+#: src/ui/app_window.cpp:5705 src/ui/app_window.cpp:7966
+#: src/ui/app_window.cpp:8138 src/ui/app_window.cpp:10869
+#: src/ui/app_window.cpp:10872 src/ui/app_window.cpp:10875
+#: src/ui/app_window.cpp:10878 src/ui/image_ops_panel.cpp:480
+msgid "Canvas fill"
+msgstr "Popuna platna"
+
+#: src/ui/app_window.cpp:5711 src/ui/app_window.cpp:8144
+#: src/ui/app_window.cpp:10888
+#, c-format
+msgid "Resized canvas to %u × %u px"
+msgstr "Veličina platna promijenjena na %u × %u px"
+
+#: src/ui/app_window.cpp:5827
+msgid "Recompose cancelled"
+msgstr "Prekomponovanje otkazano"
+
+#: src/ui/app_window.cpp:5832
+msgid "Recompose failed — try a different ratio or fewer regions"
+msgstr ""
+"Prekomponovanje nije uspjelo — pokušajte s drugim odnosom ili s manje oblasti"
+
+#: src/ui/app_window.cpp:5843
+msgid "Reviewing: drag a region to adjust — Enter applies, Esc cancels"
+msgstr ""
+"Pregled: prevucite oblast da je podesite — Enter primjenjuje, Esc otkazuje"
+
+#: src/ui/app_window.cpp:5877
+msgid "Recomposed"
+msgstr "Prekomponovano"
+
+#: src/ui/app_window.cpp:5892
+#, c-format
+msgid "Recomposed to %u × %u px"
+msgstr "Prekomponovano na %u × %u px"
+
+#: src/ui/app_window.cpp:5904
+msgid "Recompose discarded"
+msgstr "Prekomponovanje odbačeno"
+
+#: src/ui/app_window.cpp:6031
+msgid "Select three or more layers to distribute (Move tool + Shift)."
+msgstr ""
+"Izaberite tri ili više slojeva za raspoređivanje (alat Pomjeranje + Shift)."
+
+#: src/ui/app_window.cpp:6032
+msgid "Select a layer to align (Move tool)."
+msgstr "Izaberite sloj za poravnanje (alat Pomjeranje)."
+
+#: src/ui/app_window.cpp:6508 src/ui/app_window.cpp:9620
+msgid "Masked to the selection"
+msgstr ""
+
+#: src/ui/app_window.cpp:6907
+#, c-format
+msgid "Sky from \"%s\""
+msgstr "Nebo iz \"%s\""
+
+#: src/ui/app_window.cpp:7329
+msgid "Rasterize: this layer has no pixels to bake"
+msgstr "Rasterizacija: ovaj sloj nema piksela"
+
+#: src/ui/app_window.cpp:7366
+msgid "Convert to Path: this text has no outlines to convert"
+msgstr "Pretvaranje u putanju: ovaj tekst nema obrisa za pretvaranje"
+
+#: src/ui/app_window.cpp:7374
+#, c-format
+msgid "Convert to Path: %zu colour glyph(s) have no outline and were left out"
+msgstr ""
+"Pretvaranje u putanju: %zu glifova u boji nema obris pa su izostavljeni"
+
+#: src/ui/app_window.cpp:7391
+msgid "Convert to Path: the text has several colours; the path takes the first"
+msgstr "Pretvaranje u putanju: tekst ima nekoliko boja; putanja uzima prvu"
+
+#: src/ui/app_window.cpp:7398
+msgid "Convert to Path: 3D depth is not a path; the flat outlines were taken"
+msgstr "Pretvaranje u putanju: 3D dubina nije putanja; uzeti su ravni obrisi"
+
+#: src/ui/app_window.cpp:7467
+msgid "Merge Down: no layer below to merge into"
+msgstr "Spoji sa donjim: ispod nema sloja za spajanje"
+
+#: src/ui/app_window.cpp:7472
+msgid "Merge Down needs both layers visible"
+msgstr "Za spajanje sa donjim oba sloja moraju biti vidljiva"
+
+#: src/ui/app_window.cpp:7476
+msgid "Merge Down: a locked layer cannot be merged"
+msgstr "Spoji sa donjim: zaključan sloj se ne može spojiti"
+
+#: src/ui/app_window.cpp:7480
+msgid "Merge Down: an adjustment layer below has no pixels to merge into"
+msgstr ""
+
+#: src/ui/app_window.cpp:7509
+msgid "Merge Down: the two shapes are one editable path now"
+msgstr ""
+
+#: src/ui/app_window.cpp:7530
+msgid "Merge Down: the layer below has no pixels to grade"
+msgstr ""
+
+#: src/ui/app_window.cpp:7544
+msgid ""
+"Merge Down: the adjustment now applies to that one layer, not to everything "
+"below it"
+msgstr ""
+
+#: src/ui/app_window.cpp:7554
+msgid ""
+"Merge Down: the layer below is clipped to the layer under it; merge that "
+"pair first"
+msgstr ""
+
+#: src/ui/app_window.cpp:7559
+msgid ""
+"Merge Down: the blend mode of the layer below cannot be baked; it would re-"
+"blend the merged pixels against what is under it"
+msgstr ""
+
+#: src/ui/app_window.cpp:7578
+msgid "Merge Down: the active layer has no pixels to merge"
+msgstr "Spoji sa donjim: aktivni sloj nema piksela za spajanje"
+
+#: src/ui/app_window.cpp:7587
+msgid ""
+"Merge Down: this layer's blend mode cannot be baked; the layer below is not "
+"opaque everywhere this layer paints"
+msgstr ""
+
+#: src/ui/app_window.cpp:7592
+msgid "Merge Down: there are no pixels to merge"
+msgstr ""
+
+#: src/ui/app_window.cpp:7606
+msgid "Merge Down: the group was flattened into the merged layer"
+msgstr ""
+
+#: src/ui/app_window.cpp:7630
+msgid "This layer is locked. Unlock it to delete it."
+msgstr "Ovaj sloj je zaključan. Otključajte ga da biste ga obrisali."
+
+#: src/ui/app_window.cpp:7639
+msgid "This layer is locked. Unlock it to group it."
+msgstr "Ovaj sloj je zaključan. Otključajte ga da biste ga grupisali."
+
+#: src/ui/app_window.cpp:7692
+msgid "Grow Selection"
+msgstr "Proširi izbor"
+
+#: src/ui/app_window.cpp:7693
+msgid "Shrink Selection"
+msgstr "Suzi izbor"
+
+#: src/ui/app_window.cpp:7694
+msgid "Feather Selection"
+msgstr "Ublaži izbor"
+
+#: src/ui/app_window.cpp:7695
+msgid "Smooth Selection"
+msgstr "Izgladi izbor"
+
+#: src/ui/app_window.cpp:7697 src/ui/select_morph_panel.cpp:103
+msgid "Modify Selection"
+msgstr "Izmijeni izbor"
+
+#. TRANSLATORS: the canvas HUD's size readout during an Image-menu preview, e.g.
+#. "2048 × 1536 px". Both numbers are pixel counts; the separator is U+00D7, matching the
+#. Crop tool's own size HUD (vulkan_canvas.cpp) so the two read identically.
+#: src/ui/app_window.cpp:7917
+#, c-format
+msgid "%u × %u px"
+msgstr ""
+
+#: src/ui/app_window.cpp:7987 src/ui/app_window.cpp:8025
+#: src/ui/app_window.cpp:8056 src/ui/app_window.cpp:8142
+msgid "Canvas Size: the canvas is already that size"
+msgstr ""
+
+#: src/ui/app_window.cpp:7992
+msgid "Image Size: the image is already that size"
+msgstr ""
+
+#: src/ui/app_window.cpp:7998
+msgid "Rotate: that angle is a whole number of turns"
+msgstr ""
+
+#: src/ui/app_window.cpp:8218
+msgid "Rotate: there is nothing to turn"
+msgstr ""
+
+#: src/ui/app_window.cpp:8224
+msgid "Trim to Content: the canvas already hugs the visible content"
+msgstr ""
+
+#: src/ui/app_window.cpp:8246
+msgid "Select a text layer first"
+msgstr ""
+
+#: src/ui/app_window.cpp:8269
+msgid "Text Orientation"
+msgstr ""
+
+#: src/ui/app_window.cpp:8277
+msgid "Text Anti-Aliasing"
+msgstr ""
+
+#: src/ui/app_window.cpp:8282
+msgid "Kerning"
+msgstr ""
+
+#: src/ui/app_window.cpp:8289
+msgid "Text Direction"
+msgstr ""
+
+#: src/ui/app_window.cpp:8305
+msgid "Convert to Area Text"
+msgstr ""
+
+#: src/ui/app_window.cpp:8306
+msgid "Convert to Point Text"
+msgstr ""
+
+#: src/ui/app_window.cpp:8351
+msgid ""
+"Text on Path: select the text layer and exactly one shape layer together"
+msgstr ""
+
+#: src/ui/app_window.cpp:8363
+msgid "Text on Path: that shape has no outline to flow along"
+msgstr ""
+
+#: src/ui/app_window.cpp:8371
+msgid "Text on Path"
+msgstr ""
+
+#: src/ui/app_window.cpp:8380
+msgid "Release from Path: this text is not on a path"
+msgstr ""
+
+#: src/ui/app_window.cpp:8385
+msgid "Release from Path"
+msgstr ""
+
+#: src/ui/app_window.cpp:8399
+msgid "Create Work Path: this text has no outlines to convert"
+msgstr ""
+
+#: src/ui/app_window.cpp:8405
+#, c-format
+msgid "Create Work Path: %zu colour glyph(s) have no outline and were left out"
+msgstr ""
+
+#: src/ui/app_window.cpp:8413
+msgid "Work Path"
+msgstr ""
+
+#: src/ui/app_window.cpp:8453
+msgid "Update All Text Layers: this document has no text"
+msgstr ""
+
+#: src/ui/app_window.cpp:8461
+#, c-format
+msgid "Re-shaped %zu text layer(s)"
+msgstr ""
+
+#: src/ui/app_window.cpp:8541
+msgid "This layer is already at the top of its group"
+msgstr ""
+
+#: src/ui/app_window.cpp:8545
+msgid "This layer is already at the bottom of its group"
+msgstr ""
+
+#: src/ui/app_window.cpp:8564
+msgid "Flatten to Path needs a shape layer"
+msgstr ""
+
+#: src/ui/app_window.cpp:8568
+msgid "Flatten to Path: this layer is locked"
+msgstr ""
+
+#: src/ui/app_window.cpp:8574
+msgid "Flatten to Path: this shape is already a plain path"
+msgstr ""
+
+#: src/ui/app_window.cpp:8578
+msgid "Flatten to Path"
+msgstr ""
+
+#: src/ui/app_window.cpp:8603
+msgid "Add Paths"
+msgstr ""
+
+#: src/ui/app_window.cpp:8604
+msgid "Subtract Paths"
+msgstr ""
+
+#: src/ui/app_window.cpp:8605
+msgid "Intersect Paths"
+msgstr ""
+
+#: src/ui/app_window.cpp:8606
+msgid "Exclude Paths"
+msgstr ""
+
+#: src/ui/app_window.cpp:8608
+msgid "Combine Paths"
+msgstr ""
+
+#: src/ui/app_window.cpp:8617
+msgid "Combine Paths needs two or more shape layers selected"
+msgstr ""
+
+#: src/ui/app_window.cpp:8622
+msgid "Combine Paths: a locked layer cannot be combined"
+msgstr ""
+
+#: src/ui/app_window.cpp:8639
+msgid "Combine Paths: these shapes cannot be combined"
+msgstr ""
+
+#: src/ui/app_window.cpp:8672
+msgid "Reselect: there is no previous selection to restore"
+msgstr ""
+
+#: src/ui/app_window.cpp:8680
+msgid "Reselect: that selection belongs to a differently-sized canvas"
+msgstr ""
+
+#: src/ui/app_window.cpp:8702
+msgid "Select All Layers: nothing visible to select"
+msgstr ""
+
+#: src/ui/app_window.cpp:8724
+msgid "Nothing to clear: the selection covers no editable pixels"
+msgstr ""
+
+#: src/ui/app_window.cpp:8740
+msgid "Paste in Place: nothing was copied inside Mosaic"
+msgstr ""
+
+#: src/ui/app_window.cpp:8761 src/ui/app_window.cpp:8766
+msgid "Mask from Selection"
+msgstr "Maska iz izbora"
+
+#: src/ui/app_window.cpp:8762
+msgid "Mask from Inverse Selection"
+msgstr "Maska iz obrnutog izbora"
+
+#: src/ui/app_window.cpp:8763
+msgid "Add to Mask"
+msgstr "Dodaj u masku"
+
+#: src/ui/app_window.cpp:8764
+msgid "Subtract from Mask"
+msgstr "Oduzmi od maske"
+
+#: src/ui/app_window.cpp:8787
+msgid ": make a selection first"
+msgstr ": prvo napravite izbor"
+
+#: src/ui/app_window.cpp:8793
+msgid ": no active layer"
+msgstr ": nema aktivnog sloja"
+
+#: src/ui/app_window.cpp:8797
+msgid "This layer is locked. Unlock it to add a mask."
+msgstr "Ovaj sloj je zaključan. Otključajte ga da biste dodali masku."
+
+#: src/ui/app_window.cpp:8803
+msgid ": not available on text layers yet"
+msgstr ": još nije dostupno za tekstualne slojeve"
+
+#: src/ui/app_window.cpp:8810
+msgid ": this layer has no mask"
+msgstr ": ovaj sloj nema masku"
+
+#: src/ui/app_window.cpp:8849
+msgid "Mask replaced from the selection"
+msgstr "Maska zamijenjena iz izbora"
+
+#: src/ui/app_window.cpp:8850 src/ui/app_window.cpp:8858
+msgid "Mask added from the selection"
+msgstr "Maska dopunjena iz izbora"
+
+#: src/ui/app_window.cpp:8853
+msgid "Mask replaced from the inverse selection"
+msgstr "Maska zamijenjena iz obrnutog izbora"
+
+#: src/ui/app_window.cpp:8854
+msgid "Mask added from the inverse selection"
+msgstr "Maska dopunjena iz obrnutog izbora"
+
+#: src/ui/app_window.cpp:8857
+msgid "Selection added to the mask"
+msgstr "Izbor dodat u masku"
+
+#: src/ui/app_window.cpp:8861
+msgid "Selection subtracted from the mask"
+msgstr "Izbor oduzet od maske"
+
+#: src/ui/app_window.cpp:8885
+msgid "merged"
+msgstr "spojeno"
+
+#: src/ui/app_window.cpp:8896
+msgid "Nothing to copy: the selection covers no pixels"
+msgstr "Nema šta da se kopira: izbor ne pokriva piksele"
+
+#: src/ui/app_window.cpp:8904
+#, c-format
+msgid "Copied layer '%s'"
+msgstr "Kopiran sloj „%s”"
+
+#: src/ui/app_window.cpp:8906
+#, c-format
+msgid "Copied selection from %s"
+msgstr "Kopiran izbor iz %s"
+
+#: src/ui/app_window.cpp:8921
+msgid "Nothing to cut: the selection covers no pixels"
+msgstr "Nema šta da se isiječe: izbor ne pokriva piksele"
+
+#: src/ui/app_window.cpp:8929
+#, c-format
+msgid "Cut layer '%s'"
+msgstr "Isječen sloj „%s”"
+
+#: src/ui/app_window.cpp:8931
+#, c-format
+msgid "Cut selection from %s"
+msgstr "Isječen izbor iz %s"
+
+#: src/ui/app_window.cpp:8995
+msgid "Pasted image"
+msgstr "Umetnuta slika"
+
+#: src/ui/app_window.cpp:8998
+#, c-format
+msgid "Selection from %s"
+msgstr "Izbor iz %s"
+
+#: src/ui/app_window.cpp:9066 src/ui/shape_designer.cpp:1189
+msgid "Shape"
+msgstr "Oblik"
+
+#: src/ui/app_window.cpp:9102
+msgid "Add "
+msgstr "Dodaj "
+
+#: src/ui/app_window.cpp:9469 src/ui/settings_dialog.cpp:1340
+#: src/ui/settings_dialog.cpp:2060
+msgid "Text"
+msgstr "Tekst"
+
+#: src/ui/app_window.cpp:9606
+msgid "Add Gradient"
+msgstr "Dodaj gradijent"
+
+#: src/ui/app_window.cpp:10368 src/ui/fill_dialog.cpp:100
+#: src/ui/image_ops_panel.cpp:773 src/ui/tool.cpp:309
+msgid "Inpaint"
+msgstr "Retuširanje"
+
+#: src/ui/app_window.cpp:10476
+msgid ""
+"The active layer has no pixels to sample. Rasterize it, or set the Magic "
+"Wand's Source to All Layers."
+msgstr ""
+"Aktivni sloj nema piksela za uzorkovanje. Rasterizujte ga ili postavite "
+"Izvor čarobnog štapića na Svi slojevi."
+
+#: src/ui/app_window.cpp:10487
+msgid "Magic Wand"
+msgstr "Čarobni štapić"
+
+#: src/ui/app_window.cpp:10514
+msgid ""
+"The active layer has no pixels to read edges from. Rasterize it, or set the "
+"Edge Select Brush's Source to All Layers."
+msgstr ""
+"Aktivni sloj nema piksela iz kojih bi se čitale ivice. Rasterizujte ga ili "
+"postavite Izvor četkice za izbor ivica na Svi slojevi."
+
+#: src/ui/app_window.cpp:10533
+msgid "The layer is locked — unlock it to retouch it"
+msgstr ""
+
+#: src/ui/app_window.cpp:10537
+msgid "Can’t retouch a vector layer — rasterize it first"
+msgstr ""
+
+#: src/ui/app_window.cpp:10554
+msgid "No red-eye glow found inside the ring"
+msgstr ""
+
+#: src/ui/app_window.cpp:10555
+msgid "Nothing red enough to correct where you painted"
+msgstr ""
+
+#: src/ui/app_window.cpp:10642
+msgid "The active layer has no pixels to fill. Rasterize it first."
+msgstr "Aktivni sloj nema piksela za popunu. Prvo ga rasterizujte."
+
+#: src/ui/app_window.cpp:10646
+msgid "This layer is locked. Unlock it to fill."
+msgstr "Ovaj sloj je zaključan. Otključajte ga da biste popunili."
+
+#: src/ui/app_window.cpp:10856
+msgid "Inpaint fill is not available on a rotated crop"
+msgstr "Popuna retuširanjem nije dostupna kod zakrenutog isijecanja"
+
+#: src/ui/app_window.cpp:10888
+#, c-format
+msgid "Cropped to %u × %u px"
+msgstr "Isječeno na %u × %u px"
+
+#: src/ui/app_window.cpp:11352
+#, c-format
+msgid "\"%s\" has unsaved changes. If you don't save them, they are lost."
+msgstr ""
+"Datoteka \"%s\" ima nesačuvane izmjene. Ako ih ne sačuvate, bit će "
+"izgubljene."
+
+#: src/ui/app_window.cpp:11357
+msgid "Save your changes?"
+msgstr "Sačuvati izmjene?"
+
+#: src/ui/app_window.cpp:11359
+msgid "Don't save"
+msgstr "Nemoj sačuvati"
+
+#. TRANSLATORS: window title, whole phrase: "<document> • unsaved for 5 min — Mosaic".
+#. This is the mark that a document has changes that are not written to disk.
+#: src/ui/app_window.cpp:11492
+msgid "unsaved"
+msgstr ""
+
+#. TRANSLATORS: window title connective, between "unsaved" and a duration:
+#. "unsaved FOR 5 min".
+#: src/ui/app_window.cpp:11495
+msgid "for"
+msgstr ""
+
+#. TRANSLATORS: abbreviation for MINUTES in the window title's unsaved duration ("5 min").
+#: src/ui/app_window.cpp:11497
+msgid "min"
+msgstr ""
+
+#. TRANSLATORS: abbreviation for SECONDS in the window title's unsaved duration ("12 sec").
+#: src/ui/app_window.cpp:11499
+msgid "sec"
+msgstr ""
+
+#: src/ui/app_window.cpp:11504 src/ui/new_document_dialog.cpp:331
+#: src/ui/new_document_dialog.cpp:338
+msgid "Untitled"
+msgstr ""
+
+#: src/ui/app_window.cpp:12578
+msgid "Hardware acceleration unavailable"
+msgstr "Hardversko ubrzanje nije dostupno"
+
+#: src/ui/app_window.cpp:12579
+msgid ""
+"Mosaic could not initialize its Vulkan canvas, so the image area will not "
+"display. Check that your GPU drivers and the Vulkan loader are installed and "
+"up to date."
+msgstr ""
+"Mosaic nije mogao pokrenuti svoje Vulkan platno, pa se područje slike neće "
+"prikazivati. Provjerite jesu li drajveri grafičke kartice i Vulkan učitavač "
+"instalirani i ažurni."
+
+#: src/ui/app_window.cpp:13557
+msgid "Services"
+msgstr ""
+
+#: src/ui/app_window.cpp:13558
+msgid "Hide Mosaic"
+msgstr ""
+
+#: src/ui/app_window.cpp:13559
+msgid "Hide Others"
+msgstr ""
+
+#: src/ui/app_window.cpp:13560
+msgid "Show All"
+msgstr ""
+
+#: src/ui/app_window.cpp:13561
+msgid "Quit Mosaic"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:404 src/ui/brush_editor.cpp:1404
+msgid "Tip & spacing"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:717 src/ui/settings_dialog.cpp:1339
+#: src/ui/settings_dialog.cpp:1356 src/ui/settings_dialog.cpp:1380
+msgid "General"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:718
+msgid "Colour"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:719 src/ui/brush_preset_panel.cpp:493
+#: src/ui/new_document_dialog.cpp:789
+msgid "Texture"
+msgstr "Tekstura"
+
+#: src/ui/brush_editor.cpp:720 src/ui/brush_editor.cpp:722
+msgid "Tip"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:729 src/ui/layer_effects_dialog.cpp:763
+#: src/ui/layer_effects_dialog.cpp:787 src/ui/layer_effects_dialog.cpp:1171
+#: src/ui/layer_effects_dialog.cpp:1267 src/ui/settings_dialog.cpp:1710
+#: src/ui/tool.cpp:228 src/ui/tool.cpp:249 src/ui/tool.cpp:331
+#: src/ui/tool.cpp:342 src/ui/tool.cpp:353 src/ui/tool.cpp:368
+#: src/ui/tool.cpp:402 src/ui/tool.cpp:417 src/ui/tool.cpp:523
+msgid "Size"
+msgstr "Veličina"
+
+#: src/ui/brush_editor.cpp:730 src/ui/fill_dialog.cpp:165
+#: src/ui/layer_effects_dialog.cpp:751 src/ui/layer_effects_dialog.cpp:780
+#: src/ui/layer_effects_dialog.cpp:912 src/ui/layer_effects_dialog.cpp:948
+#: src/ui/layer_effects_dialog.cpp:1063 src/ui/layer_effects_dialog.cpp:1106
+#: src/ui/layer_effects_dialog.cpp:1257 src/ui/layer_panel.cpp:2889
+#: src/ui/tool.cpp:233 src/ui/tool.cpp:336 src/ui/tool.cpp:345
+#: src/ui/tool.cpp:373 src/ui/tool.cpp:437 src/ui/tool.cpp:459
+msgid "Opacity"
+msgstr "Neprozirnost"
+
+#: src/ui/brush_editor.cpp:731 src/ui/tool.cpp:231 src/ui/tool.cpp:334
+#: src/ui/tool.cpp:371
+msgid "Flow"
+msgstr "Protok"
+
+#: src/ui/brush_editor.cpp:732 src/ui/tool.cpp:277
+msgid "Ratio"
+msgstr "Odnos"
+
+#: src/ui/brush_editor.cpp:733 src/ui/settings_dialog.cpp:1312
+msgid "Rotation"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:734
+msgid "Softness"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:735
+msgid "Scatter"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:736
+msgid "Mirror"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:737 src/ui/brush_editor.cpp:1446
+#: src/ui/shape_designer.cpp:1289 src/ui/tool.cpp:389
+msgid "Spacing"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:738
+msgid "Sharpness"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:739
+msgid "Airbrush rate"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:740
+msgid "Smudge length"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:741
+msgid "Colour rate"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:742
+msgid "Smudge radius"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:743
+msgid "Hue"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:744
+msgid "Saturation"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:745
+msgid "Value"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:746 src/ui/texture_generator_dialog.cpp:1856
+msgid "Density"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:747
+msgid "Line width"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:748
+msgid "Offset scale"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:749
+msgid "Curve opacity"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:750
+msgid "Hatch angle"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:751
+msgid "Crosshatching"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:752
+msgid "Separation"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:753
+msgid "Thickness"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:754
+msgid "Texture strength"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:760 src/ui/brush_editor.cpp:779
+#: src/ui/settings_dialog.cpp:1279
+msgid "Pressure"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:761
+msgid "Pressure (on tap)"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:762
+msgid "Tangential pressure"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:763
+msgid "Drawing angle"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:764
+msgid "X tilt"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:765
+msgid "Y tilt"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:768
+msgid "Tilt direction"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:769
+msgid "Tilt elevation"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:770
+msgid "Barrel rotation"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:771
+msgid "Random (per dab)"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:772
+msgid "Random (per stroke)"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:773 src/ui/settings_dialog.cpp:1918
+msgid "Speed"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:774
+msgid "Fade"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:775 src/ui/layer_effects_dialog.cpp:757
+#: src/ui/layer_effects_dialog.cpp:1263
+msgid "Distance"
+msgstr "Rastojanje"
+
+#: src/ui/brush_editor.cpp:776
+msgid "Time"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:777
+msgid "Perspective"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:900
+msgid "Brush Editor"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:959
+msgid "The name this brush is saved and found under"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:999
+msgid "Save As…"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1002
+msgid "Export…"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1004
+msgid "Write this brush to a .mbp file you can keep or share"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1006
+msgid "Import…"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1009 src/ui/brush_editor.cpp:1911
+#: src/ui/scrub_slider.cpp:498 src/ui/widgets.cpp:1032
+msgid "Delete"
+msgstr "Obriši"
+
+#: src/ui/brush_editor.cpp:1012
+msgid "Remove this brush from your brushes folder. Only your own."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1042
+msgid "Presets"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1061
+msgid "Options"
+msgstr "Opcije"
+
+#: src/ui/brush_editor.cpp:1104
+msgid "Preview & scratchpad"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1111
+msgid ""
+"Draw here to try the brush -- with your tablet's pressure and tilt. Nothing "
+"here ever reaches your artwork."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1123
+msgid "Wipe the scratchpad and lay the sample stroke again"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1131 src/ui/settings_dialog.cpp:1713
+msgid "Eraser size follows the brush"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1140 src/ui/settings_dialog.cpp:1730
+msgid "Eraser preset follows the brush"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1405
+msgid ""
+"The nib itself: how wide it is, which way it is turned, and how densely it "
+"lays dabs along the stroke. A preset's dynamic options scale these; this is "
+"what they scale."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1409
+msgid "Diameter"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1423 src/ui/image_ops_panel.cpp:668
+#: src/ui/layer_effects_dialog.cpp:678
+msgid "Angle"
+msgstr "Ugao"
+
+#: src/ui/brush_editor.cpp:1448
+msgid "Automatic spacing"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1450
+msgid "Auto coefficient"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1452
+msgid "Same spacing in every direction"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1454
+msgid ""
+"Spacing is an ellipse, not a number: the interval follows both of the dab's "
+"extents, so a long thin nib steps further along its blade than across it. "
+"\"Same in every direction\" opts out of that."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1461
+msgid ""
+"Always on. This option's enable bit is written to preset files and ignored "
+"by every reader, so there is nothing here to switch off."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1465 src/ui/tool.cpp:403
+msgid "Strength"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1469
+msgid "Let the sensors drive it"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1470
+msgid ""
+"Off collapses the option to its constant strength -- the sensors are not "
+"consulted at all, which is what the preset format means by this bit even "
+"though its name says otherwise."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1478
+msgid "Sensor"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1501
+msgid "Active"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1512
+msgid "An option keeps at least one sensor -- switch the sensors off instead."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1525
+msgid "Combine"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1527 src/ui/tool.cpp:201
+msgid "Add"
+msgstr "Dodaj"
+
+#: src/ui/brush_editor.cpp:1527
+msgid "Largest"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1527
+msgid "Multiply"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1527
+msgid "Smallest"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1528
+msgid "Difference"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1539
+msgid ""
+"How several active sensors fold together. It touches the scaling sensors "
+"only -- a tilt offset always adds and an absolute angle always overwrites."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1542
+msgid "One curve for every sensor"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1553 src/ui/shape_designer.cpp:1210
+msgid "Curve"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1553
+msgid "Curve (shared)"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1599 src/ui/shape_designer.cpp:1203
+msgid "Length"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1604 src/ui/gradient_flyout.cpp:183
+msgid "Repeat"
+msgstr "Ponavljaj"
+
+#: src/ui/brush_editor.cpp:1608
+msgid ""
+"Fade counts dabs, Distance counts pixels and Time counts milliseconds -- "
+"three sensors, three units. \"Repeat\" saws back to zero instead of holding "
+"at one."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1614
+msgid "Offset"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1631
+msgid "Lock the angle at the stroke's start"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1638
+msgid "Nothing to edit"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1639
+msgid "This preset carries no options in that group."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1662
+msgid "Approximated"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1662
+msgid "Exact"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1662
+msgid "Substituted"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1664
+msgid "colour accumulation"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1665
+msgid "alpha accumulation"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1667
+msgid "pixel brush"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1673
+msgid "edited"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1783
+msgid "The preset could not be saved."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1791
+msgid "Saved."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1820
+msgid "Import a brush preset"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1823
+msgid "Brush presets"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1832
+msgid "That file is not a brush preset."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1840
+msgid "Imported."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1853
+msgid "Export brush preset"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1858
+msgid "Mosaic brush preset"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1866
+msgid "Exported."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1880
+msgid "The preset could not be exported."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1890
+msgid "That preset cannot be deleted."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1902
+msgid "Delete this brush?"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1908
+#, c-format
+msgid "\"%s\" will be removed from your brushes folder. This cannot be undone."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1920
+msgid "The preset could not be deleted."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1948
+msgid "Deleted."
+msgstr ""
+
+#: src/ui/brush_preset_panel.cpp:104
+msgid ""
+"No spray engine yet: this stamps its tip. It does not scatter particles."
+msgstr ""
+"Još nema pogona za sprej: ova četkica otiskuje svoj vrh. Ne rasipa čestice."
+
+#: src/ui/brush_preset_panel.cpp:106
+msgid "No filter-brush engine yet: this paints colour. It does not filter."
+msgstr ""
+"Još nema pogona za filtersku četkicu: ova četkica slika bojom. Ne filtrira."
+
+#: src/ui/brush_preset_panel.cpp:483
+msgid "All"
+msgstr "Sve"
+
+#: src/ui/brush_preset_panel.cpp:485
+msgid "Basics"
+msgstr "Osnove"
+
+#: src/ui/brush_preset_panel.cpp:487
+msgid "Draw"
+msgstr "Crtanje"
+
+#: src/ui/brush_preset_panel.cpp:489 src/ui/layer_effects_dialog.cpp:854
+msgid "Paint"
+msgstr "Slikanje"
+
+#: src/ui/brush_preset_panel.cpp:491 src/ui/layer_effects_dialog.cpp:661
+#: src/ui/layer_panel.cpp:2887
+msgid "Blend"
+msgstr "Stapanje"
+
+#: src/ui/brush_preset_panel.cpp:495 src/ui/layer_effects_dialog.cpp:343
+msgid "Effects"
+msgstr "Efekti"
+
+#: src/ui/brush_preset_panel.cpp:497
+msgid "Special"
+msgstr "Posebno"
+
+#: src/ui/brush_preset_panel.cpp:499
+msgid "User"
+msgstr "Korisničko"
+
+#: src/ui/brush_preset_panel.cpp:652
+msgid "Search presets"
+msgstr "Traži postavke četkica"
+
+#: src/ui/brush_preset_panel.cpp:1361
+msgid "Filter the presets by name"
+msgstr "Filtriraj postavke po nazivu"
+
+#: src/ui/brush_preset_panel.cpp:1365
+msgid "Clear the filter"
+msgstr "Očisti filter"
+
+#: src/ui/brush_preset_panel.cpp:1371 src/ui/paint_chip.cpp:214
+#: src/ui/widgets.cpp:284
+msgid "Edit…"
+msgstr "Uredi…"
+
+#: src/ui/brush_preset_panel.cpp:1374
+msgid "Edit the selected brush preset"
+msgstr ""
+
+#: src/ui/brush_preset_panel.cpp:1378
+msgid "Filter by kind. Drag or scroll the strip to see them all."
+msgstr "Filtriraj po vrsti. Prevucite ili pomjerite traku da vidite sve."
+
+#: src/ui/brush_preset_panel.cpp:1479 src/ui/brush_preset_panel.cpp:1492
+#: src/ui/brush_preset_panel.cpp:1667
+msgid "Default round"
+msgstr "Podrazumijevana okrugla"
+
+#: src/ui/brush_preset_panel.cpp:1493
+msgid "No preset: the engine's own plain round tip."
+msgstr "Bez postavke: vlastiti jednostavan okrugli vrh pogona."
+
+#: src/ui/brush_preset_panel.cpp:1503
+msgid "Your own preset (in your brushes folder)."
+msgstr ""
+
+#: src/ui/brush_preset_panel.cpp:1520
+msgid "Approximated: some of this preset's options have no engine here yet."
+msgstr "Približno: za neke opcije ove postavke ovdje još nema pogona."
+
+#: src/ui/brush_preset_panel.cpp:1524
+msgid "Substituted: imported as its nearest pixel-brush kin."
+msgstr "Zamijenjeno: uvezeno kao najbliži srodnik među pikselnim četkicama."
+
+#: src/ui/brush_preset_panel.cpp:1531
+msgid "Dropped:"
+msgstr "Izostavljeno:"
+
+#: src/ui/brush_preset_panel.cpp:1952
+msgid "Brush Presets"
+msgstr "Postavke četkica"
+
+#: src/ui/brush_preset_panel.cpp:1952
+msgid "Eraser Presets"
+msgstr "Postavke gumica"
+
+#: src/ui/brush_preset_panel.cpp:1970
+#, c-format
+msgid "%d of %d"
+msgstr "%d od %d"
+
+#: src/ui/brush_preset_panel.cpp:1978
+msgid "No presets installed"
+msgstr "Nema instaliranih postavki"
+
+#: src/ui/brush_preset_panel.cpp:1979
+msgid "No preset matches"
+msgstr "Nijedna postavka ne odgovara"
+
+#: src/ui/channels_panel.cpp:368
+msgid "No image data"
+msgstr "Nema podataka o slici"
+
+#: src/ui/channels_panel.cpp:542 src/ui/gradient_flyout.cpp:204
+msgid "Alpha"
+msgstr "Alfa"
+
+#: src/ui/channels_panel.cpp:542
+msgid "Blue"
+msgstr "Plava"
+
+#: src/ui/channels_panel.cpp:542
+msgid "Green"
+msgstr "Zelena"
+
+#: src/ui/channels_panel.cpp:542
+msgid "RGB"
+msgstr "RGB"
+
+#: src/ui/channels_panel.cpp:542
+msgid "Red"
+msgstr "Crvena"
+
+#: src/ui/color_flyout.cpp:90
+msgid "Field"
+msgstr "Polje"
+
+#: src/ui/color_flyout.cpp:91
+msgid "HSL Wheel"
+msgstr "HSL točak"
+
+#: src/ui/color_flyout.cpp:92
+msgid "SV Wheel"
+msgstr "SV točak"
+
+#: src/ui/color_flyout.cpp:140
+msgid "Use the foreground colour"
+msgstr "Koristi boju prednjeg plana"
+
+#: src/ui/color_picker.cpp:199
+msgid "Outside the working-space gamut — click to snap to the nearest color"
+msgstr "Izvan gamuta radnog prostora — kliknite da prionete na najbližu boju"
+
+#: src/ui/export_dialog.cpp:435
+msgid "Auto  (recommended)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:436
+msgid "Nearest  (hard pixels)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:437 src/ui/image_ops_panel.cpp:735
+#: src/ui/tool.cpp:195
+msgid "Bilinear"
+msgstr "Bilinearno"
+
+#: src/ui/export_dialog.cpp:438 src/ui/image_ops_panel.cpp:735
+#: src/ui/tool.cpp:195
+msgid "Bicubic"
+msgstr "Bikubično"
+
+#: src/ui/export_dialog.cpp:439 src/ui/image_ops_panel.cpp:736
+#: src/ui/tool.cpp:195
+msgid "Mitchell"
+msgstr "Mitchell"
+
+#: src/ui/export_dialog.cpp:440 src/ui/image_ops_panel.cpp:736
+#: src/ui/tool.cpp:196
+msgid "Lanczos 2"
+msgstr "Lanczos 2"
+
+#: src/ui/export_dialog.cpp:441 src/ui/image_ops_panel.cpp:736
+#: src/ui/tool.cpp:196
+msgid "Lanczos 3"
+msgstr "Lanczos 3"
+
+#: src/ui/export_dialog.cpp:442
+msgid "Area  (shrinking)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:443 src/ui/image_ops_panel.cpp:737
+#: src/ui/tool.cpp:196
+msgid "Gaussian"
+msgstr "Gaussovo"
+
+#: src/ui/export_dialog.cpp:444 src/ui/image_ops_panel.cpp:737
+#: src/ui/tool.cpp:197
+msgid "Supersample"
+msgstr "Naduzorkovanje"
+
+#: src/ui/export_dialog.cpp:449
+msgid "100%"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:449
+msgid "200%"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:449
+msgid "25%"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:449
+msgid "50%"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:460
+msgid ""
+"Transparency is lost -- transparent areas are filled with the matte colour."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:462
+msgid ""
+"Soft transparency is lost -- each pixel ends up either fully opaque or fully "
+"transparent."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:465
+msgid "Layers are flattened into one picture."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:467
+msgid "Vector shapes are rasterised -- they stop being editable geometry."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:469
+msgid "Text is rasterised -- it stops being editable type."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:471
+msgid "Layer effects are baked into the pixels."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:473
+msgid "3D text is baked into the pixels."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:475
+msgid "Adjustment layers are baked into the pixels."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:477
+msgid "Colour precision is reduced to what this format stores."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:479
+msgid "High dynamic range is clipped to the format's range."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:481
+msgid "Colours are quantised down to this format's palette."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:483
+msgid "The picture is re-compressed lossily -- fine detail changes."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:485
+msgid ""
+"Colour resolution is halved (chroma subsampling) -- edges and text soften."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:487
+msgid "The colour profile is not written -- the file is read as plain sRGB."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:489
+msgid "The working colour space is converted on the way out."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:491
+msgid "Camera metadata (EXIF) is not written."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:493
+msgid "XMP metadata is not written."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:495
+msgid "The resolution (DPI) is not recorded in the file."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:497
+msgid "Conic gradients have no equivalent here and are rasterised."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:499
+msgid ""
+"Inside/outside strokes are converted to outlines -- they look identical but "
+"stop being strokes."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:502
+msgid "Blend modes are flattened into the artwork."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:599
+msgid "lossless or lossy"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:601
+msgid "lossless"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:603
+msgid "lossy"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:605
+msgid "no transparency"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:606
+msgid "on/off transparency"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:607
+msgid "full transparency"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:611
+#, c-format
+msgid "up to %d colours"
+msgstr ""
+
+#. TRANSLATORS: bit depth per colour channel of the exported file.
+#: src/ui/export_dialog.cpp:614
+#, c-format
+msgid "%d-bit colour"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:617
+msgid "ICC profile"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:619
+msgid "animation"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:894
+msgid "Web PNG"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:895
+msgid "Web JPEG"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:900
+msgid "Photo JPEG (high quality)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:903
+msgid "Lossless archive"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:926 src/ui/layer_effects_dialog.cpp:1399
+msgid "Nothing to preview"
+msgstr "Nema šta da se pregleda"
+
+#: src/ui/export_dialog.cpp:952 src/ui/settings_dialog.cpp:1727
+#: src/ui/texture_generator_dialog.cpp:888
+msgid "Preset"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:954 src/ui/settings_dialog.cpp:2600
+#: src/ui/settings_dialog.cpp:2616 src/ui/texture_generator_dialog.cpp:1097
+#: src/ui/tool.cpp:278
+msgid "Custom"
+msgstr "Prilagođeno"
+
+#: src/ui/export_dialog.cpp:961
+msgid "Format"
+msgstr "Format"
+
+#: src/ui/export_dialog.cpp:991
+msgid "Output size"
+msgstr "Izlazna veličina"
+
+#: src/ui/export_dialog.cpp:992
+msgid "Scale (%)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1021
+msgid "Width (px)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1027
+msgid "Height (px)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1033
+msgid "Lock aspect ratio"
+msgstr "Zaključaj odnos stranica"
+
+#: src/ui/export_dialog.cpp:1037
+msgid "Resolution (ppi)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1051
+msgid "Resize quality"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1067
+msgid "Format settings"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1069
+msgid "This format has no settings to choose."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1080
+msgid "Transparency"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1081
+msgid "Matte colour"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1086
+msgid "Colour that fills transparency in a format without an alpha channel"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1142
+msgid "Save to"
+msgstr "Sačuvaj u"
+
+#: src/ui/export_dialog.cpp:1146
+msgid "Where the file is written. Leave it empty and Export will ask."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1148
+msgid "Choose a file…"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1652
+msgid "Nothing is lost -- this format carries everything the document uses."
+msgstr ""
+
+#. TRANSLATORS: tail of the export loss banner when more warnings than fit are listed.
+#: src/ui/export_dialog.cpp:1665
+#, c-format
+msgid "+ %zu more"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1770
+msgid "File size: rendering…"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1835 src/ui/export_dialog.cpp:1837
+msgid "File size: "
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1838
+msgid "unavailable"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1922
+msgid "Export failed: could not resize the image"
+msgstr "Izvoz nije uspio: veličina slike se nije mogla promijeniti"
+
+#: src/ui/export_dialog.cpp:1935
+msgid "Export failed: "
+msgstr "Izvoz nije uspio: "
+
+#: src/ui/export_dialog.cpp:1936
+msgid "unknown error"
+msgstr ""
+
+#: src/ui/export_preview.cpp:203
+msgid "Actual pixels (100%)"
+msgstr ""
+
+#: src/ui/export_preview.cpp:208
+msgid "Reset zoom (fit to window)"
+msgstr ""
+
+#: src/ui/export_preview.cpp:452 src/ui/texture_generator_dialog.cpp:3148
+msgid "Rendering…"
+msgstr ""
+
+#: src/ui/fill_dialog.cpp:88
+msgid "Contents"
+msgstr "Sadržaj"
+
+#: src/ui/fill_dialog.cpp:90 src/ui/image_ops_panel.cpp:760
+msgid "Foreground Color"
+msgstr "Boja prednjeg plana"
+
+#: src/ui/fill_dialog.cpp:91 src/ui/image_ops_panel.cpp:761
+msgid "Background Color"
+msgstr "Boja pozadine"
+
+#: src/ui/fill_dialog.cpp:92 src/ui/image_ops_panel.cpp:762 src/ui/tool.cpp:308
+msgid "White"
+msgstr "Bijela"
+
+#: src/ui/fill_dialog.cpp:93 src/ui/image_ops_panel.cpp:763 src/ui/tool.cpp:308
+msgid "Black"
+msgstr "Crna"
+
+#: src/ui/fill_dialog.cpp:94 src/ui/image_ops_panel.cpp:764
+msgid "50% Gray"
+msgstr ""
+
+#: src/ui/fill_dialog.cpp:95 src/ui/image_ops_panel.cpp:765
+msgid "Color…"
+msgstr "Boja…"
+
+#: src/ui/fill_dialog.cpp:97 src/ui/image_ops_panel.cpp:766
+msgid "Gradient…"
+msgstr "Gradijent…"
+
+#: src/ui/fill_dialog.cpp:98 src/ui/image_ops_panel.cpp:767
+msgid "Pattern…"
+msgstr "Šara…"
+
+#: src/ui/fill_dialog.cpp:143 src/ui/image_ops_panel.cpp:837
+msgid "Gradient direction"
+msgstr "Smjer gradijenta"
+
+#: src/ui/fill_dialog.cpp:159 src/ui/select_morph_panel.cpp:113
+#: src/ui/tool.cpp:201 src/ui/tool.cpp:538
+msgid "Mode"
+msgstr "Režim"
+
+#: src/ui/fill_dialog.cpp:192
+msgid "Protect alpha"
+msgstr "Zaštiti alfu"
+
+#: src/ui/fill_dialog.cpp:194
+msgid ""
+"Only recolors pixels the layer already has (opacity above zero); fully "
+"transparent pixels are left untouched. With a transparent selection this "
+"leaves the preview unchanged."
+msgstr ""
+"Preboji samo piksele koje sloj već ima (neprozirnost iznad nule); potpuno "
+"prozirni pikseli ostaju netaknuti. Uz proziran izbor ovo ostavlja pregled "
+"nepromijenjenim."
+
+#: src/ui/fill_dialog.cpp:200 src/ui/fill_dialog.cpp:203
+msgid "Preview"
+msgstr "Pregled"
+
+#: src/ui/fill_dialog.cpp:310 src/ui/fill_dialog.cpp:564
+msgid "No raster layer is active."
+msgstr "Nijedan rasterski sloj nije aktivan."
+
+#: src/ui/fill_dialog.cpp:312
+msgid "active layer"
+msgstr "aktivnog sloja"
+
+#: src/ui/fill_dialog.cpp:312
+msgid "selection"
+msgstr "izbora"
+
+#: src/ui/fill_dialog.cpp:314
+msgid "Filling"
+msgstr "Popunjavanje"
+
+#: src/ui/fill_dialog.cpp:410
+msgid ""
+"Reconstructs the selection from the surrounding image. Click Preview to see "
+"the result; Fill commits it."
+msgstr ""
+"Rekonstruiše izbor iz okolne slike. Kliknite Pregled da vidite rezultat; "
+"Popuni ga primjenjuje."
+
+#: src/ui/fill_dialog.cpp:449 src/ui/image_ops_panel.cpp:961
+msgid "Click to choose a color"
+msgstr "Kliknite da izaberete boju"
+
+#: src/ui/fill_dialog.cpp:563
+msgid "Nothing to fill."
+msgstr "Nema šta da se popuni."
+
+#: src/ui/fill_dialog.cpp:597
+msgid "Reconstructing… 0%"
+msgstr "Rekonstrukcija… 0%"
+
+#: src/ui/gradient_flyout.cpp:156
+msgid "Add a gradient stop"
+msgstr "Dodaj tačku gradijenta"
+
+#: src/ui/gradient_flyout.cpp:160
+msgid "Remove the selected gradient stop"
+msgstr "Ukloni izabranu tačku gradijenta"
+
+#: src/ui/gradient_flyout.cpp:178
+msgid "Set the selected stop to the foreground colour"
+msgstr "Postavi izabranoj tački boju prednjeg plana"
+
+#: src/ui/gradient_flyout.cpp:182
+msgid "Pad"
+msgstr "Rastegni"
+
+#: src/ui/gradient_flyout.cpp:184
+msgid "Reflect"
+msgstr "Odrazi"
+
+#: src/ui/history_panel.cpp:66
+msgid "just now"
+msgstr "upravo sada"
+
+#: src/ui/history_panel.cpp:356 src/ui/tool.cpp:278
+msgid "Original"
+msgstr "Original"
+
+#: src/ui/history_panel.cpp:437 src/ui/layer_panel.cpp:2921
+msgid "No document"
+msgstr "Nema dokumenta"
+
+#: src/ui/idle_invitation.cpp:25
+msgid "Open an image"
+msgstr "Otvorite sliku"
+
+#: src/ui/idle_invitation.cpp:26
+msgid "Drop it anywhere"
+msgstr "Pustite je bilo gdje"
+
+#: src/ui/idle_invitation.cpp:27
+msgid "click anywhere, or drop a file into this window"
+msgstr "kliknite bilo gdje ili pustite datoteku u ovaj prozor"
+
+#. TRANSLATORS: "File > New" names the menu path -- use the same wording as the File and New menu
+#. entries in this catalog so the hint points at something the user can actually see.
+#: src/ui/idle_invitation.cpp:30
+msgid "File > New starts a blank canvas"
+msgstr "Datoteka > Nova otvara prazno platno"
+
+#: src/ui/image_ops_panel.cpp:540
+msgid "Canvas Size"
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:542
+msgid "Image Size"
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:544
+msgid "Rotate Canvas"
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:559 src/ui/layer_effects_dialog.cpp:830
+#: src/ui/new_document_dialog.cpp:1830 src/ui/shape_designer.cpp:1205
+msgid "Width"
+msgstr "Širina"
+
+#: src/ui/image_ops_panel.cpp:597 src/ui/new_document_dialog.cpp:1844
+msgid "Height"
+msgstr "Visina"
+
+#: src/ui/image_ops_panel.cpp:636 src/ui/new_document_dialog.cpp:1865
+#: src/ui/settings_dialog.cpp:1357
+msgid "Units"
+msgstr "Jedinice"
+
+#: src/ui/image_ops_panel.cpp:654
+msgid "Constrain Proportions"
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:676
+msgid "Drag to turn the canvas; hold Shift to snap"
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:715
+msgid "Anchor"
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:730
+msgid "Resample"
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:735 src/ui/tool.cpp:195
+msgid "Auto"
+msgstr "Automatski"
+
+#: src/ui/image_ops_panel.cpp:735 src/ui/tool.cpp:195
+msgid "Nearest"
+msgstr "Najbliži susjed"
+
+#: src/ui/image_ops_panel.cpp:736 src/ui/tool.cpp:196
+msgid "Area (box)"
+msgstr "Površinski (kutijasto)"
+
+#: src/ui/image_ops_panel.cpp:759 src/ui/tool.cpp:308
+msgid "Transparent"
+msgstr "Prozirno"
+
+#: src/ui/image_ops_panel.cpp:870 src/ui/select_morph_panel.cpp:160
+#: src/ui/texture_generator_dialog.cpp:1084 src/ui/tool.cpp:316
+msgid "Apply"
+msgstr "Primijeni"
+
+#: src/ui/image_ops_panel.cpp:949
+msgid ""
+"Rebuilds the new margin from the picture beside it. Runs in the background "
+"when you Apply."
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:951
+msgid "The area the canvas gains is left empty."
+msgstr ""
+
+#: src/ui/layer_effects_dialog.cpp:365
+msgid "Coming in a later update"
+msgstr "Stiže u nekom od narednih ažuriranja"
+
+#: src/ui/layer_effects_dialog.cpp:547
+msgid "Dims the layer's own pixels while its effects stay at full strength"
+msgstr "Prigušuje vlastite piksele sloja dok njegovi efekti ostaju pune snage"
+
+#: src/ui/layer_effects_dialog.cpp:747 src/ui/layer_effects_dialog.cpp:776
+#: src/ui/layer_effects_dialog.cpp:928 src/ui/layer_effects_dialog.cpp:1239
+#: src/ui/new_document_dialog.cpp:1881
+msgid "Color"
+msgstr "Boja"
+
+#: src/ui/layer_effects_dialog.cpp:760 src/ui/tool.cpp:428
+msgid "Spread"
+msgstr "Rasipanje"
+
+#: src/ui/layer_effects_dialog.cpp:784
+msgid "Choke"
+msgstr "Stezanje"
+
+#: src/ui/layer_effects_dialog.cpp:791 src/ui/tool.cpp:220 src/ui/tool.cpp:254
+#: src/ui/tool.cpp:463
+msgid "Source"
+msgstr "Izvor"
+
+#: src/ui/layer_effects_dialog.cpp:793
+msgid "Edge"
+msgstr "Ivica"
+
+#: src/ui/layer_effects_dialog.cpp:794
+msgid "Center"
+msgstr "Sredina"
+
+#: src/ui/layer_effects_dialog.cpp:813 src/ui/tool.cpp:505
+msgid "Stroke"
+msgstr "Obrub"
+
+#: src/ui/layer_effects_dialog.cpp:835
+msgid "Position"
+msgstr "Položaj"
+
+#: src/ui/layer_effects_dialog.cpp:921
+msgid "Color Overlay"
+msgstr "Prekrivanje bojom"
+
+#: src/ui/layer_effects_dialog.cpp:958
+msgid "Gradient Overlay"
+msgstr "Prekrivanje gradijentom"
+
+#: src/ui/layer_effects_dialog.cpp:965 src/ui/tool.cpp:450
+msgid "Type"
+msgstr "Vrsta"
+
+#: src/ui/layer_effects_dialog.cpp:1022 src/ui/shape_designer.cpp:1201
+msgid "Direction"
+msgstr "Smjer"
+
+#: src/ui/layer_effects_dialog.cpp:1073
+msgid "Pattern Overlay"
+msgstr "Prekrivanje šarom"
+
+#: src/ui/layer_effects_dialog.cpp:1080
+msgid "Pattern"
+msgstr "Šara"
+
+#: src/ui/layer_effects_dialog.cpp:1116
+msgid "Drop Shadow"
+msgstr "Bačena sjenka"
+
+#: src/ui/layer_effects_dialog.cpp:1118
+msgid "Inner Shadow"
+msgstr "Unutrašnja sjenka"
+
+#: src/ui/layer_effects_dialog.cpp:1121
+msgid "Outer Glow"
+msgstr "Vanjski sjaj"
+
+#: src/ui/layer_effects_dialog.cpp:1131
+msgid "Inner Glow"
+msgstr "Unutrašnji sjaj"
+
+#: src/ui/layer_effects_dialog.cpp:1145
+msgid "Bevel & Emboss"
+msgstr "Kosina i reljef"
+
+#: src/ui/layer_effects_dialog.cpp:1152 src/ui/shape_designer.cpp:1165
+#: src/ui/shape_designer.cpp:1243 src/ui/shape_designer.cpp:1282
+msgid "Style"
+msgstr "Stil"
+
+#: src/ui/layer_effects_dialog.cpp:1167 src/ui/new_document_dialog.cpp:1892
+#: src/ui/shape_designer.cpp:1256 src/ui/texture_generator_dialog.cpp:1795
+msgid "Depth"
+msgstr "Dubina"
+
+#: src/ui/layer_effects_dialog.cpp:1175
+msgid "Soften"
+msgstr "Ublažavanje"
+
+#: src/ui/layer_effects_dialog.cpp:1181
+msgid "Altitude"
+msgstr "Visina"
+
+#: src/ui/layer_effects_dialog.cpp:1185
+msgid "Highlight"
+msgstr "Svjetlo"
+
+#: src/ui/layer_effects_dialog.cpp:1201
+msgid "Hl. Opacity"
+msgstr "Neproz. svjetla"
+
+#: src/ui/layer_effects_dialog.cpp:1205
+msgid "Shadow"
+msgstr "Sjenka"
+
+#: src/ui/layer_effects_dialog.cpp:1221
+msgid "Sh. Opacity"
+msgstr "Neproz. sjenke"
+
+#: src/ui/layer_effects_dialog.cpp:1232
+msgid "Satin"
+msgstr "Saten"
+
+#: src/ui/layer_effects_dialog.cpp:1271
+msgid "Invert"
+msgstr "Obrni"
+
+#: src/ui/layer_effects_dialog.cpp:1294
+msgid "Enable an effect from the list to edit it here."
+msgstr "Uključite efekat sa spiska da biste ga ovdje uredili."
+
+#: src/ui/layer_panel.cpp:1138
+msgid "Blend mode of the active layer"
+msgstr "Režim stapanja aktivnog sloja"
+
+#: src/ui/layer_panel.cpp:1146
+msgid "Opacity of the active layer"
+msgstr "Neprozirnost aktivnog sloja"
+
+#: src/ui/layer_panel.cpp:1159
+msgid "Add a new raster layer"
+msgstr "Dodaj novi rasterski sloj"
+
+#: src/ui/layer_panel.cpp:1162
+msgid "Group the active layer"
+msgstr "Grupiši aktivni sloj"
+
+#: src/ui/layer_panel.cpp:1165
+msgid "Delete the active layer"
+msgstr "Obriši aktivni sloj"
+
+#: src/ui/layer_panel.cpp:1291 src/ui/layer_panel.cpp:2864
+msgid "Channels"
+msgstr "Kanali"
+
+#: src/ui/layer_panel.cpp:1291 src/ui/layer_panel.cpp:2864
+msgid "History"
+msgstr "Historija"
+
+#: src/ui/layer_panel.cpp:1291 src/ui/layer_panel.cpp:2864
+msgid "Layers"
+msgstr "Slojevi"
+
+#: src/ui/layer_panel.cpp:2021
+msgid "Rename..."
+msgstr "Preimenuj..."
+
+#: src/ui/layer_panel.cpp:2022
+msgid "Duplicate Layer"
+msgstr "Dupliciraj sloj"
+
+#: src/ui/layer_panel.cpp:2026
+msgid "Group Layers"
+msgstr "Grupiši slojeve"
+
+#: src/ui/layer_panel.cpp:2032
+msgid "Merge Down"
+msgstr "Spoji sa donjim"
+
+#: src/ui/layer_panel.cpp:2046
+msgid "Rasterize"
+msgstr "Rasterizuj"
+
+#: src/ui/layer_panel.cpp:2051
+msgid "Convert to Path"
+msgstr "Pretvori u putanju"
+
+#: src/ui/layer_panel.cpp:2063
+msgid "Add Mask"
+msgstr "Dodaj masku"
+
+#: src/ui/layer_panel.cpp:2066
+msgid "Delete Mask"
+msgstr "Obriši masku"
+
+#: src/ui/layer_panel.cpp:2072
+msgid "Layer Effects..."
+msgstr "Efekti sloja..."
+
+#: src/ui/layer_panel.cpp:2238
+msgid "This layer has no pixels to select"
+msgstr ""
+
+#: src/ui/layer_panel.cpp:2354
+msgid "This layer has no mask to select"
+msgstr ""
+
+#: src/ui/layer_panel.cpp:2359
+msgid "This mask hides everything — there is no coverage to select"
+msgstr ""
+
+#: src/ui/layer_panel.cpp:2424
+msgid "Group"
+msgstr "Grupa"
+
+#: src/ui/layer_panel.cpp:2921
+msgid "No layers"
+msgstr "Nema slojeva"
+
+#: src/ui/new_document_dialog.cpp:611
+msgid "Link width and height (keep the ratio)"
+msgstr "Poveži širinu i visinu (zadrži odnos)"
+
+#: src/ui/new_document_dialog.cpp:737
+msgid "Landscape"
+msgstr "Vodoravno"
+
+#: src/ui/new_document_dialog.cpp:737
+msgid "Portrait"
+msgstr "Uspravno"
+
+#: src/ui/new_document_dialog.cpp:786
+msgid "Recent"
+msgstr "Nedavno"
+
+#: src/ui/new_document_dialog.cpp:787
+msgid "Print"
+msgstr "Štampa"
+
+#: src/ui/new_document_dialog.cpp:788
+msgid "Screen"
+msgstr "Ekran"
+
+#: src/ui/new_document_dialog.cpp:790
+msgid "Templates"
+msgstr "Šabloni"
+
+#: src/ui/new_document_dialog.cpp:813
+msgid "Adventure"
+msgstr "Avantura"
+
+#: src/ui/new_document_dialog.cpp:813
+msgid "Artwork"
+msgstr "Grafika"
+
+#: src/ui/new_document_dialog.cpp:813
+msgid "Creation"
+msgstr "Tvorevina"
+
+#: src/ui/new_document_dialog.cpp:813
+msgid "Document"
+msgstr "Dokument"
+
+#: src/ui/new_document_dialog.cpp:814
+msgid "Masterpiece"
+msgstr "Remek-djelo"
+
+#: src/ui/new_document_dialog.cpp:814
+msgid "Story"
+msgstr "Priča"
+
+#: src/ui/new_document_dialog.cpp:814
+msgid "Vision"
+msgstr "Vizija"
+
+#: src/ui/new_document_dialog.cpp:814
+msgid "Wonder"
+msgstr "Čudo"
+
+#: src/ui/new_document_dialog.cpp:827 src/ui/tool.cpp:201
+msgid "New"
+msgstr "Novo"
+
+#: src/ui/new_document_dialog.cpp:1070
+msgid "from the clipboard"
+msgstr "iz međuspremnika"
+
+#: src/ui/new_document_dialog.cpp:1087
+msgid "per layer"
+msgstr "po sloju"
+
+#: src/ui/new_document_dialog.cpp:1183 src/ui/new_document_dialog.cpp:1202
+#: src/ui/new_document_dialog.cpp:1215 src/ui/new_document_dialog.cpp:1559
+#: src/ui/new_document_dialog.cpp:1598 src/ui/new_document_dialog.cpp:1930
+#: src/ui/texture_generator_dialog.cpp:1014
+#: src/ui/texture_generator_dialog.cpp:1084
+msgid "Create"
+msgstr "Napravi"
+
+#: src/ui/new_document_dialog.cpp:1430 src/ui/new_document_dialog.cpp:1503
+msgid "Clipboard"
+msgstr "Međuspremnik"
+
+#: src/ui/new_document_dialog.cpp:1432
+msgid "Sizes"
+msgstr "Veličine"
+
+#: src/ui/new_document_dialog.cpp:1436
+msgid "Files"
+msgstr "Datoteke"
+
+#: src/ui/new_document_dialog.cpp:1490
+msgid ""
+"No templates installed yet.\n"
+"Template .mosaic files appear here from the app's data/presets folder."
+msgstr ""
+"Još nema instaliranih šablona.\n"
+"Datoteke šablona .mosaic pojavljuju se ovdje iz foldera data/presets "
+"aplikacije."
+
+#: src/ui/new_document_dialog.cpp:1530
+msgid ""
+"No recent files yet.\n"
+"Documents you open or save appear here."
+msgstr ""
+"Još nema nedavnih datoteka.\n"
+"Dokumenti koje otvorite ili sačuvate pojavljuju se ovdje."
+
+#: src/ui/new_document_dialog.cpp:1576
+msgid "Forget This Size"
+msgstr "Zaboravi ovu veličinu"
+
+#: src/ui/new_document_dialog.cpp:1576
+msgid "Remove from Recents"
+msgstr "Ukloni iz nedavnih"
+
+#: src/ui/new_document_dialog.cpp:1677
+msgid "Choose an RGB ICC profile"
+msgstr "Izaberite ICC profil za RGB"
+
+#: src/ui/new_document_dialog.cpp:1679 src/ui/settings_dialog.cpp:2849
+msgid "ICC profiles\t*.{icc,icm}"
+msgstr "ICC profili\t*.{icc,icm}"
+
+#: src/ui/new_document_dialog.cpp:1689
+msgid "Not an RGB profile"
+msgstr ""
+
+#: src/ui/new_document_dialog.cpp:1690
+msgid "That file is not an RGB ICC profile, so it was not applied."
+msgstr "Ta datoteka nije ICC profil za RGB, pa nije primijenjena."
+
+#: src/ui/new_document_dialog.cpp:1774
+msgid "New Document"
+msgstr "Novi dokument"
+
+#: src/ui/new_document_dialog.cpp:1852
+msgid "Orientation"
+msgstr "Orijentacija"
+
+#: src/ui/new_document_dialog.cpp:1871
+msgid "Resolution"
+msgstr "Rezolucija"
+
+#: src/ui/new_document_dialog.cpp:1887
+msgid "Custom…"
+msgstr "Prilagođeno…"
+
+#: src/ui/new_document_dialog.cpp:1899
+msgid "Background"
+msgstr "Pozadina"
+
+#: src/ui/pattern_flyout.cpp:332
+msgid "Anchor to canvas"
+msgstr "Usidri na platno"
+
+#: src/ui/pattern_flyout.cpp:335
+msgid ""
+"Keep the pattern fixed to the canvas: moving or rotating the layer slides "
+"its shape over the pattern instead of dragging the pattern along"
+msgstr ""
+"Zadrži šaru nepomičnom u odnosu na platno: pomjeranje ili rotiranje sloja "
+"klizi njegov oblik preko šare umjesto da šaru vuče sa sobom"
+
+#: src/ui/pattern_flyout.cpp:354
+msgid ""
+"Image tiles\n"
+"(coming soon)"
+msgstr ""
+"Pločice slika\n"
+"(uskoro)"
+
+#: src/ui/pattern_flyout.cpp:370
+msgid "Foreground colour (click to edit)"
+msgstr "Boja prednjeg plana (kliknite za uređivanje)"
+
+#: src/ui/pattern_flyout.cpp:375
+msgid "Background colour (click to edit)"
+msgstr "Boja pozadine (kliknite za uređivanje)"
+
+#: src/ui/pattern_flyout.cpp:390
+msgid "Set the active colour to the app foreground"
+msgstr "Postavi aktivnu boju na boju prednjeg plana aplikacije"
+
+#: src/ui/pattern_flyout.cpp:399
+msgid "A"
+msgstr "A"
+
+#: src/ui/scrub_slider.cpp:495 src/ui/vulkan_canvas.cpp:7089
+#: src/ui/widgets.cpp:1029
+msgid "Cut"
+msgstr "Isijeci"
+
+#: src/ui/scrub_slider.cpp:496 src/ui/vulkan_canvas.cpp:7096
+#: src/ui/widgets.cpp:1030 src/ui/widgets.cpp:1034
+msgid "Copy"
+msgstr "Kopiraj"
+
+#: src/ui/scrub_slider.cpp:497 src/ui/vulkan_canvas.cpp:7097
+#: src/ui/widgets.cpp:1031
+msgid "Paste"
+msgstr "Umetni"
+
+#: src/ui/scrub_slider.cpp:499 src/ui/vulkan_canvas.cpp:7098
+#: src/ui/widgets.cpp:1036
+msgid "Select All"
+msgstr "Izaberi sve"
+
+#: src/ui/select_modify_dialog.cpp:101 src/ui/select_morph_panel.cpp:135
+#: src/ui/shape_designer.cpp:1143 src/ui/shape_designer.cpp:1163
+#: src/ui/shape_designer.cpp:1174 src/ui/shape_designer.cpp:1176
+#: src/ui/shape_designer.cpp:1181 src/ui/shape_designer.cpp:1194
+#: src/ui/shape_designer.cpp:1203 src/ui/shape_designer.cpp:1205
+#: src/ui/shape_designer.cpp:1241 src/ui/shape_designer.cpp:1260
+#: src/ui/tool.cpp:116 src/ui/tool.cpp:203 src/ui/tool.cpp:207
+#: src/ui/tool.cpp:243 src/ui/tool.cpp:472 src/ui/tool.cpp:491
+#: src/ui/tool.cpp:506
+msgid "px"
+msgstr "px"
+
+#: src/ui/select_morph_panel.cpp:115
+msgid "Grow"
+msgstr "Proširi"
+
+#: src/ui/select_morph_panel.cpp:116
+msgid "Shrink"
+msgstr "Suzi"
+
+#: src/ui/select_morph_panel.cpp:117 src/ui/tool.cpp:203 src/ui/tool.cpp:207
+msgid "Feather"
+msgstr "Ublažavanje"
+
+#: src/ui/select_morph_panel.cpp:118
+msgid "Smooth"
+msgstr "Izglađivanje"
+
+#: src/ui/select_morph_panel.cpp:131 src/ui/texture_generator_dialog.cpp:1475
+#: src/ui/tool.cpp:418
+msgid "Amount"
+msgstr "Iznos"
+
+#: src/ui/settings_dialog.cpp:459
+msgid "Open in browser"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1105
+msgid "Differs from the paper"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1107
+msgid "Mosaic adds"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1109
+msgid "Paper: "
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1267
+msgid "Touch your pen to the tablet — pressure, tilt and rate appear here."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1310
+msgid "Tilt"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1316
+msgid "Sample rate"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1325
+msgid "Settings"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1339 src/ui/settings_dialog.cpp:1379
+msgid "Appearance"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1339 src/ui/settings_dialog.cpp:1760
+msgid "Tablet"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1339 src/ui/settings_dialog.cpp:1532
+msgid "Tools"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1340 src/ui/settings_dialog.cpp:2113
+msgid "Annoyances"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1340 src/ui/settings_dialog.cpp:1958
+msgid "Color Management"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1340 src/ui/settings_dialog.cpp:2001
+msgid "Inpainting"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1359
+msgid "Automatic (system)"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1360
+msgid "Metric"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1361
+msgid "Imperial"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1365
+msgid ""
+"Measurement system for rulers and size readouts. Automatic follows your "
+"system locale."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1380
+msgid "Icons"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1391
+msgid ""
+"Choose how Mosaic looks. \"System\" follows your desktop's light / dark "
+"preference and changes are applied immediately."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1397
+msgid "System"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1398
+msgid "Dark"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1399 src/ui/texture_generator_dialog.cpp:1912
+msgid "Light"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1423
+msgid "Selection & reticle line"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1425
+msgid ""
+"How the lasso, brush reticle and text-frame line keeps itself readable over "
+"the image. The image drifts beneath each line."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1427
+msgid "Adaptive"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1427
+msgid "Classic"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1427
+msgid "Shadowed"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1449
+msgid "Feathered selection indicator"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1455
+msgid ""
+"How a soft-edged (feathered) selection shows its softness, which a single "
+"marching ant cannot. \"Bracketing ant pair\" fences the feather between two "
+"ants; \"True edge + soft band\" keeps the crisp edge and adds a faint band."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1459
+msgid "Bracketing ant pair"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1459
+msgid "True edge + soft band"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1534
+msgid "Brush"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1534
+msgid "Crop"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1534
+msgid "Eraser"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1534
+msgid "Lasso"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1534
+msgid "Move"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1546
+msgid "Crop framing"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1548
+msgid "Draw to begin"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1548
+msgid "Inset"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1548
+msgid "Whole canvas"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1566
+msgid ""
+"What the Crop tool frames when you pick it. \"Whole canvas\" (the default) "
+"selects the entire image; \"Inset\" leaves a 15% margin; \"Draw to begin\" "
+"stages nothing until you drag out a rectangle."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1572
+msgid "Switch to the previous tool after applying a crop"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1578
+msgid ""
+"Off (the default, like most editors) keeps the Crop tool active after you "
+"apply; on returns you to the tool you were using before."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1583
+msgid "Clear the crop selection when leaving the Crop tool"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1593
+msgid "About Smart Resize"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1609
+msgid "Multi-selection edits"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1611
+msgid "Active layer only"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1611
+msgid "All selected layers"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1611
+msgid "Disabled"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1629
+msgid ""
+"What a blend or opacity change does while several layers are selected (shift-"
+"click them with the Move tool). \"Disabled\" edits one layer at a time; "
+"\"All selected layers\" applies to every selected layer in one step; "
+"\"Active layer only\" applies just to the active layer."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1646
+msgid "Freehand lasso"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1649
+msgid "Smooth the freehand lasso"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1655
+msgid ""
+"On (the default) smooths the freehand lasso into a clean curve -- for both "
+"the live preview and the committed selection -- which actually follows your "
+"stroke more faithfully than the raw path, whose decimated samples read as a "
+"jagged staircase. Off uses that raw path. The polygonal lasso is never "
+"smoothed."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1672
+msgid "Preset dock"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1674
+msgid "Cards"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1674 src/ui/tool.cpp:192
+msgid "Grid"
+msgstr "Mreža"
+
+#: src/ui/settings_dialog.cpp:1692
+msgid ""
+"How the brush-preset dock lists the library. \"Cards\" (the default) gives "
+"each preset a row carrying its tip and a stroke of that very brush, painted "
+"by the real engine -- so you can see the mark it makes before you make it. "
+"\"Grid\" packs the tips into a denser grid of tiles, for reaching a brush "
+"you already know by sight."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1719
+msgid ""
+"On (the default) keeps one shared tip size: resizing the brush resizes the "
+"eraser and the other way round, so switching tools never changes the mark "
+"you make. Off gives the eraser its own independent size."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1737
+msgid ""
+"Off (the default) gives the eraser its own preset, kept apart from the "
+"brush's, so reaching for one never re-points the other. Note that the two "
+"preset lists do not overlap -- a preset belongs to the eraser because it "
+"erases, and each tool is shown only its own -- so \"follow the brush\" can "
+"at most follow it to a nib the eraser is never offered."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1785
+msgid ""
+"No tablet backend is running — pressure is unavailable, and strokes paint at "
+"full pressure."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1788
+msgid "Backend: "
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1791
+msgid "No tablet devices detected. Plug one in and reopen Settings."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1799
+msgid "no valuators reported"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1819
+msgid "Devices"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1830
+msgid "Test area"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1834
+msgid ""
+"Live, and already through the settings below — what you see here is what the "
+"brush will get. Hover the pen; you do not have to press."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1842
+msgid "Pressure curve"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1859
+msgid ""
+"How hard you press (left to right) maps to how much paint comes out (bottom "
+"to top). Drag a point to bend it; click to add one, right-click to remove "
+"it, double-click to make it a sharp corner. A line from corner to corner is "
+"no change at all."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1868
+msgid "Pressure range"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1871
+msgid "Lightest"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1872
+msgid "Heaviest"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1890
+msgid ""
+"Stretch the part of the range your pen actually reaches out to the full "
+"stroke. A worn nib that never bottoms out is what this is for."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1897
+msgid "Tilt offset"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1911
+msgid ""
+"For a pen you hold turned. Shifts which way the tablet thinks you are "
+"leaning, without changing how far."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1920
+msgid "Counts as full"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1921
+msgid "Averaged over"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1941
+msgid ""
+"Calibrates brushes that respond to how fast you draw: the speed that counts "
+"as \"full\", and how long a window it is averaged over."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1964
+msgid ""
+"Mosaic includes a default CMYK profile, though some distributions may omit "
+"it. Choose a CMYK .icc here to use your own instead; \"Use default\" "
+"restores it."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1967
+msgid "Mosaic's built-in CMYK profile is "
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1968
+msgid ""
+" (a FOGRA39 press profile); some distributions may omit it. Choose a "
+"CMYK .icc here to use your own instead; \"Use default\" restores the built-"
+"in."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1971
+msgid "CMYK profile"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1982
+msgid "Browse..."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1985
+msgid "Use default"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2002
+msgid "Backend settings"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2002
+msgid "Engine"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2011
+msgid "Backend"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2061
+msgid "Check spelling"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2066
+msgid ""
+"Underline misspelled words with a red wavy line while you edit text. The "
+"underline is only drawn on-canvas -- never part of the image or an export."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2069
+msgid "Check ALL-CAPS words"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2074
+msgid "Off by default, so acronyms like NASA or HTTP are not flagged."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2075
+msgid "Language"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2083
+msgid ""
+"The default language for spell-check and hyphenation, used where a paragraph "
+"has no language of its own. \"Follow system\" uses your OS locale."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2089
+msgid "Emoji font"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2091
+msgid "Automatic"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2098
+msgid ""
+"The color font used when text needs an emoji glyph. An emoji the chosen "
+"family lacks still falls back automatically, so nothing turns into boxes."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2121
+msgid "Cheesy motivational one-liners"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2126
+msgid ""
+"Mosaic believes in you. With this on, a line of all-caps encouragement "
+"slides down into the empty right end of the menu bar every few minutes, "
+"holds there for a breath, then slips back out of sight. Off by default, "
+"because some hearts are busy."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2137
+msgid "Show how long the document has been unsaved in the title"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2142
+msgid ""
+"After a few unsaved minutes the title starts counting -- a quiet nudge "
+"toward Ctrl+S. The bare \"unsaved\" mark shows either way; this just adds "
+"the tally."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2146
+msgid "Include the seconds"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2151
+msgid ""
+"Tick the tally every second instead of every minute. Off by default: a title "
+"that re-renders each second is motion in the corner of the eye, and some "
+"screen readers read it aloud each time."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2165
+msgid "Done"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2448
+msgid ""
+"This backend has no adjustable settings — it is configured elsewhere (a "
+"script provides it)."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2459 src/ui/texture_generator_dialog.cpp:1428
+msgid "Quality"
+msgstr "Kvalitet"
+
+#: src/ui/settings_dialog.cpp:2483 src/ui/texture_generator_dialog.cpp:1697
+msgid "Advanced"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2494
+msgid "Reset to defaults"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2847
+msgid "Choose a CMYK ICC profile"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2861
+msgid "Not a CMYK profile"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2862
+msgid "That file is not a CMYK ICC profile, so it was not applied."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2885
+msgid "Default (built-in)"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2888
+msgid "Default: "
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2890
+msgid "Mosaic's vendored default CMYK press profile."
+msgstr ""
+
+#: src/ui/shape_designer.cpp:418
+msgid "Drag the round handles to shape it"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:895
+msgid "This shape has no editable parameters."
+msgstr ""
+
+#: src/ui/shape_designer.cpp:896
+msgid "Select a shape with the Shape tool to edit it."
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1123 src/ui/shape_designer.cpp:1161
+msgid "Corners"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1129
+msgid "Link all four corners"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1130
+msgid "Edit every corner together"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1136
+msgid "Bot-right"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1136
+msgid "Top-left"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1136
+msgid "Top-right"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1137
+msgid "Bot-left"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1145 src/ui/shape_designer.cpp:1165
+#: src/ui/shape_designer.cpp:1243 src/ui/tool.cpp:509
+msgid "Bevel"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1145 src/ui/shape_designer.cpp:1165
+#: src/ui/shape_designer.cpp:1243 src/ui/shape_designer.cpp:1300
+#: src/ui/tool.cpp:492 src/ui/tool.cpp:507 src/ui/tool.cpp:509
+msgid "Round"
+msgstr "Okruglo"
+
+#: src/ui/shape_designer.cpp:1145 src/ui/shape_designer.cpp:1243
+msgid "Scoop"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1153
+msgid "Arc"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1154 src/ui/shape_designer.cpp:1230
+msgid "Start"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1155
+msgid "Where the arc begins (drag the handle on the diagram)"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1156 src/ui/shape_designer.cpp:1232
+#: src/ui/shape_designer.cpp:1253
+msgid "End"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1157
+msgid "Where the arc ends (drag the handle on the diagram)"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1158
+msgid "Chord"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1158
+msgid "Closure"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1158
+msgid "Pie"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1159
+msgid "How a partial sweep closes"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1163
+msgid "Rounding"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1168 src/ui/tool.cpp:480
+msgid "Points"
+msgstr "Krakovi"
+
+#: src/ui/shape_designer.cpp:1174
+msgid "Tip round"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1175
+msgid "Rounding at the outer tips"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1176
+msgid "Valley round"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1177
+msgid "Rounding at the inner valleys"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1179 src/ui/shape_gesture.cpp:197
+msgid "Line"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1181
+msgid "Border"
+msgstr "Okvir"
+
+#: src/ui/shape_designer.cpp:1182
+msgid "The contrasting edge of a Hollow / Outlined line"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1188
+msgid "Body"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1189 src/ui/shape_gesture.cpp:194
+msgid "Ellipse"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1189
+msgid "Rounded box"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1190
+msgid "The balloon's body"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1193 src/ui/shape_designer.cpp:1240
+#: src/ui/shape_designer.cpp:1259 src/ui/tool.cpp:472
+msgid "Corner"
+msgstr "Ugao"
+
+#: src/ui/shape_designer.cpp:1197
+msgid "Tail"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1198 src/ui/texture_generator_dialog.cpp:1750
+msgid "Kind"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1198
+msgid "Pointer"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1198
+msgid "Thought puffs"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1200
+msgid "A speech balloon's pointer, or a thought balloon's trail"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1202
+msgid "Which way the tail leaves the body (drag the tip on the diagram)"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1204
+msgid "How far the tail reaches past the body"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1206
+msgid "The pointer's base width -- or the size of the leading puff"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1210 src/ui/shape_designer.cpp:1218
+#: src/ui/shape_designer.cpp:1220 src/ui/shape_designer.cpp:1222
+#: src/ui/shape_designer.cpp:1227 src/ui/shape_designer.cpp:1236
+#: src/ui/shape_designer.cpp:1247 src/ui/shape_designer.cpp:1249
+#: src/ui/shape_designer.cpp:1256 src/ui/shape_designer.cpp:1294
+#: src/ui/tool.cpp:229 src/ui/tool.cpp:231 src/ui/tool.cpp:233
+#: src/ui/tool.cpp:332 src/ui/tool.cpp:334 src/ui/tool.cpp:336
+#: src/ui/tool.cpp:343 src/ui/tool.cpp:345 src/ui/tool.cpp:354
+#: src/ui/tool.cpp:369 src/ui/tool.cpp:371 src/ui/tool.cpp:373
+#: src/ui/tool.cpp:389 src/ui/tool.cpp:403 src/ui/tool.cpp:405
+#: src/ui/tool.cpp:418 src/ui/tool.cpp:420 src/ui/tool.cpp:428
+#: src/ui/tool.cpp:437 src/ui/tool.cpp:459 src/ui/tool.cpp:481
+msgid "%"
+msgstr "%"
+
+#: src/ui/shape_designer.cpp:1211
+msgid "Hook the tip sideways without moving where the tail joins"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1213
+msgid "Puffs"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1214
+msgid "How many shrinking puffs trail a thought balloon"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1217 src/ui/shape_gesture.cpp:199
+msgid "Arrow"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1218
+msgid "Shaft"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1219
+msgid "Shaft thickness, as a share of the head's width"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1220
+msgid "Head"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1221
+msgid "Head length, as a share of the total length"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1222
+msgid "Barb"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1223
+msgid "Sweep the head's back edge into a barb"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1224
+msgid "Head at both ends"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1226
+msgid "Ring"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1227
+msgid "Hole"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1228
+msgid "Inner radius as a share of the outer (0 = a solid pie)"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1229
+msgid "Sweep"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1231
+msgid "Where the sweep begins (drag the handle on the diagram)"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1233
+msgid "Where the sweep ends (drag the handle on the diagram)"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1235 src/ui/shape_gesture.cpp:201
+msgid "Cross"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1236
+msgid "Arms"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1237
+msgid "Arm thickness, as a share of the shorter side"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1246 src/ui/shape_gesture.cpp:202
+msgid "Heart"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1247
+msgid "Shoulders"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1248
+msgid "How low and full the two lobes sit"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1249
+msgid "Cleft"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1250
+msgid "Depth of the notch between the lobes"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1252
+msgid "Banner"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1253 src/ui/tool.cpp:461
+msgid "Point"
+msgstr "Tačka"
+
+#: src/ui/shape_designer.cpp:1253
+msgid "Swallow-tail"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1255
+msgid "Push the right edge out into a point, or cut it in as a ribbon"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1257
+msgid "Notch the tail"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1258
+msgid "Cut the matching notch into the left edge"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1268
+msgid "Outline & dashes"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1271
+msgid "Dash pattern for a line, or for an outline this shape already carries"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1284 src/ui/tool.cpp:511
+msgid "Dash-dot"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1284 src/ui/tool.cpp:511
+msgid "Dashed"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1284 src/ui/tool.cpp:511
+msgid "Dotted"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1284 src/ui/tool.cpp:511
+msgid "Solid"
+msgstr "Puno"
+
+#: src/ui/shape_gesture.cpp:193
+msgid "Rectangle"
+msgstr ""
+
+#: src/ui/shape_gesture.cpp:195
+msgid "Polygon"
+msgstr ""
+
+#: src/ui/shape_gesture.cpp:196
+msgid "Star"
+msgstr ""
+
+#: src/ui/shape_gesture.cpp:198
+msgid "Speech bubble"
+msgstr ""
+
+#: src/ui/shape_gesture.cpp:200
+msgid "Ring / pie"
+msgstr ""
+
+#: src/ui/shape_gesture.cpp:203
+msgid "Chevron / banner"
+msgstr ""
+
+#: src/ui/status_bar.cpp:195
+msgid "Document color space"
+msgstr "Prostor boja dokumenta"
+
+#: src/ui/status_bar.cpp:420
+msgid "Sel"
+msgstr "Izbor"
+
+#: src/ui/texture_generator_dialog.cpp:262
+#, c-format
+msgid "%02d:%02d solar"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:408
+#: src/ui/texture_generator_dialog.cpp:2400
+msgid "Sky"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:409
+msgid "Paper"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:410
+msgid "Grass"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:411
+msgid "Wood"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:412
+msgid "Marble"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:413
+#: src/ui/texture_generator_dialog.cpp:2008
+#: src/ui/texture_generator_dialog.cpp:2066
+msgid "Stone"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:414
+msgid "Canvas"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:415
+msgid "Metal"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:544
+msgid "Analyzes this layer; sets horizon, camera, sun & sky to match."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:653
+msgid "Drag to pan; scroll to zoom"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:654
+msgid "Horizon: drag up or down"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:655
+msgid "Roll: drag to tilt the horizon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:656
+msgid "Sun: drag to place it in the sky"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:657
+msgid "Moon: drag to place it in the sky"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:658
+msgid "Sun position: angle = direction, centre = overhead"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:659
+msgid "Wind: direction and strength"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:661
+msgid "View width: drag outward to zoom in"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:662
+msgid "Grain direction"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:663
+msgid "Raking light: angle = direction, centre = overhead"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:774
+msgid "Texture Generator"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:870
+msgid "Generator"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:903
+msgid ""
+"A complete look for this generator; the sliders fine-tune from there (the "
+"readout says Custom once they diverge)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:908
+msgid "Seed"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:926
+msgid "Every render is reproducible from seed + settings"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:931
+msgid "Roll a fresh seed (same settings, new variation)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:963
+msgid "Reset view"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:971
+msgid "Fit the whole document (or double-click the preview)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:978
+msgid "Scroll to zoom, drag to pan"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1007
+msgid "Also mask the photo's sky and match it to this sky."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1011
+msgid ""
+"On Create: after the full-resolution render, the photo's sky is masked out "
+"and a Photometric Match layer grades the foreground toward the new sky -- "
+"one undo step"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1105
+#, c-format
+msgid "Applies to \"%s\"."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1107
+#, c-format
+msgid "Creates a new \"%s\" layer."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1341
+msgid "Estimate from layer…"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1345
+msgid "Analyzes this layer; sets horizon, camera, sun & sky to match"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1349
+msgid ""
+"The active layer has no pixels to analyze. Rasterize it, or select a pixel "
+"layer."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1355
+msgid "Revert"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1357
+msgid "Restore the settings from before the estimate"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1378
+#, c-format
+msgid "Use %s UTC instead"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1384
+msgid "The sun crosses this height twice a day; switch to the other crossing"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1392
+msgid "Sky dome"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1394
+msgid "Off = a transparent layer carrying only sun/clouds (§3.4)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1394
+#: src/ui/texture_generator_dialog.cpp:2407
+msgid "Sun"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1397
+msgid "The disc + aureole element (clouds stay sun-lit either way)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1398
+#: src/ui/texture_generator_dialog.cpp:1423
+msgid "Clouds"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1400
+msgid "Haze"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1402
+msgid "Aerial-perspective boost toward the horizon tint"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1406
+#: src/ui/texture_generator_dialog.cpp:1917
+msgid "Sun height"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1409
+msgid "0 = on the horizon; low = golden light; below 0 = twilight into night"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1410
+#: src/ui/texture_generator_dialog.cpp:1913
+msgid "Sun direction"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1413
+msgid "Compass direction; 180 faces the frame centre (drag the sun too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1414
+msgid "Cloud cover"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1417
+msgid "The master dial; each deck multiplies it"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1418
+msgid "Turbidity"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1421
+msgid "Atmosphere thickness: 1 crystalline, 10 murky"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1424
+msgid "Cloud scale"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1427
+msgid "Cloud feature size (the dome and camera stay physical, §8.3)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1428
+msgid "Fast 2D"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1428
+msgid "Volumetric (best)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1431
+msgid "Cumulus / storm towers ray-march a real 3D field (slower, rounder)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1436
+msgid "Deck on/off"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1464
+msgid "Remove this deck"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1483
+msgid "This deck's multiplier on Cloud cover"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1497
+msgid "Add deck"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1511
+msgid "Night & moon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1512
+#: src/ui/texture_generator_dialog.cpp:2414
+msgid "Moon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1515
+msgid "A real near-side Moon; its phase comes from the source below"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1520
+msgid "Moon phase"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1522
+msgid "From date & place"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1523
+msgid "Manual"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1525
+msgid ""
+"\"From date & place\" uses the real ephemeris; \"Manual\" sets the phase by "
+"hand. Whichever you touch first is remembered."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1532
+msgid "Illumination"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1532
+msgid "New at 0%, full at 100%"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1539
+msgid "Manual moon phase: 0 = new, 0.5 = half, 1 = full"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1575
+msgid "Moon direction"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1578
+msgid "Compass, like the sun (drag the moon in the preview too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1579
+msgid "Moon height"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1582
+msgid "Moon size"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1585
+msgid "1 = the honest 0.26° disc; postcards lie larger"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1586
+msgid "Stars"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1589
+msgid "Fade in once the sun is well below the horizon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1592
+#: src/ui/texture_generator_dialog.cpp:1883
+msgid "Camera"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1593
+#: src/ui/texture_generator_dialog.cpp:1884
+msgid "View width"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1596
+#: src/ui/texture_generator_dialog.cpp:1887
+msgid "Horizontal field of view (the bracket handles drag it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1597
+#: src/ui/texture_generator_dialog.cpp:1888
+msgid "Horizon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1600
+msgid "Camera pitch above the horizon (drag the horizon line too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1601
+msgid "Roll"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1604
+msgid "Horizon tilt, for matching a hand-held shot"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1605
+msgid "Tilt-shift"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1608
+msgid "Slides the horizon without pitching the rays (architectural look)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1611
+msgid "Sky by date & place"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1615
+msgid "Date (UTC)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1620
+msgid "Pick a date; the sun, moon and stars follow it"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1628
+msgid "Time (UTC)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1630
+msgid "Drag or scroll a drum to spin it"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1644
+msgid "Place"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1648
+msgid "Place the observer on a world map; the pin snaps to nearby cities"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1654
+msgid "Latitude"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1671
+msgid "Longitude"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1698
+msgid "Exposure"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1701
+msgid "Ground albedo"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1704
+msgid "Light bounced back into the dome from the ground"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1705
+msgid "Sun disc size"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1708
+msgid "1 = the physical 0.255° half-angle"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1710
+msgid "Lens flare"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1713
+msgid "Photographic ghosts, halo and starburst cast by the sun"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1715
+msgid "Flare strength"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1718
+msgid "Ghost and starburst energy; the flare fades as the sun leaves the frame"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1719
+#: src/ui/texture_generator_dialog.cpp:1870
+msgid "Wind direction"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1722
+msgid "Where the wind blows toward (the arrow drags it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1723
+#: src/ui/texture_generator_dialog.cpp:1874
+msgid "Wind strength"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1726
+msgid "Shear: streaks and wisp elongation along the wind"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1750
+msgid "Felt"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1750
+msgid "Laid"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1750
+msgid "Wove"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1755
+msgid ""
+"Wove = machine paper; Laid carries laid + chain lines; Felt = coarse relief"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1756
+msgid "Deckle edge"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1759
+msgid "A torn transparent fringe at the sheet border (§3.4)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1759
+msgid "Print tooth"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1762
+msgid "Toner speckle caught in the tooth valleys"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1763
+#: src/ui/texture_generator_dialog.cpp:2120
+#: src/ui/texture_generator_dialog.cpp:2176
+msgid "Tint"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1765
+#: src/ui/texture_generator_dialog.cpp:1973
+#: src/ui/texture_generator_dialog.cpp:2034
+#: src/ui/texture_generator_dialog.cpp:2183
+msgid "Roughness"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1768
+msgid "Tooth relief height"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1769
+#: src/ui/texture_generator_dialog.cpp:1960
+msgid "Fibre"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1772
+msgid "Spectral fibre streaks along the grain"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1773
+#: src/ui/texture_generator_dialog.cpp:1964
+msgid "Grain angle"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1776
+msgid "The fibre axis (the ring handle drags it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1777
+msgid "Grain strength"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1780
+msgid "0 isotropic, 1 strongly directional"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1781
+#: src/ui/texture_generator_dialog.cpp:1968
+msgid "Grain scale"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1784
+msgid "Feature size per document pixel -- match your print DPI (§8.3)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1786
+msgid "Ruling (laid)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1787
+msgid "Laid pitch"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1790
+msgid "Fine parallel line spacing at Scale 1 (Laid kind)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1791
+msgid "Chain pitch"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1794
+msgid "Sparse perpendicular chain-line spacing (Laid kind)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1798
+msgid "Prominence of the ruling"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1800
+#: src/ui/texture_generator_dialog.cpp:1972
+#: src/ui/texture_generator_dialog.cpp:2033
+#: src/ui/texture_generator_dialog.cpp:2088
+#: src/ui/texture_generator_dialog.cpp:2146
+#: src/ui/texture_generator_dialog.cpp:2199
+msgid "Surface & light"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1801
+#: src/ui/texture_generator_dialog.cpp:1977
+#: src/ui/texture_generator_dialog.cpp:2038
+#: src/ui/texture_generator_dialog.cpp:2089
+#: src/ui/texture_generator_dialog.cpp:2147
+#: src/ui/texture_generator_dialog.cpp:2200
+msgid "Matte"
+msgstr "Podloga"
+
+#: src/ui/texture_generator_dialog.cpp:1804
+msgid "Oren-Nayar roughness: 0 smooth diffuse, 1 very matte"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1805
+#: src/ui/texture_generator_dialog.cpp:1980
+#: src/ui/texture_generator_dialog.cpp:2092
+#: src/ui/texture_generator_dialog.cpp:2150
+#: src/ui/texture_generator_dialog.cpp:2187
+msgid "Sheen"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1808
+msgid "Coated-stock highlight (0 = uncoated)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1809
+#: src/ui/texture_generator_dialog.cpp:1984
+#: src/ui/texture_generator_dialog.cpp:2045
+#: src/ui/texture_generator_dialog.cpp:2096
+#: src/ui/texture_generator_dialog.cpp:2154
+#: src/ui/texture_generator_dialog.cpp:2203
+msgid "Light direction"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1812
+msgid "Raking light compass; 0 = from the top of the frame"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1813
+#: src/ui/texture_generator_dialog.cpp:1988
+#: src/ui/texture_generator_dialog.cpp:2049
+#: src/ui/texture_generator_dialog.cpp:2100
+#: src/ui/texture_generator_dialog.cpp:2158
+#: src/ui/texture_generator_dialog.cpp:2207
+msgid "Light height"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1816
+#: src/ui/texture_generator_dialog.cpp:1991
+msgid "Low = grazing light throws long micro-shadow"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1818
+msgid "Edges & print"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1819
+msgid "Deckle amount"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1822
+msgid "Deckle inset"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1825
+msgid "Fringe band width as a fraction of the sheet"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1826
+msgid "Print amount"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1846
+msgid "Turf base"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1848
+msgid "Blades"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1848
+msgid "Off = transparent ground, blade silhouettes only (§3.4)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1851
+msgid "Off = the flat turf field alone"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1852
+msgid "Blade root"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1854
+msgid "Blade tip"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1859
+msgid "Blade coverage: 0 bald, 1 dense sward"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1860
+msgid "Blade height"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1863
+msgid "Blade width"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1866
+msgid "Droop"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1869
+msgid "Blade arc: 0 stiff upright, 1 drooping"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1873
+msgid "Where blades lean toward (the arrow drags it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1877
+msgid "0 upright, 1 flattened"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1878
+msgid "Growth scale"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1881
+msgid "Blade and clump world size (§8.3)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1891
+msgid "Camera down-tilt: higher looks down at a fuller lawn"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1893
+msgid "Ground & variety"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1894
+msgid "Soil"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1896
+msgid "Earth showing between and under blades"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1897
+msgid "Straw"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1899
+msgid "The dead-blade tint Dry blades mixes in"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1900
+msgid "Dry blades"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1903
+msgid "Fraction of straw blades"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1904
+msgid "Patchiness"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1907
+msgid "0 uniform lawn, 1 worn and patchy"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1908
+msgid "Clump size"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1916
+#: src/ui/texture_generator_dialog.cpp:1987
+#: src/ui/texture_generator_dialog.cpp:2048
+#: src/ui/texture_generator_dialog.cpp:2099
+#: src/ui/texture_generator_dialog.cpp:2157
+#: src/ui/texture_generator_dialog.cpp:2206
+msgid "The dome handle drags it too"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1920
+msgid "Low = raking sheen and backlight"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1939
+msgid "Earlywood"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1941
+msgid "The pale band of each growth ring"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1942
+msgid "Latewood"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1944
+msgid "The dark dense band"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1945
+msgid "Ring spacing"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1948
+msgid "Growth-ring pitch at Scale 1"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1949
+msgid "Ring contrast"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1952
+msgid "Waviness"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1955
+msgid "How far the rings meander"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1956
+msgid "Knots"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1959
+msgid "0 = clear lumber"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1963
+msgid "Streaks running along the grain"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1967
+msgid "The grain axis (the ring handle drags it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1971
+#: src/ui/texture_generator_dialog.cpp:2032
+#: src/ui/texture_generator_dialog.cpp:2087
+#: src/ui/texture_generator_dialog.cpp:2145
+#: src/ui/texture_generator_dialog.cpp:2198
+msgid "Feature size per document pixel (§8.3)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1976
+msgid "Open-grain relief height"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1983
+msgid "Satin finish (0 = raw wood)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2010
+msgid "The polished ground"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2011
+msgid "Veins"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2013
+msgid "Vein spacing"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2016
+msgid "Primary vein pitch at Scale 1"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2017
+msgid "Turbulence"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2020
+msgid "How wildly the veins meander"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2021
+msgid "Contrast"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2024
+msgid "Vein strength against the ground"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2025
+msgid "Vein angle"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2028
+msgid "The primary fracture direction (the ring handle drags it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2029
+msgid "Vein scale"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2037
+msgid "Polished marble carries only a hair of relief"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2041
+msgid "Polish"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2044
+msgid "The tight specular sheen of a honed surface"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2068
+msgid "Cell size"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2071
+msgid "Aggregate grain at Scale 1: small = granite, large = cobbles"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2072
+msgid "Crack depth"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2075
+msgid "The joint network between cells"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2076
+msgid "Relief"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2079
+msgid "Per-cell surface bumpiness"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2080
+msgid "Variation"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2083
+msgid "Per-cell tone differences"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2084
+msgid "Stone scale"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2095
+msgid "Wet or sealed stone (0 = dry)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2103
+msgid "Low = grazing light digs out the joints"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2122
+msgid "Thread pitch"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2125
+msgid "Thread spacing at Scale 1"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2126
+msgid "Irregularity"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2129
+msgid "Thread wobble and thickness jitter"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2130
+msgid "Weave depth"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2133
+msgid "Over/under relief prominence"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2134
+msgid "Weave angle"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2137
+msgid "Warp direction (the ring handle drags it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2138
+msgid "Fuzz"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2141
+msgid "Stray-fibre micro relief"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2142
+msgid "Weave scale"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2153
+msgid "A primed/sized surface (0 = raw cloth)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2161
+msgid "Low = grazing light raises the weave"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2178
+msgid "The alloy: steel grey, brass yellow..."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2179
+msgid "Brush angle"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2182
+msgid "Streaks run along it (the ring handle drags it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2186
+msgid "Brushed streak depth"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2190
+msgid "The specular band across the brushing"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2191
+msgid "Reflection"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2194
+msgid "A vertical sky-to-ground tone ramp"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2195
+msgid "Brush scale"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2339
+msgid "New moon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2340
+msgid "Crescent"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2341
+msgid "Half moon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2342
+msgid "Gibbous"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2343
+msgid "Full moon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2344
+#: src/ui/texture_generator_dialog.cpp:2348
+#, c-format
+msgid "Phase: %s (%.0f%% lit)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2404
+#, c-format
+msgid "up  (%.0f° above)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2406
+#, c-format
+msgid "down  (%.0f° below)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2411
+#, c-format
+msgid "%s · %.0f%% lit · %s"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2413
+msgid "down"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2413
+msgid "up"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2421
+msgid "Nearest city"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2423
+msgid "Sky at this date & place"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2429
+#, c-format
+msgid "Night there: sun %.1f° below the horizon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2432
+#, c-format
+msgid "Sun: azimuth %.1f°, elevation %.1f°"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2492
+#, c-format
+msgid "Zoom %d%%  (scroll / drag)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2624
+msgid "Rendering at full resolution…"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2758
+msgid "Analyzing the layer…"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2790
+#: src/ui/texture_generator_dialog.cpp:2890
+msgid "No sky or horizon found -- settings unchanged."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2791
+msgid "Estimate applied -- the summary sits above the controls."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2824
+msgid "Estimate reverted."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2895
+msgid " (low confidence)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2898
+#, c-format
+msgid "Horizon: pitch %.1f deg, roll %.1f deg%s"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2903
+#, c-format
+msgid "Time: %s UTC -- %s"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2908
+#, c-format
+msgid "Sun: elevation %.1f deg, azimuth %.0f deg%s"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2915
+#, c-format
+msgid "Atmosphere: turbidity %.1f, exposure %+.1f EV"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2919
+#, c-format
+msgid ", clouds %.0f%%"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:3007
+msgid "Isolating the sky…"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:3055
+msgid "Cancelling…"
+msgstr ""
+
+#: src/ui/tool.cpp:144
+msgid "Scale stroke"
+msgstr "Skaliraj obrub"
+
+#: src/ui/tool.cpp:145
+msgid ""
+"Scale the stroke with the shape when dragging handles; off keeps the stroke "
+"width fixed and resizes the shape"
+msgstr ""
+"Skalira obrub zajedno s oblikom pri prevlačenju ručki; isključeno — širina "
+"obruba ostaje ista, a mijenja se samo veličina oblika"
+
+#: src/ui/tool.cpp:152
+msgid "Edit shape…"
+msgstr "Uredi oblik…"
+
+#: src/ui/tool.cpp:153
+msgid "Open the shape designer for the selected shape's full parameters"
+msgstr "Otvara dizajner oblika sa svim parametrima izabranog oblika"
+
+#: src/ui/tool.cpp:159
+msgid "Style…"
+msgstr "Stil…"
+
+#: src/ui/tool.cpp:160
+msgid "Open the Type panel: Character + Paragraph controls"
+msgstr "Otvara panel za tekst: postavke znaka i pasusa"
+
+#: src/ui/tool.cpp:167
+msgid "Stops…"
+msgstr "Tačke…"
+
+#: src/ui/tool.cpp:168
+msgid "Edit the gradient's colour stops, blend curves, and spread"
+msgstr "Uredi tačke boja gradijenta, krive prelaza i rastezanje"
+
+#: src/ui/tool.cpp:175
+msgid "3D extrusion (depth, bevel, lighting)"
+msgstr "3D izvlačenje (dubina, kosina, osvjetljenje)"
+
+#: src/ui/tool.cpp:175
+msgid "3D…"
+msgstr "3D…"
+
+#: src/ui/tool.cpp:190
+msgid "Auto-Select"
+msgstr "Automatski izbor"
+
+#: src/ui/tool.cpp:191
+msgid "Click selects the topmost layer under the cursor"
+msgstr "Klik bira najgornji sloj ispod pokazivača"
+
+#: src/ui/tool.cpp:192
+msgid "Edges"
+msgstr "Ivice"
+
+#: src/ui/tool.cpp:192 src/ui/tool.cpp:455
+msgid "None"
+msgstr "Nema"
+
+#: src/ui/tool.cpp:192
+msgid "Snap"
+msgstr "Prianjanje"
+
+#: src/ui/tool.cpp:193
+msgid "Snap moved layers to edges or the grid"
+msgstr "Prianjaj pomjerene slojeve uz ivice ili uz mrežu"
+
+#: src/ui/tool.cpp:194
+msgid "Anti-aliasing"
+msgstr "Izglađivanje ivica"
+
+#: src/ui/tool.cpp:198
+msgid "How rotated / scaled layers are resampled (Auto picks per transform)"
+msgstr ""
+"Kako se zakrenuti i skalirani slojevi ponovo uzorkuju (Automatski bira prema "
+"transformaciji)"
+
+#: src/ui/tool.cpp:201
+msgid "Intersect"
+msgstr "Presijeci"
+
+#: src/ui/tool.cpp:201
+msgid "Subtract"
+msgstr "Oduzmi"
+
+#: src/ui/tool.cpp:202
+msgid "How a new selection combines with the current one"
+msgstr "Kako se novi izbor spaja s trenutnim"
+
+#: src/ui/tool.cpp:204 src/ui/tool.cpp:208
+msgid "Soften the selection edge by this radius"
+msgstr "Ublaži ivicu izbora za ovaj poluprečnik"
+
+#: src/ui/tool.cpp:209 src/ui/tool.cpp:219 src/ui/tool.cpp:435
+msgid "Anti-alias"
+msgstr "Izglađivanje ivica"
+
+#: src/ui/tool.cpp:209 src/ui/tool.cpp:219
+msgid "Smooth the selection edge"
+msgstr "Izgladi ivicu izbora"
+
+#: src/ui/tool.cpp:215 src/ui/tool.cpp:431
+msgid "Tolerance"
+msgstr "Tolerancija"
+
+#: src/ui/tool.cpp:216
+msgid "How close in color a pixel must be to the clicked one to be selected"
+msgstr "Koliko blizu po boji piksel mora biti kliknutom da bi bio izabran"
+
+#: src/ui/tool.cpp:217 src/ui/tool.cpp:433
+msgid "Contiguous"
+msgstr "Povezano"
+
+#: src/ui/tool.cpp:218
+msgid "Select only the connected region, not every matching pixel"
+msgstr "Bira samo povezanu oblast, a ne svaki odgovarajući piksel"
+
+#: src/ui/tool.cpp:220 src/ui/tool.cpp:254 src/ui/tool.cpp:463
+msgid "Active Layer"
+msgstr "Aktivni sloj"
+
+#: src/ui/tool.cpp:220 src/ui/tool.cpp:254 src/ui/tool.cpp:386
+#: src/ui/tool.cpp:463
+msgid "All Layers"
+msgstr "Svi slojevi"
+
+#: src/ui/tool.cpp:221
+msgid "Sample from the active layer or the merged composite"
+msgstr "Uzorkuj sa aktivnog sloja ili sa spojene kompozicije"
+
+#: src/ui/tool.cpp:228
+msgid "Select brush tip diameter"
+msgstr "Prečnik vrha četkice za izbor"
+
+#: src/ui/tool.cpp:229 src/ui/tool.cpp:332 src/ui/tool.cpp:343
+#: src/ui/tool.cpp:354 src/ui/tool.cpp:369
+msgid "Hardness"
+msgstr "Tvrdoća"
+
+#: src/ui/tool.cpp:230
+msgid "Edge softness of the selection tip"
+msgstr "Mekoća ivice vrha za izbor"
+
+#: src/ui/tool.cpp:232
+msgid "Selection coverage added per stroke pass"
+msgstr "Koliko pokrivenosti izbora dodaje jedan prolaz poteza"
+
+#: src/ui/tool.cpp:234
+msgid "Maximum coverage the stroke adds to the selection"
+msgstr "Najveća pokrivenost koju potez dodaje izboru"
+
+#: src/ui/tool.cpp:243
+msgid "Reach"
+msgstr "Domet"
+
+#: src/ui/tool.cpp:244
+msgid "How far the selection grows out from the stroke before stopping"
+msgstr "Koliko daleko izbor raste od poteza prije nego što stane"
+
+#: src/ui/tool.cpp:249
+msgid "Seed stroke tip diameter"
+msgstr "Prečnik vrha početnog poteza"
+
+#: src/ui/tool.cpp:251
+msgid "Edge Stop"
+msgstr "Zaustavljanje na ivicama"
+
+#: src/ui/tool.cpp:252
+msgid ""
+"How strongly image edges stop the growing selection (0 grows a plain disc)"
+msgstr ""
+"Koliko snažno ivice na slici zaustavljaju rastući izbor (0 raste običan krug)"
+
+#: src/ui/tool.cpp:255
+msgid "Read edges from the active layer or the merged composite"
+msgstr "Čitaj ivice sa aktivnog sloja ili sa spojene kompozicije"
+
+#: src/ui/tool.cpp:271
+msgid "Recompose"
+msgstr "Prekomponuj"
+
+#: src/ui/tool.cpp:272
+msgid ""
+"Rebuild the picture instead of cropping: the marked regions move closer "
+"together, the background is retargeted and the gaps are healed. Available "
+"when the marked regions cannot all fit a crop at this ratio"
+msgstr ""
+"Ponovo izgradi sliku umjesto isijecanja: označene oblasti se približavaju, "
+"pozadina se preusmjerava, a praznine se zacjeljuju. Dostupno kada označene "
+"oblasti ne mogu sve stati u isječak s ovim odnosom"
+
+#: src/ui/tool.cpp:278
+msgid "Free"
+msgstr "Slobodno"
+
+#: src/ui/tool.cpp:279
+msgid "Constrain the crop to an aspect ratio"
+msgstr "Ograniči isijecanje na odnos stranica"
+
+#: src/ui/tool.cpp:281
+msgid "Custom aspect ratio width (W:H)"
+msgstr "Širina prilagođenog odnosa (Š:V)"
+
+#: src/ui/tool.cpp:283
+msgid "Custom aspect ratio height (W:H)"
+msgstr "Visina prilagođenog odnosa (Š:V)"
+
+#: src/ui/tool.cpp:284
+msgid "Swap orientation"
+msgstr "Zamijeni orijentaciju"
+
+#: src/ui/tool.cpp:285
+msgid "Swap the crop's width and height (portrait / landscape)"
+msgstr "Zamjenjuje širinu i visinu isječka (uspravno / vodoravno)"
+
+#: src/ui/tool.cpp:289
+msgid "Smart Resize"
+msgstr "Pametno isijecanje"
+
+#: src/ui/tool.cpp:290
+msgid ""
+"Place the crop automatically to keep the most important parts of the "
+"picture: with an aspect ratio it repositions the frame, with Free it trims "
+"away the boring edges. Click a detected region to protect or ignore it, Ctrl-"
+"drag to mark one yourself — then adjust the crop as you like"
+msgstr ""
+"Postavlja isječak automatski tako da zadrži najvažnije dijelove slike: uz "
+"zadani odnos pomjera okvir, uz Slobodno odsijeca dosadne ivice. Kliknite "
+"otkrivenu oblast da je zaštitite ili zanemarite, Ctrl+prevlačenjem označite "
+"vlastitu — zatim isječak podesite po želji"
+
+#: src/ui/tool.cpp:295
+msgid "Guides"
+msgstr "Vodilice"
+
+#: src/ui/tool.cpp:296
+msgid "Show rule-of-thirds guides over the crop"
+msgstr "Prikaži vodilice pravila trećina preko isječka"
+
+#: src/ui/tool.cpp:297
+msgid "Delete Pixels"
+msgstr "Obriši piksele"
+
+#: src/ui/tool.cpp:298
+msgid ""
+"On: discard the pixels outside the crop. Off: keep them (resize the canvas "
+"only)"
+msgstr ""
+"Uključeno: pikseli izvan isječka se odbacuju. Isključeno: zadržavaju se "
+"(mijenja se samo veličina platna)"
+
+#: src/ui/tool.cpp:308
+msgid "Active color"
+msgstr "Aktivna boja"
+
+#: src/ui/tool.cpp:309
+msgid "Background color"
+msgstr "Boja pozadine"
+
+#: src/ui/tool.cpp:311
+msgid ""
+"What fills the new area when the crop box reaches outside the canvas (drag a "
+"handle past the edge to expand). Transparent adds nothing; Inpaint continues "
+"the picture into the new area"
+msgstr ""
+"Čime se popunjava nova oblast kada okvir isječka izađe izvan platna "
+"(prevucite ručku preko ivice da proširite). Prozirno ne dodaje ništa; "
+"Retuširanje nastavlja sliku u novu oblast"
+
+#: src/ui/tool.cpp:316
+msgid "Apply the crop (Enter)"
+msgstr "Primijeni isijecanje (Enter)"
+
+#: src/ui/tool.cpp:320
+msgid "Reset the crop to the full canvas (Esc)"
+msgstr "Vrati isječak na cijelo platno (Esc)"
+
+#: src/ui/tool.cpp:331
+msgid "Brush tip diameter"
+msgstr "Prečnik vrha četkice"
+
+#: src/ui/tool.cpp:333
+msgid "Edge softness of the brush tip"
+msgstr "Mekoća ivice vrha četkice"
+
+#: src/ui/tool.cpp:335
+msgid "Paint build-up rate per stroke pass"
+msgstr "Brzina nagomilavanja boje po prolazu poteza"
+
+#: src/ui/tool.cpp:337
+msgid "Maximum stroke opacity"
+msgstr "Najveća neprozirnost poteza"
+
+#: src/ui/tool.cpp:338 src/ui/tool.cpp:347 src/ui/tool.cpp:356
+#: src/ui/tool.cpp:391
+msgid "Smoothing"
+msgstr "Izglađivanje"
+
+#: src/ui/tool.cpp:339 src/ui/tool.cpp:348 src/ui/tool.cpp:357
+#: src/ui/tool.cpp:392
+msgid ""
+"Steadies the stroke by averaging recent pointer positions. A mouse reports "
+"whole pixels, so it rattles without this. Off paints your input raw."
+msgstr ""
+"Smiruje potez usrednjavanjem nedavnih položaja pokazivača. Miš javlja cijele "
+"piksele, pa se bez toga potez trese. Isključeno slika vaš unos neobrađen."
+
+#: src/ui/tool.cpp:342
+msgid "Eraser tip diameter"
+msgstr "Prečnik vrha gumice"
+
+#: src/ui/tool.cpp:344
+msgid "Edge softness of the eraser tip"
+msgstr "Mekoća ivice vrha gumice"
+
+#: src/ui/tool.cpp:346
+msgid "How much each pass erases"
+msgstr "Koliko briše svaki prolaz"
+
+#: src/ui/tool.cpp:353
+msgid "Inpaint tip diameter"
+msgstr "Prečnik vrha za retuširanje"
+
+#: src/ui/tool.cpp:355
+msgid "Edge softness of the inpaint tip"
+msgstr "Mekoća ivice vrha za retuširanje"
+
+#: src/ui/tool.cpp:368
+msgid "Clone stamp tip diameter"
+msgstr ""
+
+#: src/ui/tool.cpp:370
+msgid "Edge softness of the clone tip"
+msgstr ""
+
+#: src/ui/tool.cpp:372
+msgid "How much of the source each pass lays down"
+msgstr ""
+
+#: src/ui/tool.cpp:374
+msgid "Maximum strength of the stamped source"
+msgstr ""
+
+#: src/ui/tool.cpp:375
+msgid "Aligned"
+msgstr ""
+
+#: src/ui/tool.cpp:376
+msgid ""
+"Keep the distance between the source and where you paint, so every stroke "
+"carries on from the last. Off restarts each stroke at the same source point"
+msgstr ""
+
+#: src/ui/tool.cpp:385 src/ui/tool.cpp:461
+msgid "Sample"
+msgstr "Uzorkovanje"
+
+#: src/ui/tool.cpp:386
+msgid "Current Layer"
+msgstr ""
+
+#: src/ui/tool.cpp:386
+msgid "Current and Below"
+msgstr ""
+
+#: src/ui/tool.cpp:387
+msgid ""
+"Which pixels get copied: the active layer alone, everything from the active "
+"layer down, or the whole picture as you see it"
+msgstr ""
+
+#: src/ui/tool.cpp:390
+msgid "Distance between stamped dabs, as a percentage of the tip"
+msgstr ""
+
+#: src/ui/tool.cpp:402
+msgid "Diameter of the region a click corrects"
+msgstr ""
+
+#: src/ui/tool.cpp:404
+msgid "How strongly the red glow is removed"
+msgstr ""
+
+#: src/ui/tool.cpp:405
+msgid "Darken"
+msgstr ""
+
+#: src/ui/tool.cpp:406
+msgid "How far the corrected pupil goes toward a dark pupil"
+msgstr ""
+
+#: src/ui/tool.cpp:407
+msgid "Keep catchlight"
+msgstr ""
+
+#: src/ui/tool.cpp:408
+msgid ""
+"Leave the bright reflection in the eye alone, so the eye keeps its spark"
+msgstr ""
+
+#: src/ui/tool.cpp:417
+msgid "Eye retouch tip diameter"
+msgstr ""
+
+#: src/ui/tool.cpp:419
+msgid "How far the redness is pulled toward the surrounding white"
+msgstr ""
+
+#: src/ui/tool.cpp:420
+msgid "Keep veins"
+msgstr ""
+
+#: src/ui/tool.cpp:421
+msgid ""
+"The share of the eye's own colour and vein detail that always survives. The "
+"default under-corrects on purpose — a fully whitened eye looks fake"
+msgstr ""
+
+#: src/ui/tool.cpp:424
+msgid "Harmonize"
+msgstr ""
+
+#: src/ui/tool.cpp:424
+msgid "Harmonize + veins"
+msgstr ""
+
+#: src/ui/tool.cpp:424
+msgid "Method"
+msgstr ""
+
+#: src/ui/tool.cpp:425
+msgid "Harmonize evens out the redness; + veins also softens the vessels"
+msgstr ""
+
+#: src/ui/tool.cpp:426
+msgid "Corner warmth"
+msgstr ""
+
+#: src/ui/tool.cpp:427
+msgid "Leave the warm tint in the corners of the eye alone"
+msgstr ""
+
+#: src/ui/tool.cpp:429
+msgid "Softness of the painted region's edge"
+msgstr ""
+
+#: src/ui/tool.cpp:432
+msgid "How close in color a pixel must be to get filled"
+msgstr "Koliko blizu po boji piksel mora biti da bi bio popunjen"
+
+#: src/ui/tool.cpp:434
+msgid "Fill only the connected region, not all matching pixels"
+msgstr "Popunjava samo povezanu oblast, a ne sve odgovarajuće piksele"
+
+#: src/ui/tool.cpp:436
+msgid "Soften the filled region's edge with a one-pixel feather"
+msgstr "Ublaži ivicu popunjene oblasti ublažavanjem od jednog piksela"
+
+#: src/ui/tool.cpp:438
+msgid "Fill opacity"
+msgstr "Neprozirnost popune"
+
+#: src/ui/tool.cpp:451
+msgid "Conic"
+msgstr "Konusni"
+
+#: src/ui/tool.cpp:451
+msgid "Elliptical"
+msgstr "Eliptični"
+
+#: src/ui/tool.cpp:451
+msgid "Linear"
+msgstr "Linearni"
+
+#: src/ui/tool.cpp:451
+msgid "Radial"
+msgstr "Radijalni"
+
+#: src/ui/tool.cpp:452
+msgid "Gradient shape"
+msgstr "Oblik gradijenta"
+
+#: src/ui/tool.cpp:454
+msgid "Dithering"
+msgstr ""
+
+#: src/ui/tool.cpp:455
+msgid "Blue noise"
+msgstr ""
+
+#: src/ui/tool.cpp:455
+msgid "Noise"
+msgstr ""
+
+#: src/ui/tool.cpp:455
+msgid "Ordered"
+msgstr ""
+
+#: src/ui/tool.cpp:456
+msgid ""
+"Break up 8-bit banding in a smooth ramp: Ordered is a fine repeating matrix, "
+"Blue noise a pattern-free high-frequency tile, Noise plain film grain"
+msgstr ""
+
+#: src/ui/tool.cpp:459
+msgid "Gradient layer opacity"
+msgstr "Neprozirnost sloja gradijenta"
+
+#: src/ui/tool.cpp:462
+msgid "Average the picked color over this neighborhood"
+msgstr "Usrednji uzetu boju preko ove okoline"
+
+#: src/ui/tool.cpp:464
+msgid "Sample from the active layer or the composite"
+msgstr "Uzorkuj sa aktivnog sloja ili sa kompozicije"
+
+#: src/ui/tool.cpp:472
+msgid "Corner radius"
+msgstr "Poluprečnik ugla"
+
+#: src/ui/tool.cpp:477
+msgid "Number of polygon sides"
+msgstr "Broj stranica mnogougla"
+
+#: src/ui/tool.cpp:477
+msgid "Sides"
+msgstr "Stranice"
+
+#: src/ui/tool.cpp:480
+msgid "Number of star points"
+msgstr "Broj krakova zvijezde"
+
+#: src/ui/tool.cpp:481
+msgid "Inner"
+msgstr "Unutrašnji"
+
+#: src/ui/tool.cpp:482
+msgid "Inner radius as a percentage of the outer"
+msgstr "Unutrašnji poluprečnik kao postotak vanjskog"
+
+#: src/ui/tool.cpp:491
+msgid "Line thickness"
+msgstr "Debljina linije"
+
+#: src/ui/tool.cpp:491 src/ui/tool.cpp:506
+msgid "Weight"
+msgstr "Debljina"
+
+#: src/ui/tool.cpp:492 src/ui/tool.cpp:507
+msgid "Butt"
+msgstr "Ravno"
+
+#: src/ui/tool.cpp:492 src/ui/tool.cpp:507
+msgid "Cap"
+msgstr "Završetak"
+
+#: src/ui/tool.cpp:492 src/ui/tool.cpp:507
+msgid "Square"
+msgstr "Četvrtasto"
+
+#: src/ui/tool.cpp:493
+msgid "How the line ends are drawn"
+msgstr "Kako se crtaju krajevi linije"
+
+#: src/ui/tool.cpp:504
+msgid "Fill the finished path with the foreground color"
+msgstr ""
+
+#: src/ui/tool.cpp:505
+msgid "Draw the path's outline"
+msgstr ""
+
+#: src/ui/tool.cpp:506
+msgid "Stroke width"
+msgstr ""
+
+#: src/ui/tool.cpp:508
+msgid "How open ends are drawn"
+msgstr ""
+
+#: src/ui/tool.cpp:509
+msgid "Join"
+msgstr ""
+
+#: src/ui/tool.cpp:509
+msgid "Miter"
+msgstr ""
+
+#: src/ui/tool.cpp:510
+msgid "How corners are drawn"
+msgstr ""
+
+#: src/ui/tool.cpp:511
+msgid "Dash"
+msgstr ""
+
+#: src/ui/tool.cpp:512
+msgid "Stroke dash pattern"
+msgstr ""
+
+#: src/ui/tool.cpp:520
+msgid "Font"
+msgstr "Font"
+
+#: src/ui/tool.cpp:520
+msgid "Font family"
+msgstr "Porodica fontova"
+
+#: src/ui/tool.cpp:520
+msgid "Sans"
+msgstr "Sans"
+
+#: src/ui/tool.cpp:523
+msgid "pt"
+msgstr "pt"
+
+#: src/ui/tool.cpp:524
+msgid "Font size"
+msgstr "Veličina fonta"
+
+#: src/ui/tool.cpp:527
+msgid "Bold weight"
+msgstr "Podebljano"
+
+#: src/ui/tool.cpp:528
+msgid "Italic / oblique"
+msgstr "Kurziv / ukošeno"
+
+#: src/ui/tool.cpp:529
+msgid "Underline"
+msgstr "Podvučeno"
+
+#: src/ui/tool.cpp:530
+msgid "Strikethrough"
+msgstr "Precrtano"
+
+#: src/ui/tool.cpp:538
+msgid "In"
+msgstr "Uvećaj"
+
+#: src/ui/tool.cpp:538
+msgid "Out"
+msgstr "Umanji"
+
+#: src/ui/tool.cpp:539
+msgid "Click to zoom in or out"
+msgstr "Kliknite da uvećate ili umanjite"
+
+#: src/ui/vulkan_canvas.cpp:5338
+msgid "Path"
+msgstr ""
+
+#: src/ui/vulkan_canvas.cpp:7076
+msgid "Add to Dictionary"
+msgstr "Dodaj u rječnik"
+
+#: src/ui/vulkan_canvas.cpp:7080
+msgid "Ignore All"
+msgstr "Zanemari sve"
+
+#~ msgid "&Image/&Rotate 90° CW"
+#~ msgstr "&Slika/&Rotiraj 90° udesno"
+
+#~ msgid "&Image/&Flip Horizontal"
+#~ msgstr "&Slika/Obrni &horizontalno"
+
+#~ msgid "&Type/&Add Text"
+#~ msgstr "&Tekst/&Dodaj tekst"
+
+#~ msgid "Merge Down: the layer below cannot receive pixels"
+#~ msgstr "Spoji sa donjim: donji sloj ne može primiti piksele"
+
+#~ msgid "PNG  (lossless)"
+#~ msgstr "PNG  (bez gubitaka)"
+
+#~ msgid "JPEG  (lossy photo)"
+#~ msgstr "JPEG  (sa gubicima, fotografije)"
+
+#~ msgid "JPEG XL  (modern, both)"
+#~ msgstr "JPEG XL  (moderan, oboje)"
+
+#~ msgid "Scale"
+#~ msgstr "Razmjera"
+
+#~ msgid "W"
+#~ msgstr "Š"
+
+#~ msgid "H"
+#~ msgstr "V"
+
+#~ msgid "Compression"
+#~ msgstr "Kompresija"
+
+#~ msgid "Interlaced (Adam7)"
+#~ msgstr "Isprepleteno (Adam7)"
+
+#~ msgid "Subsampling"
+#~ msgstr "Poduzorkovanje"
+
+#~ msgid "4:2:0  (smallest)"
+#~ msgstr "4:2:0  (najmanje)"
+
+#~ msgid "4:2:2"
+#~ msgstr "4:2:2"
+
+#~ msgid "4:4:4  (full chroma)"
+#~ msgstr "4:4:4  (puna boja)"
+
+#~ msgid "Progressive"
+#~ msgstr "Progresivno"
+
+#~ msgid "Colour that fills transparency (JPEG has no alpha)"
+#~ msgstr "Boja koja popunjava prozirnost (JPEG nema alfu)"
+
+#~ msgid "Lossless (bit-exact)"
+#~ msgstr "Bez gubitaka (bit po bit)"
+
+#~ msgid "Effort"
+#~ msgstr "Trud"
+
+#~ msgid "Output:"
+#~ msgstr "Izlaz:"
+
+#~ msgid "Estimated size: computing..."
+#~ msgstr "Procijenjena veličina: računanje..."
+
+#~ msgid "Estimated size: (skipped for a large image)"
+#~ msgstr "Procijenjena veličina: (preskočeno za veliku sliku)"
+
+#~ msgid "Estimated size: "
+#~ msgstr "Procijenjena veličina: "
+
+#~ msgid "Fill + Outline"
+#~ msgstr "Popuna + obris"
+
+#~ msgid "Outline"
+#~ msgstr "Obris"
+
+#~ msgid "Paint the fill, the outline, or both"
+#~ msgstr "Slikaj popunu, obris ili oboje"
+
+#~ msgid "Outline width"
+#~ msgstr "Širina obrisa"
+
+#~ msgid "Hollow"
+#~ msgstr "Šuplje"
+
+#~ msgid "Outlined"
+#~ msgstr "Sa obrisom"
+
+#~ msgid "A solid line, just its outline, or a line with a contrasting border"
+#~ msgstr "Puna linija, samo njen obris ili linija sa kontrastnim okvirom"
+
+#~ msgid "Hollow / Outlined border thickness"
+#~ msgstr "Debljina okvira za Šuplje / Sa obrisom"

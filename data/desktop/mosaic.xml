@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- shared-mime-info declaration for the .mosaic native format (S48-b). The magic rule matches
+     the container preamble (spec 2.1, io/mosaic/format.hpp kPreambleMagic): a high-bit lead byte,
+     "MOS", CRLF, 0x1A, LF - 8 distinctive bytes at offset 0, so priority sits above the generic
+     sniffers. The glob covers files whose preamble a transfer mangled (recovery still opens them;
+     the desktop should still hand them to Mosaic). Installed to <datadir>/mime/packages; distros
+     run update-mime-database on install (packaging's job, S59). -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="image/x-mosaic">
+    <comment>Mosaic document</comment>
+    <generic-icon name="image-x-generic"/>
+    <magic priority="80">
+      <match type="string" offset="0" value="\x8cMOS\x0d\x0a\x1a\x0a"/>
+    </magic>
+    <glob pattern="*.mosaic"/>
+  </mime-type>
+</mime-info>

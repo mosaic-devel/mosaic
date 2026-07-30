@@ -1,0 +1,545 @@
+#version 450
+
+// The FUSED per-layer tile composite (S60-a, docs/s60-performance-plan.md §4). ONE dispatch
+// composites ONE macrotile of ONE layer onto an accumulator, absorbing the WHOLE per-layer step:
+//
+//     inverse transform -> resample -> mask fold -> clip-to-below -> blend
+//
+// That fusion is the point. S7-b's composite_blend.comp does only the last step, so the tree walk
+// has to come back to host memory for every layer to apply the transform, the mask and the clip --
+// which is why the existing GPU compositor is SLOWER than the CPU one (§1.1). Splitting the layer
+// step across the PCIe bus costs more than the blend saves; this kernel does not split it.
+//
+// CPU REFERENCE, mirrored formula-for-formula:
+//   * src/render/compositor.cpp -- rasteriseLayerInto / sampleTransformed (transform + resample),
+//     convolveInto / supersampleInto / bilinearPremul (the kernels), foldMaskThrough /
+//     foldUnlinkedMask / the maskCov lambda (the mask folds), multiplyAlpha (clip-to-below);
+//   * src/core/blend_math.hpp -- blendChannel / blendNonSeparable / compositeOver, already
+//     mirrored by shaders/composite_blend.comp. That mirror is reused VERBATIM below (notably
+//     setSat's vector form, which is where HSL mirrors usually drift).
+// tests/test_composite_tile_parity.cpp holds this shader to `render::composite(..., Backend::Cpu)`
+// within 1/255 across every blend mode, every resample filter, every mask/clip/transform shape.
+//
+// VULKAN 1.0 FLOOR (§2): plain `#version 450`, no `#extension`, no subgroup ops, no 16/64-bit
+// types. 8x8x1 = 64 invocations (the guaranteed minimum is 128).
+// 2 storage images + 3 sampled images + 1 storage buffer (guaranteed 4 / 16 / 4).
+// 124 bytes of push constants (guaranteed 128). One descriptor set (guaranteed 4).
+//
+// TWO BINARIES, ONE SOURCE (plan item 10). This file is compiled twice: once plain, at the
+// vulkan1.0 target env, and once with -DMOSAIC_TILE_INDEXED at its own (newer) target env for the
+// descriptor-indexed variant. The resampling and blend math below is therefore written ONCE --
+// two hand-kept mirrors of a 23-mode blend table and nine reconstruction kernels is exactly the
+// drift the parity tests exist to prevent, and a #define cannot drift.
+//
+// WORKING FORMAT: the accumulator is R16G16B16A16_SFLOAT (GpuCaps::workingFormat) -- the only
+// float format Vulkan 1.0 guarantees for BOTH storage and linear filtering. STRAIGHT
+// (non-premultiplied) alpha throughout, matching common::ImageF; filtering weights PREMULTIPLIED
+// colour and un-premultiplies once, so a transparent texel's arbitrary RGB cannot bleed
+// (docs/compositor.md).
+//
+// DETERMINISM: a pure function of (push constants, bound images, pixel) -- no atomics, no shared
+// memory, and every tile writes a disjoint region of the accumulator, so a dispatch split (or
+// tiles submitted in any order) produces identical bytes.
+
+#ifdef MOSAIC_TILE_INDEXED
+// The DESCRIPTOR-INDEXED variant. Its only difference from the floor blob is WHERE a layer's two
+// sheets come from: a runtime-sized array indexed by a push constant, instead of a binding the
+// host rewrites per layer. The host builds this pipeline only when GpuCaps::descriptorIndexing
+// says so; every other device takes the blob without this extension and loses nothing but
+// descriptor writes.
+#extension GL_EXT_nonuniform_qualifier : require
+#endif
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// ---- The DISPATCH SHAPE (plan item 10) --------------------------------------------------------
+//
+// 0  ONE DISPATCH PER MACROTILE. The tile's three integers -- its origin in the target buffer, its
+//    origin in the accumulator atlas, its valid extent -- arrive in push constants and
+//    gl_WorkGroupID.z is always 0. This is S60-a item 9's shape and it stays the reference.
+// 1  ONE DISPATCH PER LAYER (per accumulator atlas image). gl_WorkGroupID.z picks a macrotile out
+//    of `uTiles`, so `layers x dirty macrotiles` dispatches collapse to `layers x atlas images`.
+//    Available at the 1.0 floor: one storage buffer against a guaranteed four.
+//
+// A SPECIALIZATION constant rather than a uniform, so the branch folds away at pipeline creation
+// and neither shape pays for the other's existence. The two shapes are the SAME arithmetic on the
+// SAME integers -- only their provenance differs -- which is why the output is byte-identical and
+// why the tests assert exactly that rather than a tolerance.
+#ifdef MOSAIC_TILE_INDEXED
+// The indexed variant is always list-driven (there is no other reason to build it), which is what
+// frees uTileOrigin.x to carry the layer index instead -- see the push block.
+#define kTileList 1
+#else
+layout(constant_id = 0) const int kTileList = 0;
+#endif
+
+// ---- Bindings ---------------------------------------------------------------------------------
+//
+// uAcc   the macrotile accumulator, read+write, in the working format. The tile occupies
+//        [uAccOrigin, uAccOrigin + uExtent); nothing outside is touched.
+// uSrc   the layer's source pixels in LAYER-LOCAL space, straight alpha. texelFetch only -- the
+//        reconstruction kernels are evaluated here, never by the sampler -- so the sampler's
+//        filter/address state is irrelevant (use NEAREST/CLAMP). Any float or UNORM format works.
+// uMask  the layer mask's coverage, ONE channel, .r in [0,1] (R8_UNORM mirrors the CPU's
+//        `coverage / 255` exactly). Must always be bound (see uMaskMode); a 1x1 image will do.
+// uClip  the clip base -- the alpha of the nearest non-clipped layer beneath, .r in [0,1], in the
+//        ACCUMULATOR's coordinate space (sampled at uAccOrigin + tile pixel). R16_SFLOAT.
+//        Must always be bound; a 1x1 image will do when uClipMode == 0.
+// uClipOut the clip base this layer PUBLISHES, when uClipWrite != 0: its own placed alpha, before
+//        opacity, before the blend, and before any clip multiply -- exactly what the CPU walk
+//        snapshots at compositor.cpp's `st.clipBase[p] = src.rgba[p * 4 + 3]`. Without this the
+//        host would have to read the accumulator back to learn the clip base, which is the one
+//        thing residency exists to stop; with it, a whole clip run stays on the device. Same
+//        layout as uClip (write at uAccOrigin + tile pixel), R16_SFLOAT, always bound -- a 1x1
+//        image will do when uClipWrite == 0. A layer never both reads and writes a clip base
+//        (a clipped layer never becomes one), so the two may name the same image with a barrier
+//        between layers -- which is exactly what the descriptor-indexed variant does, because its
+//        one set serves every layer; the per-layer variant binds a dummy to whichever is unused
+//        because it can, and that is cheaper to reason about.
+// uTiles the DIRTY-MACROTILE LIST, read only when kTileList != 0 (see above).
+layout(binding = 0, rgba16f) uniform image2D uAcc;
+#ifdef MOSAIC_TILE_INDEXED
+// ONE runtime-sized array for BOTH sheets a layer owns: slot 2i is layer i's pixels, slot 2i+1 is
+// its mask coverage (the 1x1 all-revealing stand-in when it has none). Two arrays would be
+// illegal -- Vulkan permits a variable descriptor count on the LAST binding of a set only -- and
+// interleaving lets the one array that is allowed serve both. sampler2D is format-agnostic, so an
+// R8G8B8A8_UNORM sheet and an R8_UNORM one sit in the same array without a second binding.
+layout(binding = 6) uniform sampler2D uSources[];
+#define uSrc  uSources[nonuniformEXT(2 * uLayer)]
+#define uMask uSources[nonuniformEXT(2 * uLayer + 1)]
+#else
+layout(binding = 1) uniform sampler2D uSrc;
+layout(binding = 2) uniform sampler2D uMask;
+#endif
+layout(binding = 3) uniform sampler2D uClip;
+layout(binding = 4, r16f) uniform image2D uClipOut;
+// Two ivec4 per dirty macrotile, in the order the host would otherwise have pushed them:
+//   [2i+0] = (tileOriginX, tileOriginY, accOriginX, accOriginY)
+//   [2i+1] = (extentX, extentY, 0, 0)
+// The bound RANGE is one accumulator atlas image's run, so index 0 is always this dispatch's
+// first macrotile and no base offset has to travel in a push lane.
+layout(std430, binding = 5) readonly buffer TileList {
+    ivec4 uTiles[];
+};
+
+// ---- Push constants (124 bytes; the Vulkan 1.0 guarantee is 128) -------------------------------
+layout(push_constant) uniform Push {
+    // Rows of the affine mapping a TARGET pixel to a SOURCE pixel -- the layer's inverse
+    // placement, (pre * layer.transform())^-1, in the target buffer's own coordinates, NOT
+    // pre-composed with the tile origin. Computed host-side in double; .w is unused padding.
+    //
+    // TILING INVARIANCE, and why the tile origin is a separate integer rather than baked in:
+    // every sample point is evaluated at (tile-local pixel + uTileOrigin), which is the SAME
+    // integer target pixel whatever macrotile it lands in -- so the float arithmetic is
+    // identical, and one macrotile recomposited on its own is BIT-identical to the same pixels
+    // inside a whole-canvas dispatch. Baking the origin into m02/m12 host-side would round
+    // differently per tile and make the picture depend on the macrotile size k, which
+    // docs/s60-performance-plan.md §3.1 deliberately wants to be a free knob. It also gives the
+    // GPU lane the invariant compositor.hpp already pins for compositeRegion on the CPU lane.
+    // ⚠ The .w lanes are NOT padding: they carry the source WINDOW, so a layer larger than the
+    // device's maxImageDimension2D can still be composited (Vulkan 1.0 guarantees only 4096, and
+    // a 5000x8000 document is the live case -- PLAN §2's Move-lag bug). Free: they were unused.
+    //   uInv0.w, uInv1.w   = srcOrigin -- the LAYER-LOCAL texel at the bound image's (0,0)
+    //   uMask0.w, uMask1.w = the layer's TRUE size, which is not textureSize(uSrc) when a window
+    //                        is bound. srcSize.x <= 0 means "the whole layer is bound", the
+    //                        common case, so a caller that knows nothing of windows still works.
+    vec4 uInv0;      //   0  (m00, m01, m02, srcOriginX)
+    vec4 uInv1;      //  16  (m10, m11, m12, srcOriginY)
+    // Rows of the affine feeding the mask fold. Its DOMAIN depends on uMaskMode: source-pixel
+    // centres for mode 2, TARGET-pixel centres for mode 3. Unused for modes 0/1.
+    vec4 uMask0;     //  32  (m00, m01, m02, srcTrueWidth)
+    vec4 uMask1;     //  48  (m10, m11, m12, srcTrueHeight)
+    // Source texels per output texel along each source axis -- the inverse map's COLUMN lengths,
+    // max(1, hypot(...)), computed host-side in double (compositor.cpp's sclX/sclY). Drives the
+    // minification footprint widening.
+    vec2 uScale;     //  64
+    // ⚠ THESE THREE ARE THE PER-TILE GROUP, and they are dead when kTileList != 0 -- the list
+    // supplies all three. That is what pays for the descriptor-indexed variant's layer index
+    // without growing the block past 124 bytes (the floor guarantees 128): see uLayer below.
+    ivec2 uTileOrigin;// 72  this tile's origin in the TARGET buffer (document/parent space)
+    ivec2 uAccOrigin;//  80  where this tile starts inside uAcc / uClip (0 for a per-tile image,
+                     //      the atlas slot otherwise -- deliberately independent of uTileOrigin)
+    ivec2 uExtent;   //  88  the tile's VALID extent -- edge tiles are partial, not square
+    int uFilter;     //  96  render::ResampleFilter, ALREADY RESOLVED (see the note below)
+    int uSuperN;     // 100  Supersample only: the NxN sub-sample count, computed host-side
+    int uBlend;      // 104  core::BlendMode (Normal = 0 .. Luminosity = 22)
+    float uOpacity;  // 108  the layer's opacity
+    int uMaskMode;   // 112  0 none, 1 proportional-in-source, 2 affine-in-source,
+                     //      3 affine-in-target (an unlinked mask)
+    int uClipMode;   // 116  0 unclipped, 1 multiply alpha by uClip.r
+    int uClipWrite;  // 120  0 publish nothing, 1 store this layer's placed alpha to uClipOut
+};
+//                   // 124 total
+
+#ifdef MOSAIC_TILE_INDEXED
+// Which slot pair of uSources this dispatch composites. It rides in uTileOrigin.x because the
+// indexed variant is always list-driven and the per-tile group is therefore free -- the same
+// trick the .w lanes above play with the source window, and for the same reason: the block has
+// FOUR spare bytes against the 1.0 floor and they are worth more as headroom than as a field.
+#define uLayer uTileOrigin.x
+#endif
+
+// uFilter is ALREADY RESOLVED host-side, in two steps the caller must not skip:
+//   1. ResampleFilter::Auto -> render::chooseAutoFilter(place, liveDrag).
+//   2. The CPU's lossless fast path -> Nearest. compositor.cpp short-circuits a linear-identity
+//      transform with an integer translation (or ANY translation under Nearest) to a whole-pixel
+//      COPY, and that copy is exactly what Nearest computes -- but NOT what convolving Mitchell or
+//      Gaussian computes, because those kernels are approximating, not interpolating (they blur at
+//      integer offsets). So: if the placement's linear part is the identity and (filter == Nearest
+//      or both translations are integers), pass Nearest.
+const int kFilterAuto        = 0;   // never dispatched; treated as Bilinear, matching the CPU
+const int kFilterNearest     = 1;
+const int kFilterBilinear    = 2;
+const int kFilterBicubic     = 3;
+const int kFilterMitchell    = 4;
+const int kFilterLanczos2    = 5;
+const int kFilterLanczos3    = 6;
+const int kFilterArea        = 7;
+const int kFilterGaussian    = 8;
+const int kFilterSupersample = 9;
+
+const float kPi = 3.14159265358979323846;
+// compositor.cpp's kMaxFootprintRadius: the per-pixel tap footprint cap under heavy minification.
+const float kMaxFootprintRadius = 8.0;
+
+// ---- Resampling kernels (mirrors of compositor.cpp's kernelRadius / kernelWeight) --------------
+
+// sin(pi * x) evaluated through explicit range reduction and a minimax-free odd Taylor series,
+// NOT the built-in sin(). Vulkan guarantees built-in sin only to an absolute error of 2^-11 and
+// only inside [-pi, pi]; Lanczos3 needs sin(pi*x) out to x = 3, and 2^-11 of weight error would
+// eat most of the 1/255 parity budget on a conforming-but-minimal driver. Reduced to
+// [-pi/2, pi/2] the series below is accurate to ~5e-8, which is float noise.
+float sinPi(float x) {
+    float t = x - 2.0 * floor(x * 0.5 + 0.5);  // t in [-1, 1)
+    if (t > 0.5) t = 1.0 - t;                  // sin(pi t) == sin(pi (1 - t))
+    else if (t < -0.5) t = -1.0 - t;           // sin(pi t) == -sin(pi (-1 - t))
+    float z = kPi * t;                   // |z| <= pi/2
+    float z2 = z * z;
+    return z * (1.0 + z2 * (-1.0 / 6.0 +
+                 z2 * (1.0 / 120.0 +
+                 z2 * (-1.0 / 5040.0 +
+                 z2 * (1.0 / 362880.0 +
+                 z2 * (-1.0 / 39916800.0))))));
+}
+
+float sincF(float x) {
+    if (x == 0.0) return 1.0;
+    return sinPi(x) / (kPi * x);
+}
+
+float lanczosKernel(float x, float a) {
+    x = abs(x);
+    return x < a ? sincF(x) * sincF(x / a) : 0.0;
+}
+
+// The BC-spline of Mitchell & Netravali (render::cubicKernel).
+float cubicKernel(float x, float B, float C) {
+    x = abs(x);
+    float x2 = x * x, x3 = x2 * x;
+    if (x < 1.0)
+        return ((12.0 - 9.0 * B - 6.0 * C) * x3 + (-18.0 + 12.0 * B + 6.0 * C) * x2 +
+                (6.0 - 2.0 * B)) / 6.0;
+    if (x < 2.0)
+        return ((-B - 6.0 * C) * x3 + (6.0 * B + 30.0 * C) * x2 + (-12.0 * B - 48.0 * C) * x +
+                (8.0 * B + 24.0 * C)) / 6.0;
+    return 0.0;
+}
+
+// Half-support in source texels, BEFORE footprint widening.
+float kernelRadius(int f) {
+    if (f == kFilterArea) return 0.5;      // a box one footprint wide
+    if (f == kFilterBilinear) return 1.0;
+    if (f == kFilterBicubic || f == kFilterMitchell || f == kFilterLanczos2 ||
+        f == kFilterGaussian) return 2.0;
+    if (f == kFilterLanczos3) return 3.0;
+    return 1.0;                            // Auto/Nearest/Supersample unreached
+}
+
+// The 1-D weight at `t` source texels from the sample centre (the caller has already divided out
+// the footprint widening).
+float kernelWeight(int f, float t) {
+    if (f == kFilterArea) return abs(t) < 0.5 ? 1.0 : 0.0;   // box
+    if (f == kFilterBicubic) return cubicKernel(t, 0.0, 0.5);  // Catmull-Rom
+    if (f == kFilterMitchell) return cubicKernel(t, 1.0 / 3.0, 1.0 / 3.0);
+    if (f == kFilterLanczos2) return lanczosKernel(t, 2.0);
+    if (f == kFilterLanczos3) return lanczosKernel(t, 3.0);
+    if (f == kFilterGaussian) {
+        float s = 0.5;               // sigma in source texels at 1:1
+        return exp(-(t * t) / (2.0 * s * s));
+    }
+    float a = abs(t);                // Bilinear, and Auto's fall-through
+    return a < 1.0 ? 1.0 - a : 0.0;
+}
+
+// ---- Source fetch, with the pre-transform mask folded in ---------------------------------------
+
+vec2 mapAffine(vec4 r0, vec4 r1, vec2 p) {
+    return vec2(r0.x * p.x + r0.y * p.y + r0.z, r1.x * p.x + r1.y * p.y + r1.z);
+}
+
+// Nearest-sample the mask at mask-grid point `m`; OUTSIDE the sheet reads ZERO coverage -- the
+// mask defines everything it reveals, beyond it nothing shows (foldMaskThrough).
+float maskThrough(vec2 m) {
+    ivec2 mi = ivec2(floor(m));
+    ivec2 ms = textureSize(uMask, 0);
+    if (mi.x < 0 || mi.y < 0 || mi.x >= ms.x || mi.y >= ms.y) return 0.0;
+    return texelFetch(uMask, mi, 0).r;
+}
+
+// The layer-local texel sitting at the bound image's (0,0). Zero when the whole layer is bound.
+ivec2 srcWindowOrigin() { return ivec2(int(uInv0.w), int(uInv1.w)); }
+
+// The layer's TRUE size. Bounds, and the proportional mask mapping, are both defined against the
+// whole layer -- deriving them from textureSize(uSrc) would make a windowed dispatch disagree
+// with an unwindowed one at the layer's edges and wherever a mask resolution differs.
+ivec2 srcTrueSize() {
+    const ivec2 pushed = ivec2(int(uMask0.w), int(uMask1.w));
+    return pushed.x > 0 && pushed.y > 0 ? pushed : textureSize(uSrc, 0);
+}
+
+// One source texel, straight alpha in [0,1], ZERO outside the source -- with a PRE-TRANSFORM mask
+// (a linked one) already folded into alpha, exactly where rasteriseLayerInto's fetch folds it.
+// `s` is LAYER-LOCAL throughout; only the final fetch is window-relative.
+vec4 fetchSource(ivec2 s, ivec2 srcSize) {
+    if (s.x < 0 || s.y < 0 || s.x >= srcSize.x || s.y >= srcSize.y) return vec4(0.0);
+    const ivec2 w = s - srcWindowOrigin();
+    const ivec2 wSize = textureSize(uSrc, 0);
+    // Outside the BOUND window is a plumbing bug -- the caller must bind a window covering every
+    // texel this tile can reach. Returning zero makes it a visible black edge the parity test
+    // catches immediately, rather than an out-of-bounds fetch's undefined content.
+    if (w.x < 0 || w.y < 0 || w.x >= wSize.x || w.y >= wSize.y) return vec4(0.0);
+    vec4 c = texelFetch(uSrc, w, 0);
+    if (uMaskMode == 1) {
+        // A LEAF's linked mask: sampled at the source pixel, proportionally when the resolutions
+        // differ. Integer arithmetic, mirroring the CPU's `sx * mask->width / src.width` exactly
+        // -- a float ratio would round differently wherever sx*maskW is a multiple of srcW.
+        ivec2 ms = textureSize(uMask, 0);
+        int mx = ms.x == srcSize.x ? s.x : (s.x * ms.x) / srcSize.x;
+        int my = ms.y == srcSize.y ? s.y : (s.y * ms.y) / srcSize.y;
+        c.a *= texelFetch(uMask, ivec2(mx, my), 0).r;
+    } else if (uMaskMode == 2) {
+        // A GROUP's linked mask (and a vector layer's): folded onto the source buffer through an
+        // affine, in the layer's own space, before placement (foldMaskThrough).
+        c.a *= maskThrough(mapAffine(uMask0, uMask1, vec2(s) + 0.5));
+    }
+    return c;
+}
+
+// ---- Reconstruction ----------------------------------------------------------------------------
+
+// Bilinear sample at source point p, returned PREMULTIPLIED (compositor.cpp's bilinearPremul).
+// Feeds the Supersample path's per-sub-sample fetch. Texel centres sit at integer + 0.5.
+vec4 bilinearPremul(vec2 p, ivec2 srcSize) {
+    float fx = p.x - 0.5, fy = p.y - 0.5;
+    float x0 = floor(fx), y0 = floor(fy);
+    float tx = fx - x0, ty = fy - y0;
+    int ix = int(x0), iy = int(y0);
+    float w0 = (1.0 - tx) * (1.0 - ty);
+    float w1 = tx * (1.0 - ty);
+    float w2 = (1.0 - tx) * ty;
+    float w3 = tx * ty;
+    vec4 c0 = fetchSource(ivec2(ix, iy), srcSize);
+    vec4 c1 = fetchSource(ivec2(ix + 1, iy), srcSize);
+    vec4 c2 = fetchSource(ivec2(ix, iy + 1), srcSize);
+    vec4 c3 = fetchSource(ivec2(ix + 1, iy + 1), srcSize);
+    vec4 o = vec4(0.0);
+    float a0 = c0.a * w0, a1 = c1.a * w1, a2 = c2.a * w2, a3 = c3.a * w3;
+    o.rgb = c0.rgb * a0 + c1.rgb * a1 + c2.rgb * a2 + c3.rgb * a3;
+    o.a = a0 + a1 + a2 + a3;
+    return o;
+}
+
+// Convolve the filter's separable kernel over the source, mapping the TARGET pixel `tp` through
+// uInv (convolveInto). Premultiplication + footprint widening + normalisation happen here.
+vec4 convolve(ivec2 tp, ivec2 srcSize) {
+    float rx = min(kernelRadius(uFilter) * uScale.x, kMaxFootprintRadius);
+    float ry = min(kernelRadius(uFilter) * uScale.y, kMaxFootprintRadius);
+    float invSclX = 1.0 / uScale.x, invSclY = 1.0 / uScale.y;
+    vec2 p = mapAffine(uInv0, uInv1, vec2(tp) + 0.5);
+    int sx0 = int(ceil(p.x - 0.5 - rx));
+    int sy0 = int(ceil(p.y - 0.5 - ry));
+    // The radius cap bounds each span at 17 taps; the +24 guard is belt-and-braces against a
+    // degenerate (NaN/inf) transform turning a bounded loop into a hung GPU.
+    int sx1 = min(int(floor(p.x - 0.5 + rx)), sx0 + 24);
+    int sy1 = min(int(floor(p.y - 0.5 + ry)), sy0 + 24);
+
+    vec3 pc3 = vec3(0.0);   // premultiplied colour accumulator
+    float pa = 0.0;         // alpha accumulator (already weighted)
+    float wsum = 0.0;
+    for (int sy = sy0; sy <= sy1; ++sy) {
+        float wy = kernelWeight(uFilter, ((float(sy) + 0.5) - p.y) * invSclY);
+        if (wy == 0.0) continue;
+        for (int sx = sx0; sx <= sx1; ++sx) {
+            float wgt = wy * kernelWeight(uFilter, ((float(sx) + 0.5) - p.x) * invSclX);
+            if (wgt == 0.0) continue;
+            vec4 c = fetchSource(ivec2(sx, sy), srcSize);
+            float aw = c.a * wgt;
+            pc3 += c.rgb * aw;
+            pa += aw;
+            wsum += wgt;
+        }
+    }
+    if (wsum <= 0.0) return vec4(0.0);   // nothing covered -> transparent
+    vec4 o = vec4(0.0);
+    o.a = clamp(pa / wsum, 0.0, 1.0);
+    if (pa > 1e-8) o.rgb = pc3 / pa;     // un-premultiply (rgb is meaningless at ~zero coverage)
+    return o;
+}
+
+// Brute-force N x N supersampling: average N x N bilinear sub-samples across the output texel
+// (supersampleInto). N is computed host-side from the minification factor.
+vec4 supersample(ivec2 tp, ivec2 srcSize) {
+    int n = clamp(uSuperN, 2, 8);
+    float step = 1.0 / float(n);
+    float norm = 1.0 / (float(n) * float(n));
+    vec4 acc = vec4(0.0);
+    for (int j = 0; j < n; ++j) {
+        for (int i = 0; i < n; ++i) {
+            vec2 q = vec2(float(tp.x) + (float(i) + 0.5) * step,
+                                float(tp.y) + (float(j) + 0.5) * step);
+            acc += bilinearPremul(mapAffine(uInv0, uInv1, q), srcSize);
+        }
+    }
+    vec4 o = vec4(0.0);
+    o.a = clamp(acc.a * norm, 0.0, 1.0);
+    if (acc.a > 1e-8) o.rgb = acc.rgb / acc.a;   // un-premultiply
+    return o;
+}
+
+// The whole placement step for one output pixel: transform + reconstruct + pre-transform mask.
+// `tp` is the pixel's position in the TARGET buffer (tile-local + uTileOrigin), so the answer
+// does not depend on which macrotile the pixel happened to land in.
+vec4 placeLayer(ivec2 tp) {
+    ivec2 srcSize = srcTrueSize();
+    if (uFilter == kFilterNearest) {
+        vec2 p = mapAffine(uInv0, uInv1, vec2(tp) + 0.5);
+        return fetchSource(ivec2(floor(p)), srcSize);
+    }
+    if (uFilter == kFilterSupersample) return supersample(tp, srcSize);
+    return convolve(tp, srcSize);
+}
+
+// ---- Blend math: the VERBATIM mirror of core/blend_math.hpp (via composite_blend.comp) ---------
+
+// Separable (per-channel) blend modes (enum 0..18).
+float blendChannel(int m, float b, float s) {
+    if (m == 0) return s;                                   // Normal
+    if (m == 1) return min(b, s);                           // Darken
+    if (m == 2) return b * s;                               // Multiply
+    if (m == 3) return s <= 0.0 ? 0.0 : 1.0 - min(1.0, (1.0 - b) / s);  // ColorBurn
+    if (m == 4) return max(0.0, b + s - 1.0);              // LinearBurn
+    if (m == 5) return max(b, s);                           // Lighten
+    if (m == 6) return b + s - b * s;                      // Screen
+    if (m == 7) return s >= 1.0 ? 1.0 : min(1.0, b / (1.0 - s));        // ColorDodge
+    if (m == 8) return min(1.0, b + s);                    // LinearDodge
+    if (m == 9) return b <= 0.5 ? 2.0 * b * s : 1.0 - 2.0 * (1.0 - b) * (1.0 - s);  // Overlay
+    if (m == 10) {                                          // SoftLight
+        if (s <= 0.5) return b - (1.0 - 2.0 * s) * b * (1.0 - b);
+        float d = b <= 0.25 ? ((16.0 * b - 12.0) * b + 4.0) * b : sqrt(b);
+        return b + (2.0 * s - 1.0) * (d - b);
+    }
+    if (m == 11) return s <= 0.5 ? 2.0 * b * s : 1.0 - 2.0 * (1.0 - b) * (1.0 - s);  // HardLight
+    if (m == 12) {                                          // VividLight
+        if (s <= 0.5) { float d = 2.0 * s; return d <= 0.0 ? 0.0 : max(0.0, 1.0 - (1.0 - b) / d); }
+        float d = 2.0 * (1.0 - s);
+        return d <= 0.0 ? 1.0 : min(1.0, b / d);
+    }
+    if (m == 13) return clamp(b + 2.0 * s - 1.0, 0.0, 1.0);             // LinearLight
+    if (m == 14) return s <= 0.5 ? min(b, 2.0 * s) : max(b, 2.0 * s - 1.0);  // PinLight
+    if (m == 15) return abs(b - s);                        // Difference
+    if (m == 16) return b + s - 2.0 * b * s;               // Exclusion
+    if (m == 17) return max(0.0, b - s);                   // Subtract
+    if (m == 18) return s <= 0.0 ? 1.0 : min(1.0, b / s);  // Divide
+    return s;
+}
+
+float lum(vec3 c) { return 0.3 * c.r + 0.59 * c.g + 0.11 * c.b; }
+
+vec3 clipColor(vec3 c) {
+    float l = lum(c);
+    float n = min(min(c.r, c.g), c.b);
+    float x = max(max(c.r, c.g), c.b);
+    if (n < 0.0 && l - n > 0.0) c = l + (c - l) * (l / (l - n));
+    if (x > 1.0 && x - l > 0.0) c = l + (c - l) * ((1.0 - l) / (x - l));
+    return c;
+}
+
+vec3 setLum(vec3 c, float l) { return clipColor(c + (l - lum(c))); }
+
+float sat(vec3 c) { return max(max(c.r, c.g), c.b) - min(min(c.r, c.g), c.b); }
+
+vec3 setSat(vec3 c, float s) {
+    float mn = min(min(c.r, c.g), c.b);
+    float mx = max(max(c.r, c.g), c.b);
+    return mx <= mn ? vec3(0.0) : (c - mn) * (s / (mx - mn));
+}
+
+// Non-separable (HSL) blend modes (enum 19..22).
+vec3 blendNonSep(int m, vec3 b, vec3 s) {
+    if (m == 19) return setLum(setSat(s, sat(b)), lum(b));  // Hue
+    if (m == 20) return setLum(setSat(b, sat(s)), lum(b));  // Saturation
+    if (m == 21) return setLum(s, lum(b));                  // Color
+    if (m == 22) return setLum(b, lum(s));                  // Luminosity
+    return s;
+}
+
+// Source-over-with-blend (W3C), straight alpha.
+vec4 compositeOver(int m, vec4 cb, vec4 cs, float opacity) {
+    float asrc = cs.a * opacity;
+    if (asrc <= 0.0) return cb;
+    float ab = cb.a;
+    float ao = asrc + ab * (1.0 - asrc);
+    if (ao <= 0.0) return vec4(0.0);
+    vec3 bl = m <= 18 ? vec3(blendChannel(m, cb.r, cs.r), blendChannel(m, cb.g, cs.g),
+                             blendChannel(m, cb.b, cs.b))
+                      : blendNonSep(m, cb.rgb, cs.rgb);
+    vec3 mixed = (1.0 - ab) * cs.rgb + ab * bl;
+    vec3 co = (asrc * mixed + ab * (1.0 - asrc) * cb.rgb) / ao;
+    return vec4(co, ao);
+}
+
+// ---- The fused step ----------------------------------------------------------------------------
+
+void main() {
+    // WHERE THIS INVOCATION IS, and it is the ONLY thing the dispatch shape changes. Both shapes
+    // hand the rest of this function the same three integers; the list mode simply reads them out
+    // of a buffer that the host wrote instead of a push block that the host pushed. Nothing below
+    // this block knows which mode it is running in, which is what makes the two byte-identical.
+    ivec2 tileOrigin = uTileOrigin;
+    ivec2 accOrigin = uAccOrigin;
+    ivec2 extent = uExtent;
+    if (kTileList != 0) {
+        const int rec = int(gl_WorkGroupID.z) * 2;
+        const ivec4 a = uTiles[rec];
+        const ivec4 b = uTiles[rec + 1];
+        tileOrigin = a.xy;
+        accOrigin = a.zw;
+        extent = b.xy;
+    }
+
+    ivec2 lp = ivec2(gl_GlobalInvocationID.xy);
+    if (lp.x >= extent.x || lp.y >= extent.y) return;     // partial edge tiles
+    ivec2 tp = tileOrigin + lp;                           // this pixel in the TARGET buffer
+
+    vec4 cs = placeLayer(tp);                              // transform + resample + linked mask
+
+    if (uMaskMode == 3) {
+        // An UNLINKED mask folds AFTER placement, fixed in the layer's PARENT space
+        // (foldUnlinkedMask): move the layer and the pixels slide under a stationary mask.
+        cs.a *= maskThrough(mapAffine(uMask0, uMask1, vec2(tp) + 0.5));
+    }
+
+    ivec2 ap = accOrigin + lp;
+
+    // Publish the clip base BEFORE the early-out and before opacity/blend: the CPU walk captures
+    // `src.rgba[p*4+3]` -- the placed, mask-folded alpha -- for EVERY pixel, including the ones
+    // this layer misses entirely (they must publish 0, not keep the previous base's value).
+    if (uClipWrite != 0) imageStore(uClipOut, ap, vec4(cs.a, 0.0, 0.0, 0.0));
+
+    if (uClipMode != 0) cs.a *= texelFetch(uClip, ap, 0).r;  // clip-to-below (multiplyAlpha)
+
+    // compositeOver returns the backdrop untouched for a fully transparent source; skipping the
+    // read-modify-write here mirrors compositeBufferOver's early-out and saves the traffic.
+    if (cs.a * uOpacity <= 0.0) return;
+    imageStore(uAcc, ap, compositeOver(uBlend, imageLoad(uAcc, ap), cs, uOpacity));
+}

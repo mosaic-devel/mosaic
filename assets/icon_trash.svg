@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Single WHITE ink, 16x16 native. See icon_plus.svg for the pixel-grid rules. Straight-sided
+       can, not a tapered one: a taper puts both walls on a diagonal and they render as grey mush at
+       this size. Every edge here is a 1px stroke on a half-integer, so each lands on one whole pixel. -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="1" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M2 4.5 H14"/>
+    <path d="M6.5 4.5 V3.5 H9.5 V4.5"/>
+    <path d="M4.5 5 V13.5 H11.5 V5"/>
+    <path d="M6.5 7 V11.5"/>
+    <path d="M9.5 7 V11.5"/>
+  </g>
+</svg>

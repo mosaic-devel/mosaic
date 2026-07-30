@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Single WHITE ink, 16x16 native. A tabbed folder: what "Group Layers" makes. The tab steps
+       down at a right angle rather than a diagonal -- a diagonal is the one edge that cannot be
+       pixel-aligned, and it was the only soft thing in the icon. -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="1" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M1.5 12.5 V3.5 H6.5 V5.5 H14.5 V12.5 Z"/>
+  </g>
+</svg>

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="badge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#B39BFF"/>
+      <stop offset="1" stop-color="#7460D8"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.38"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.08"/>
+      <stop offset="0.8" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="shade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0.55" stop-color="#3A2B85" stop-opacity="0"/>
+      <stop offset="1" stop-color="#3A2B85" stop-opacity="0.28"/>
+    </linearGradient>
+    <linearGradient id="glyph" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EAE6FF"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="26" fill="url(#badge)"/>
+  <circle cx="32" cy="32" r="24.8" fill="none" stroke="url(#shade)" stroke-width="2.4"/>
+  <circle cx="32" cy="32" r="26" fill="none" stroke="url(#sheen)" stroke-width="2"/>
+  <circle cx="32" cy="32" r="26" fill="none" stroke="#45358F" stroke-width="1.2" opacity="0.5"/>
+  <g transform="translate(0,1)" opacity="0.3">
+    <path d="M 23.4 25.0 C 23.4 18.5 26.9 14.8 32.2 14.8 C 37.5 14.8 40.9 18.1 40.9 22.9 C 40.9 26.8 38.8 29.0 36.0 30.9 C 33.5 32.5 32.4 34.1 32.4 37.0 L 32.4 38.6"
+          fill="none" stroke="#3A2B85" stroke-width="6.5" stroke-linecap="round"/>
+    <circle cx="32.4" cy="47.2" r="3.7" fill="#3A2B85"/>
+  </g>
+  <path d="M 23.4 25.0 C 23.4 18.5 26.9 14.8 32.2 14.8 C 37.5 14.8 40.9 18.1 40.9 22.9 C 40.9 26.8 38.8 29.0 36.0 30.9 C 33.5 32.5 32.4 34.1 32.4 37.0 L 32.4 38.6"
+        fill="none" stroke="url(#glyph)" stroke-width="6.5" stroke-linecap="round"/>
+  <circle cx="32.4" cy="47.2" r="3.7" fill="url(#glyph)"/>
+</svg>

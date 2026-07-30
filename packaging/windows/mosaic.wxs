@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Mosaic's MSI, built with msitools' `wixl` (PLAN.md S57). Not NSIS, and not full WiX: wixl
+  implements a USEFUL SUBSET of WiX v3 syntax, so every construct below is one msitools 0.106
+  actually supports. packaging/windows/README.md lists what was deliberately avoided and why.
+
+  This file describes the product, the feature, the Start-menu shortcut and the .mosaic association.
+  The ~250 payload FILES arrive from a second fragment that make-package.sh generates with wixl-heat
+  (ComponentGroup CG_MosaicPayload), because per-file component ids and GUIDs have to be stable
+  across builds and derived from the tree, not hand-maintained.
+
+  Variables come from make-package.sh via wixl -D:
+    MosaicVersion  numeric ProductVersion, e.g. 0.2.17   (MSI compares this field by field)
+    MosaicBuild    the full identifier, e.g. 0.2.17+gabc1234 (for humans; not comparable)
+    MosaicIcon     path to mosaic.ico on the BUILD host  (embedded, not installed)
+    MosaicStage    the staging tree                      (used by the generated fragment)
+    Win64          "yes"                                 (used by the generated fragment)
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <!--
+    Id="*" -> a fresh ProductCode GUID per build. UpgradeCode is a FIXED CONSTANT and must never
+    change: it is the only thing that lets a new MSI recognise an older Mosaic as "the same product,
+    an earlier version" and remove it. An installer that generates its own UpgradeCode can never
+    upgrade anything, only accumulate side-by-side copies — and by the time anyone notices, the
+    copies with the old code are already in the field and unreachable.
+  -->
+  <Product Id="*"
+           Name="Mosaic"
+           Language="1033"
+           Version="$(var.MosaicVersion)"
+           Manufacturer="The Mosaic project"
+           UpgradeCode="D3A54DF1-481E-4F7D-91EF-99798A2796D6">
+
+    <!--
+      PER-USER, not per-machine. The trade-off, stated plainly:
+        + needs no administrator rights and raises no UAC prompt at all, which matters more than
+          usual here because the package is UNSIGNED — an elevation prompt for an unsigned MSI reads
+          "Unknown publisher", and asking someone to approve that is asking them to ignore the one
+          signal Windows gives them;
+        + installs under %LOCALAPPDATA%, which is where Mosaic already keeps its state, so an install
+          and an uninstall touch one user's profile and nothing else;
+        - the shortcut and the .mosaic association exist for the installing USER only. On a shared
+          machine each account installs its own copy.
+      A per-machine build would need InstallScope="perMachine" here plus the association rows' roots
+      changed from HKCU to HKLM (see the ⚠⚠ note down there for why they cannot just say HKMU).
+
+      InstallerVersion 500 = Windows Installer 5.0 (Windows 7+), far below this build's Windows 10
+      1809 floor.
+    -->
+    <Package InstallerVersion="500"
+             Compressed="yes"
+             InstallScope="perUser"
+             Manufacturer="The Mosaic project"
+             Description="Mosaic $(var.MosaicBuild)"
+             Comments="Mosaic $(var.MosaicBuild) — GNU GPL v3 or later. Unsigned: Windows may show a SmartScreen warning on first run."/>
+
+    <!-- One embedded cabinet. EmbedCab means the .msi is the whole package — a single file to
+         download, with nothing beside it that can go missing. -->
+    <Media Id="1" Cabinet="mosaic.cab" EmbedCab="yes"/>
+
+    <!--
+      ⚠ AllowSameVersionUpgrades is REQUIRED here, and the reason is the frozen version. Mosaic's
+      project(VERSION) is pinned at 0.2.17 forever (the git hash is the real build id), and MSI
+      compares only the numeric ProductVersion — so every build Mosaic will ever ship has the SAME
+      version as the one before it. Without this attribute, installing a newer build over an older
+      one detects the old product, declines to remove it because the versions are equal, and leaves
+      TWO entries in Add/Remove Programs pointing at one directory. With it, the equal-version case
+      counts as an upgrade and the old ProductCode is uninstalled first.
+    -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer build of Mosaic is already installed. Uninstall it first."/>
+
+    <!-- Add/Remove Programs presentation. The icon is embedded into the MSI's Icon stream from the
+         build host, so it shows even before (and after) the files are on disk. ARPNOMODIFY hides a
+         "Modify" button that would open a feature tree with exactly one feature in it. -->
+    <Icon Id="mosaic.ico" SourceFile="$(var.MosaicIcon)"/>
+    <Property Id="ARPPRODUCTICON" Value="mosaic.ico"/>
+    <Property Id="ARPNOMODIFY" Value="1" Secure="yes"/>
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/mosaic-devel/mosaic"/>
+
+    <!--
+      %LOCALAPPDATA%\Programs\Mosaic. "Programs" under LocalAppData is the established per-user
+      application location on Windows 10+ (it is where VS Code's User installer goes), and it is
+      NOT roamed — which is right for an executable and its DLLs, whatever the user's profile does.
+      Windows Installer creates the intermediate "Programs" folder itself; the Directory table only
+      has to name it.
+
+      ProgramMenuFolder holds the shortcut DIRECTLY, with no "Mosaic" sub-folder. A folder containing
+      a single shortcut is a wasted click on a Start menu that has been a flat searchable list since
+      Windows 10, and it would also need a RemoveFolder row to clean up — one that, misspelled,
+      deletes the user's Programs folder.
+    -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="ProgramsFolder" Name="Programs">
+          <Directory Id="INSTALLDIR" Name="Mosaic"/>
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder"/>
+    </Directory>
+
+    <Feature Id="Complete" Title="Mosaic" Level="1"
+             Description="Mosaic, its runtime libraries and its data files.">
+      <ComponentGroupRef Id="CG_MosaicPayload"/>
+      <ComponentRef Id="C_StartMenuShortcut"/>
+      <ComponentRef Id="C_FileAssociation"/>
+      <ComponentRef Id="C_ThumbnailHandler"/>
+    </Feature>
+
+    <!-- ================= Start-menu shortcut ================= -->
+    <!--
+      Explicit Guid, unlike the generated file components: wixl derives a component GUID from its key
+      path, and a registry key path is not something it will derive from ("this key path does not
+      support generating a component GUID"). A hand-written constant is what MSI wants anyway — a
+      component's GUID is its identity across every version of the product.
+    -->
+    <DirectoryRef Id="ProgramMenuFolder">
+      <Component Id="C_StartMenuShortcut" Guid="C51FE85E-193E-46A8-AB46-CC318C938510"
+                 Win64="$(var.Win64)">
+        <!--
+          NON-ADVERTISED (no Advertise="yes"), so Target is a formatted path rather than a feature
+          key: advertised shortcuts trigger MSI's self-repair, which on a per-user install means a
+          progress dialog appearing for reasons the user cannot connect to anything they did.
+
+          No Icon attribute. The shortcut inherits mosaic.exe's own embedded icon, which is the same
+          image and one fewer thing to keep in step (see mosaic.rc.in).
+
+          WorkingDirectory matters more than it looks: a shortcut with no working directory inherits
+          whatever the shell had, and "Save As" would open there.
+        -->
+        <Shortcut Id="S_Mosaic"
+                  Name="Mosaic"
+                  Description="A professional, GPU-accelerated image editor"
+                  Target="[INSTALLDIR]mosaic.exe"
+                  WorkingDirectory="INSTALLDIR"/>
+        <!-- Every component needs a key path, and a per-user component's must be under HKCU rather
+             than a file — MSI uses it to decide whether the component is still installed FOR THIS
+             USER, and a file in a shared directory cannot answer that. -->
+        <RegistryValue Root="HKCU" Key="Software\Mosaic\Installed" Name="StartMenuShortcut"
+                       Type="integer" Value="1" KeyPath="yes"/>
+      </Component>
+    </DirectoryRef>
+
+    <!-- ================= .mosaic file association ================= -->
+    <!--
+      Mosaic already registers its document type on the other two platforms: a shared-mime-info
+      declaration of image/x-mosaic plus a .desktop entry on Linux (data/desktop/mosaic.xml,
+      mosaic.desktop), and the org.mosaic.document UTI on macOS. This is the Windows third: a ProgId
+      ("Mosaic.Document") with a DefaultIcon and a shell\open\command, and the .mosaic extension
+      pointing at it.
+
+      It works with no code at all because the app already takes a POSITIONAL file argument — see the
+      comment on takePath() in src/app/main.cpp, which spells out that this is how every desktop hands
+      a program its files.
+
+      ⚠ Written as explicit <RegistryValue> rows rather than with WiX's <ProgId>/<Extension>/<Verb>
+      sugar, on purpose:
+        * wixl's ProgId element has no Icon/IconIndex attribute, so DefaultIcon would need a
+          RegistryValue anyway — and half-declarative is worse than not declarative;
+        * OpenWithProgids and Applications\<exe>\SupportedTypes have no WiX v3 element at all. They
+          are registry rows in every real installer;
+        * <ProgId> chooses its own registry root, and which root that resolves to under a per-user
+          package is not something this cross-build can verify. An explicit root is unambiguous.
+
+      ⚠⚠ Root="HKCU" and NOT Root="HKMU", which is what a per-machine/per-user-agnostic .wxs would
+      want. HKMU ("multi-user") is the MSI root that resolves to HKCU for a per-user install and HKLM
+      for a per-machine one, and Windows Installer spells it as Root = -1 in the Registry table.
+      msitools 0.106 writes **4** instead — its own enum value, straight into the column, with no
+      special case for the negative one. Verified by building a probe package and reading the table
+      back with `msiinfo export <msi> Registry`. 4 is not a root Windows Installer knows, so every row
+      using HKMU is at best ignored. HKCU emits 1 and is correct for this per-user package.
+
+      That makes flipping to per-machine a TWO-line change rather than one: InstallScope="perMachine"
+      above, and these roots to HKLM.
+    -->
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="C_FileAssociation" Guid="8000F32E-BAEE-4C43-A60D-94BBB1639315"
+                 Win64="$(var.Win64)">
+        <!-- The extension -> ProgId link, and the metadata Explorer reads off the extension itself.
+             Content Type carries the SAME MIME string Linux registers, so the three platforms agree
+             on one name for the format. -->
+        <RegistryValue Root="HKCU" Key="Software\Classes\.mosaic"
+                       Value="Mosaic.Document" Type="string" KeyPath="yes"/>
+        <RegistryValue Root="HKCU" Key="Software\Classes\.mosaic"
+                       Name="Content Type" Value="image/x-mosaic" Type="string"/>
+        <RegistryValue Root="HKCU" Key="Software\Classes\.mosaic"
+                       Name="PerceivedType" Value="image" Type="string"/>
+        <!-- Puts Mosaic in the "Open with" list for .mosaic even when the user has pointed the
+             extension at something else. An empty string is the documented value here: the presence
+             of the NAME is the whole payload. -->
+        <RegistryValue Root="HKCU" Key="Software\Classes\.mosaic\OpenWithProgids"
+                       Name="Mosaic.Document" Value="" Type="string"/>
+
+        <!-- The ProgId itself. -->
+        <RegistryValue Root="HKCU" Key="Software\Classes\Mosaic.Document"
+                       Value="Mosaic Document" Type="string"/>
+        <RegistryValue Root="HKCU" Key="Software\Classes\Mosaic.Document"
+                       Name="FriendlyTypeName" Value="Mosaic Document" Type="string"/>
+        <!-- A standalone .ico, not "mosaic.exe,1". Indexing into an executable's icon resources
+             depends on the shell's ordering rules over those resources, which is a thing to verify on
+             Windows rather than guess at from Linux — for the sake of 50 KB. -->
+        <RegistryValue Root="HKCU" Key="Software\Classes\Mosaic.Document\DefaultIcon"
+                       Value="&quot;[INSTALLDIR]mosaic-doc.ico&quot;,0" Type="string"/>
+        <!-- "%1" QUOTED: an unquoted %1 splits the path at the first space, which is most paths a
+             Windows user has. The MSI formatted-string syntax reserves [ and ], not %, so %1 reaches
+             the registry literally. -->
+        <RegistryValue Root="HKCU" Key="Software\Classes\Mosaic.Document\shell\open\command"
+                       Value="&quot;[INSTALLDIR]mosaic.exe&quot; &quot;%1&quot;" Type="string"/>
+        <RegistryValue Root="HKCU" Key="Software\Classes\Mosaic.Document\shell\open"
+                       Name="FriendlyAppName" Value="Mosaic" Type="string"/>
+
+        <!-- The Applications\<exe> registration. This is the half that makes "Open with -> Mosaic"
+             and "Always use this app" work for files Mosaic did not claim: SupportedTypes is what
+             the shell filters that list by, and without it Mosaic is missing from the dialog even
+             though it is installed. -->
+        <RegistryValue Root="HKCU" Key="Software\Classes\Applications\mosaic.exe"
+                       Name="FriendlyAppName" Value="Mosaic" Type="string"/>
+        <RegistryValue Root="HKCU" Key="Software\Classes\Applications\mosaic.exe\shell\open\command"
+                       Value="&quot;[INSTALLDIR]mosaic.exe&quot; &quot;%1&quot;" Type="string"/>
+        <RegistryValue Root="HKCU" Key="Software\Classes\Applications\mosaic.exe\SupportedTypes"
+                       Name=".mosaic" Value="" Type="string"/>
+      </Component>
+    </DirectoryRef>
+
+    <!-- ================= Explorer thumbnail handler (S57) ================= -->
+    <!--
+      MosaicThumbnail.dll is an in-process COM server implementing IThumbnailProvider, so Explorer,
+      the Open dialog and the search index draw a .mosaic file's own picture out of its PRVW chunk —
+      the Windows counterpart of the freedesktop thumbnailer + KIO plugin on Linux and the two Quick
+      Look extensions on macOS. See src/thumbnailer/shell_thumbnail_win32.cpp.
+
+      ⚠ THE INSTALLER IS THE REGISTRATION PATH, which is why these rows exist rather than a
+      `regsvr32` custom action. Registry rows belong to a component: MSI removes them on uninstall and
+      rolls them back on a failed install, and it does so even if the DLL has meanwhile been deleted.
+      A DllRegisterServer custom action can do none of that. The DLL's own DllRegisterServer stays as
+      the hand-testing escape hatch and as the executable statement of what the layout IS — it writes
+      exactly the keys below, reading the GUIDs out of the compiled constants.
+
+      ⚠ HKCU\Software\Classes, NOT HKEY_CLASSES_ROOT — and shell_thumbnail_win32.cpp's
+      DllRegisterServer writes the same root, so the hand-registered extension exercises exactly this
+      layout rather than a second one that would then need testing too. HKCR is a merged READ view of
+      the HKLM and HKCU class stores; a WRITE through it lands in the HKLM half, which is machine-wide,
+      needs elevation, and would create a rival registration to shadow this one. Per-user shell
+      extensions under HKCU\Software\Classes are ordinary and supported — the shell resolves handlers
+      through the merged view. A per-machine build moves both spellings to HKLM together; they must be
+      kept in step by hand, and they are one grep for the CLSID apart.
+
+      Two association keys, both of them, exactly as DllRegisterServer does and for the reasons its
+      comment gives: SystemFileAssociations survives the user pointing .mosaic at another program,
+      and .mosaic\ShellEx is the classic location. {E357FCCD-…} is IID_IThumbnailProvider (the handler
+      slot); {986B1E67-…} is this handler's own CLSID.
+    -->
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="C_ThumbnailHandler" Guid="2879F9AE-12C8-4DC3-B394-2A261C2857F5"
+                 Win64="$(var.Win64)">
+        <RegistryValue Root="HKCU"
+                       Key="Software\Classes\CLSID\{986B1E67-2A97-4460-A8ED-071F760F3647}"
+                       Value="Mosaic Thumbnail Handler" Type="string" KeyPath="yes"/>
+        <!-- The server path. NOT quoted: InprocServer32's default value is a bare path, and quotes
+             would become part of the file name the loader looks for. -->
+        <RegistryValue Root="HKCU"
+                       Key="Software\Classes\CLSID\{986B1E67-2A97-4460-A8ED-071F760F3647}\InprocServer32"
+                       Value="[INSTALLDIR]MosaicThumbnail.dll" Type="string"/>
+        <RegistryValue Root="HKCU"
+                       Key="Software\Classes\CLSID\{986B1E67-2A97-4460-A8ED-071F760F3647}\InprocServer32"
+                       Name="ThreadingModel" Value="Apartment" Type="string"/>
+        <RegistryValue Root="HKCU"
+                       Key="Software\Classes\SystemFileAssociations\.mosaic\ShellEx\{E357FCCD-A995-4576-B01F-234630154E96}"
+                       Value="{986B1E67-2A97-4460-A8ED-071F760F3647}" Type="string"/>
+        <RegistryValue Root="HKCU"
+                       Key="Software\Classes\.mosaic\ShellEx\{E357FCCD-A995-4576-B01F-234630154E96}"
+                       Value="{986B1E67-2A97-4460-A8ED-071F760F3647}" Type="string"/>
+      </Component>
+    </DirectoryRef>
+  </Product>
+</Wix>

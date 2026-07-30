@@ -1,0 +1,1992 @@
+#version 450
+
+// Canvas presenter (S8). Samples the document composite through the inverse view transform
+// (screen px -> doc px), so the canvas viewport can pan, zoom AND rotate. A plain
+// vkCmdBlitImage can only do an axis-aligned scale; rotation needs a sampling shader. The
+// result is written into an rgba8 "view image" that window_renderer then blits 1:1 to the
+// swapchain (the blit also maps rgba8 -> the swapchain's bgra by component). Pixels that fall
+// outside the document show the canvas background colour.
+//
+// S8-b: when the view is being rotated, a degree-readout dial (ring + ticks + needle + numeric
+// degrees) is composited on top, in screen space -- the canvas is a child Fl_Window Vulkan
+// owns, so FLTK can't draw this overlay; it is drawn here.
+//
+// S13: the selection's marching ants. The selection coverage mask (R8, document space) is
+// sampled like the document; a screen pixel is on the marquee when it is selected but one of
+// its 4 screen-space neighbours is not -- so the outline stays one pixel wide at any zoom or
+// rotation. Dashes alternate black/white along (x+y) and crawl with the phase push constant.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(binding = 0, rgba8) uniform writeonly image2D uOut; // intermediate view image
+layout(binding = 1) uniform sampler2D uDoc;                // document composite (bilinear)
+layout(binding = 2) uniform sampler2D uMask;               // selection coverage (R8, doc space)
+layout(binding = 3) uniform sampler2D uOverlayText;        // rasterized HUD/dial tile (RGBA, S16)
+
+// In-flight lasso / polygonal-lasso path: an OPEN polyline in screen (physical) px, drawn as a smooth
+// inverted line (Photopea convention) instead of the document-space marching ants, which staircased on
+// an angled path. lassoCount <= 1 means inactive. The count lives here, not in push constants (those
+// are already at the 128-byte budget). Capacity is render::kLassoMaxVerts.
+//
+// S19-a: the brush-family reticle (Brush now; Eraser/Heal/Inpaint later) rides this same overlay
+// buffer -- a circular size ring drawn at the cursor, the GPU sibling of the lasso line, so no push
+// lane is grown. reticleActive != 0 draws a two-tone ring of `reticleRadius` (screen px) at
+// `reticleCenter` (screen px). The brush is never active together with a lasso, but the fields are
+// independent so the shader can show either.
+layout(std430, binding = 4) readonly buffer LassoVerts {
+    uint lassoCount;
+    uint reticleActive;
+    vec2 lassoMin; // screen-px bounding box of the polyline -- a cheap per-pixel cull so the segment
+    vec2 lassoMax; // loop only runs near the path (cost scales with the lasso, not the vertex cap)
+    vec2 reticleCenter;  // brush reticle centre, screen (physical) px
+    // The reticle traces the TIP'S SHAPE (docs/brushes.md §6.3): xy = the tip's two semi-axes in
+    // screen px, z = its rotation (radians, the tip's own angle plus the view's), w = lock-glyph
+    // flag. A round tip has x == y and z == 0, which the ring maths below reduces to exactly the
+    // circle it drew before the tip had a shape. std430: a vec4 aligns to 16, and offset 32 is.
+    vec4 reticleShape;
+    uint lineStyle;      // Settings->Appearance overlay-line style: 0 Classic, 1 Rim, 2 Adaptive
+    uint dotAlphaBits;   // rotate-hotspot dot alpha as FLOAT BITS (0 = off, ceiling ~0.5). It was
+                         // the std430 pad; the dots ride it because the push block sits at its
+                         // 128-byte budget (see Push below) and this header uploads every frame.
+    uint featherStyle;   // Settings->Appearance feathered-selection indicator: 0 = Bracketing ant
+                         // pair (A, the DEFAULT), 1 = True-edge ant + soft band (F). Rides this
+                         // every-frame header like lineStyle.
+    uint channelView;    // Channels tab's on-canvas channel isolation (S60-a item 10), encoded --
+                         // see applyChannelView below. 0 = the normal full-colour composite. It sits
+                         // at byte 60, which was std430's LAST implicit pad in this header (the next
+                         // member is 8-aligned), so adding it moved nothing: the C++ writer's byte
+                         // 64/72 offsets are unchanged. Same reason as dotAlphaBits -- the push
+                         // block is at its 128-byte budget and this header uploads every frame.
+    vec2 anchorPos;      // Move-tool transform ANCHOR / reference point (S15+) in physical px: the
+                         // pivot rotation + scaling turn around. x < -1e8 = no anchor this frame.
+                         // std430 aligns it to 8 -> byte 64, pushing lassoPts[] to byte 72 (the C++
+                         // writer matches). Drawn by anchorGlyph, over the transform handles.
+    // The polyline itself. A vertex whose x is at or below kPolyBreak (see lassoDist) is a CONTOUR
+    // BREAK rather than a point, so a multi-contour path can ride this single-polyline lane.
+    vec2 lassoPts[];
+};
+
+// Type-tool caret + selection overlay (S29-b, the dedicated channel): the blinking insertion bar and
+// the per-visual-line selection highlight quads, in screen (physical) px. caretActive is toggled by
+// the canvas blink timer; selCount is the number of highlight quads (each a rotated rect = 4 corners,
+// since the text layer / view may be rotated). selMin/selMax bound them for a cheap per-pixel cull.
+// Inactive when caretActive == 0 and selCount == 0. A dedicated binding so it never collides with the
+// lasso/reticle (binding 4) and a filled multi-line highlight has real storage.
+layout(std430, binding = 5) readonly buffer TextOverlay {
+    uint tCaretActive;
+    uint tSelCount;
+    vec2 tCaretA;    // caret bar endpoint A (screen px)
+    vec2 tCaretB;    // caret bar endpoint B
+    vec2 tSelMin;    // bbox of all selection quads (screen px) -- per-pixel cull
+    vec2 tSelMax;
+    float tHandleActive; // COUNT of trailing quads that are box handles (resize/bend), filled SOLID
+    uint tSquiggleCount; // spell-check underline segments packed AFTER the selection quads (below)
+    vec4 tBendHandle;    // baseline bend drop-tab (§9): (pill.xy, apex.xy) screen px; pill.x<-1e8 = off
+    vec4 tSelQuads[]; // quad i: [2i] = (TL.xy, TR.xy), [2i+1] = (BR.xy, BL.xy), winding TL,TR,BR,BL.
+                      // Spell squiggle segment j (j < tSquiggleCount) rides the same array as a single
+                      // vec4 at index [2*tSelCount + j] = (A.xy, B.xy), the underline span in screen px.
+};
+
+// The Pen tool's node / handle chrome (S28, binding 6): the anchors, the handle tips and the stems
+// that join them, plus the closing-loop ring. It USED to ride the document-guide lane (binding 13)
+// as a bag of plain coloured segments -- which is why it read as weak: that lane draws a flat
+// mix(col, lineCol, cov) with no casing and no knob idiom at all, and a path over ~17 nodes both
+// lost its own marks AND starved the document's real guides out of the 64-entry lane. Its own
+// channel, in the crop/transform chrome language (square + round knobs, chromeShadow casing).
+//
+// Marks and stems share one vec4 array, marks first (the stems are indexed from pMarkCount), the
+// same "one array, two payloads" packing the Type overlay uses for its squiggles. Mark i is
+// (pos.xy, kind, state): kind 0 = a SQUARE anchor (a cusp / corner node), 1 = a ROUND anchor (a
+// smooth / symmetric node), 2 = a round handle TIP; state is a bit set, 1 = selected, 2 = hovered.
+// Stem j is (anchor.xy, tip.xy). All screen (physical) px. Inactive when both counts are 0 and the
+// ring is off. Capacities are render::kPenMarkMax / render::kPenStemMax.
+layout(std430, binding = 6) readonly buffer PenChrome {
+    uint pMarkCount;
+    uint pStemCount;
+    uint pCloseActive;   // 1 = the pointer is inside the closing-loop radius of the first node
+    uint pPad0;
+    vec2 pMin;           // screen-px bbox of every mark position, stem end and the ring's extent;
+    vec2 pMax;           // penChrome() pads it by the knob reach. The usual cheap per-pixel cull.
+    vec2 pCloseCenter;   // the first node (screen px): the closing ring's centre
+    float pCloseRadius;  // ... and its radius (screen px == the close tolerance)
+    float pPad1;
+    vec4 pData[];
+};
+
+// Binding 7 was the retired "motivational one-liner" backdrop tile's placement SSBO (Settings ->
+// Annoyances); the annoyance is now a menu-bar ticker, so that binding is gone. The numbering below
+// is kept (binding 8) so no other channel had to be renumbered.
+
+// Smart Resize keep-region chips (S16-f, binding 8): outlined boxes over the parts of the picture
+// the crop suggestion protects (docs/smart-recompose-plan.md §1). Each chip is a (possibly
+// view-rotated) quad TL,TR,BR,BL plus a meta vec4 (x: enabled). Enabled chips draw a box-blue
+// outline + a faint interior wash; a user-toggled-off chip draws a dim grey outline only.
+// kChipMin/kChipMax bound them all (the usual per-pixel cull). Inactive when kChipCount == 0.
+layout(std430, binding = 8) readonly buffer KeepChips {
+    uint kChipCount;
+    uint kChipPad0;
+    vec2 kChipMin;
+    vec2 kChipMax;
+    vec2 kChipPad1;
+    vec4 kChipData[]; // chip i: [3i] = (TL.xy, TR.xy), [3i+1] = (BR.xy, BL.xy), [3i+2] = meta
+};
+
+// The brush reticle's TIP OUTLINE (S19 §6.3, binding 9): a signed distance field of the tip's own
+// silhouette, in the TIP'S frame, built by core::brush::buildTipSdf and re-uploaded only when the
+// tip's raster or the dab's ratio changes -- never on a mouse move, a zoom or a resize. Its own
+// binding rather than a tail on the reticle's (4): that struct ends in a flexible array member, and
+// nothing can follow `lassoPts[]`.
+//
+// sdfActive == 0 means the analytic ellipse (`tipDist` below), which is what a NULL tip and a plain
+// round generator get -- bit for bit what they got before any of this existed.
+//
+// The grid is the tip's bounding box padded by `sdfPadCells` cells of background on every side, so
+// cell (i, j) samples the point (i - sdfPadCells + 0.5 - sdfBox.x/2, ...) BUILD px from the tip's
+// centre. `sdfBox` is the tip's true (unpadded, CONTINUOUS) extent in those same build px -- it is
+// NOT (sdfW, sdfH) minus the pad, because a bitmap tip's box lands on a whole cell about never.
+// Distances are normalized by sdfBox.x, negative inside.
+layout(std430, binding = 9) readonly buffer TipSdf {
+    uint sdfActive;
+    uint sdfW;
+    uint sdfH;
+    uint sdfPadCells;
+    vec2 sdfBox;
+    vec2 sdfPad2;
+    float sdfData[];
+};
+
+// The eyedropper's loupe (S24, binding 10): a circular magnifier centred on the cursor. It samples
+// uDoc (the on-screen composite) at high magnification with nearest-neighbour crisp pixels + a pixel
+// grid -- distinct from the S19-c View pixel grid (that fades in on the whole canvas at ~1000% zoom;
+// this one is the loupe's OWN grid, always on, at the loupe's own magnification). Its own binding,
+// like every other overlay family; a fixed 64-byte struct (no flexible array). loupeActive == 0 = off.
+layout(std430, binding = 10) readonly buffer Loupe {
+    uint loupeActive;     // 0 = the loupe is not shown this frame
+    float loupeRadius;    // the disk radius, screen (physical) px
+    float loupeMag;       // screen px per document texel inside the disk
+    float loupeReadout;   // 1 = there IS a resolved sample -> colour ring top arc + readout tile
+    vec2 loupeCenter;     // the disk centre, screen (physical) px (== the cursor)
+    vec2 loupeSampleDoc;  // the sampled texel's CENTRE (doc px): the loupe's centre cell
+    vec4 loupeSampleRgba; // the resolved sample colour (straight 0..1) -> the ring's TOP arc
+    vec4 loupePrevRgba;   // the swatch the pick would replace (fg, or bg under Alt/right) -> BOTTOM arc
+};
+
+// The S33 blur-adjustment centre gizmo (binding 11). dofKind picks the shape: 0 = the DoF focus
+// band -- five parallel guide lines (the focus line, the two band edges, the two feather edges)
+// plus a square centre (move) knob and a square rotate knob riding the line; 1 = the Radial
+// crosshair -- a single target mark at dKnobs.xy (the other segment fields unused). All in screen
+// (physical) px; each band guide is pushed as a segment long enough to cross any viewport so it
+// reads as an infinite line. dofHot is the hovered/dragged handle id + 1 (0 = none; band ids:
+// 0 centre knob, 1 rotate knob, 2/3 band edges, 4/5 feather edges; crosshair: 0 = the mark) --
+// that element brightens as the hover affordance. Inactive when dofActive == 0. A fixed-size
+// struct, the keep-chips' sibling.
+layout(std430, binding = 11) readonly buffer DofGizmo {
+    uint dofActive;
+    uint dofHot;
+    uint dofKind;   // 0 = focus band, 1 = radial crosshair
+    float dofPad1;
+    vec4 dLine;     // focus line  A.xy, B.xy
+    vec4 dBandA;    // band edge through +normal
+    vec4 dBandB;    // band edge through -normal
+    vec4 dFeatherA; // feather edge +
+    vec4 dFeatherB; // feather edge -
+    vec4 dKnobs;    // centre knob xy, rotate knob xy
+};
+
+// The canvas FPS readout (binding 12, Help -> Show Canvas FPS). A DEBUG-ONLY diagnostic drawn as its
+// own overlay family, on top of everything, in the top-right corner. fpsActive == 0 = hidden. The
+// host formats the rate into a short glyph string ("60 FPS") on the CPU; each glyph is an index into
+// the tiny 5x7 bitmap font below (0..9 digits, 10 space, 11 'F', 12 'P', 13 'S'). fpsPx is the
+// integer scale (physical px per font cell-pixel), so the badge tracks the HiDPI content scale.
+// The whole binding-12 channel compiles out of release builds -- glslc is passed -DMOSAIC_DEBUG only
+// for Debug (EmbedShaders.cmake), matching the C++ descriptor set's own MOSAIC_DEBUG guard so the
+// two never drift apart. Release SPIR-V therefore declares no binding 12.
+#ifdef MOSAIC_DEBUG
+layout(std430, binding = 12) readonly buffer FpsReadout {
+    uint fpsActive;
+    uint fpsCount;    // number of glyphs
+    uint fpsPx;       // physical px per font-pixel (integer scale)
+    uint fpsPad;
+    uint fpsGlyphs[16];
+};
+#endif
+
+// Rulers/guides (binding 13): document guides pulled off the rulers, the guide being dragged out,
+// and the Move tool's dynamic smart-alignment guides. A flat list of coloured straight line segments
+// in screen (physical) px; each segment carries its own RGB so guides (cyan) and smart guides
+// (magenta) share the one channel. gLineCount == 0 = nothing this frame. Its own binding like every
+// overlay family; a flexible array, so nothing can follow it. Present in every build (unlike the
+// debug-only FPS channel above), so it sits at binding 13, not 12.
+layout(std430, binding = 13) readonly buffer GuideLines {
+    uint gLineCount;
+    uint gLinePad0;
+    uint gLinePad1;
+    uint gLinePad2;
+    vec4 gLineData[]; // segment i: [2i] = (A.xy, B.xy) screen px, [2i+1] = (rgb, _) the line colour
+};
+
+layout(push_constant) uniform Push {
+    // .rgb = canvas background (straight, 0..1); .a repurposed as the pixel-grid toggle (S19-c) --
+    // the push block is already at the 128-byte guaranteed budget, so a free lane is borrowed
+    // rather than grown. The output alpha is forced to 1.0 at store time, so .a carries no colour.
+    vec4 bgColor; // vec4 first for 16-byte alignment
+    // Inverse view transform, screen(physical px) -> doc(px):
+    //   doc = (r0.x*x + r0.y*y + t.x,  r1.x*x + r1.y*y + t.y)
+    vec2 invR0;
+    vec2 invR1;
+    vec2 invT;
+    vec2 docSize;       // document size, px
+    vec2 outSize;       // view-image size, px (== swapchain extent)
+    vec2 overlayCenter; // overlay text-tile content size (physical px): HUD or dial readout
+    vec4 overlay;       // x: dial active (0/1), y: dial radius px, z: dial angle rad, w: HUD active
+    vec4 ants;          // x: ants (0 off, 1 diagonal crawl, 2 circulate), y: dash phase px, z: mode
+                        // (0 none, 1 Move handles, 2 crop rect, 3 crop + guides, 4 sample area,
+                        // 5 line gizmo, 6 rotate-hotspot dots alone, 7 the Image Size resample
+                        // preview = the crop picture + a ghost outline of the CURRENT document
+                        // frame, 8 an Image-menu preview whose rect is DERIVED = the crop picture
+                        // with NO handles), w: handle half px
+    vec4 hc01;          // controls quad corners TL,TR (physical px; S15 Move / S16 crop)
+    vec4 hc23;          // corners BR,BL
+}
+pc;
+
+// ---- HiDPI: physical px per logical px ------------------------------------------------------
+// Every length in this file -- stroke widths, dash periods, glyph sizes, cull margins -- was written
+// as a PHYSICAL pixel count, which means each one halves in angular size on a 2x display: the
+// marching ants, the lasso, the reticle and the guides all came out hairline-thin on a Retina Mac
+// (and on Linux HiDPI, where the same bug was simply less looked at).
+//
+// The rule this file now follows, uniformly:
+//   * a distance that feeds a coverage PROFILE is divided by uiScale() -- so the profile keeps the
+//     exact shape it was tuned with, just magnified. Its antialiasing ramp scales with it, which is
+//     deliberate: what a 2x display should show is precisely today's look, twice the size.
+//   * a cull margin, bbox pad, dash period, radius offset or glyph size is MULTIPLIED by uiScale().
+// Element GEOMETRY needs neither -- the renderer already scales positions, radii and the handle
+// half-size by the content scale on its way into the buffers.
+//
+// The scale itself rides pc.ants.w, which the canvas writes as exactly 4 * contentScale every frame
+// whether or not the transform handles are up, so it doubles as the scale lane. It is read that way
+// rather than given a field of its own because the push block has been at its 128-byte guaranteed
+// budget since S15.
+float uiScale() { return max(pc.ants.w, 4.0) * 0.25; }
+
+// ---- The Channels tab's on-canvas channel isolation (S60-a item 10) --------------------------
+// The Channels tab's eyes isolate / hide colour channels ON THE DISPLAY. That remap used to be a
+// CPU pass over a whole COPY of the composite on its way to the canvas texture, which is precisely
+// what made the device-resident compositor ineligible the moment an eye was closed: a host pass in
+// the middle of a device-resident lane, plus a full-canvas upload every frame. It is a handful of
+// instructions on pixels that are already here, so it belongs in this pass -- and because it is
+// applied when the document is SAMPLED, it costs nothing at all while the view is normal, applies
+// identically whether the resident resolve or a host upload wrote the texture, and leaves the
+// canvas texture holding the TRUE composite (the histogram, the cursor colour readout and Smart
+// Resize all key on that; an isolation baked into the pixels would corrupt every one of them).
+//
+// `channelView` (the lasso/reticle header's last std430 pad) encodes ui::ChannelViewMask:
+// kChannelViewNormal == 0 for the full-colour composite, else kChannelViewActive (bit 4) OR'd with
+// one bit per SHOWN channel -- R = 1, G = 2, B = 4, A = 8. Zero is deliberately the identity so the
+// early-out below doubles as the "nobody has pushed a view yet" path. The marker bit is what keeps
+// "every colour channel hidden" (a legal, black, view) distinct from normal; nothing here has to
+// TEST it -- non-zero already means active -- but it is named so both ends of the ABI read alike.
+//
+// The CPU expression this reproduces EXACTLY -- ui::applyChannelViewMask, over straight-alpha
+// RGBA8, and the specification here, not an approximation of one:
+//
+//     if (mask.alpha)  px[0..2] = px[3];  px[3] = 255;            // the exclusive alpha view
+//     else if (nOn == 1) { v = mask.red ? px[0] : (mask.green ? px[1] : px[2]);
+//                          px[0] = px[1] = px[2] = v; }           // alpha untouched
+//     else { if (!mask.red) px[0] = 0; if (!mask.green) px[1] = 0; if (!mask.blue) px[2] = 0; }
+//
+// Every one of those three remaps is per-channel and LINEAR (copy / select / zero), so remapping
+// AFTER the bilinear fetch gives the same value as remapping the texels the fetch reads -- which is
+// what makes this a move rather than a change: minified (bilinear) content lands on the same
+// numbers the CPU pass produced, not merely similar ones.
+//
+// Must match ui::kChannelView* in src/ui/channels_panel.hpp, which owns this encoding.
+const uint kChannelViewNormal = 0x00u;
+const uint kChannelViewRed = 0x01u;
+const uint kChannelViewGreen = 0x02u;
+const uint kChannelViewBlue = 0x04u;
+const uint kChannelViewAlpha = 0x08u;
+const uint kChannelViewActive = 0x10u;
+
+vec4 applyChannelView(vec4 d) {
+    if (channelView == kChannelViewNormal)
+        return d; // NORMAL: byte-identical to a build with none of this in it
+    if ((channelView & kChannelViewAlpha) != 0u)
+        return vec4(d.a, d.a, d.a, 1.0); // the alpha view: coverage as OPAQUE grayscale
+    bool r = (channelView & kChannelViewRed) != 0u;
+    bool g = (channelView & kChannelViewGreen) != 0u;
+    bool b = (channelView & kChannelViewBlue) != 0u;
+    if (int(r) + int(g) + int(b) == 1) {
+        // A single colour channel isolated: its value in all three, KEEPING the pixel's own alpha
+        // so transparent regions still read through the checkerboard.
+        float v = r ? d.r : (g ? d.g : d.b);
+        return vec4(v, v, v, d.a);
+    }
+    // Two channels shown (or the degenerate none): keep the shown ones, zero the hidden ones.
+    return vec4(r ? d.r : 0.0, g ? d.g : 0.0, b ? d.b : 0.0, d.a);
+}
+
+// EVERY read of the document composite goes through here. That is not tidiness: the CPU pass
+// rewrote the pixels the texture was made of, so it also reached the overlay-line content key
+// (contentRgb) and the eyedropper's magnified loupe. Routing all three uDoc taps through one
+// function is what keeps those at parity instead of quietly reverting them to unisolated colour.
+vec4 docTexel(vec2 uv) { return applyChannelView(texture(uDoc, uv)); }
+
+// Marching-ants dash geometry, in LOGICAL px. The phase pushed by the canvas is pre-wrapped to this
+// period (render::kAntsDashPeriodPx must match), and the dash coordinate is divided by uiScale()
+// before it is wrapped -- so the phase stays in the same units the host wrapped it in.
+const float ANTS_PERIOD = 8.0;
+
+// Feathered-selection indicator, style A ("Bracketing ant pair"): the two coverage contours the ants
+// ride instead of the single 50% marquee, chosen to fence the soft band so the gap between the two
+// ant lines reads as the feather WIDTH. On a hard/binary mask all three (0.15, 0.5, 0.85) contours
+// collapse to the same texel boundary, so A shows a single ant there -- byte-identical to today.
+const float kFeatherLoCoverage = 0.15;
+const float kFeatherHiCoverage = 0.85;
+
+// The UI accent (matches the default theme accent #5E7EFF). Used for the rotation-dial needle.
+const vec3 kAccent = vec3(0.369, 0.494, 1.0);
+
+// The crop/transform box colour: a FIXED conventional "selection blue" (#2F80ED), deliberately NOT the
+// theme accent -- a user's accent could be any garish colour, and the box must always look right. A
+// single hue reads on BOTH light and dark content (white vanishes on light, black on dark), and a
+// single colour anti-aliases cleanly -- no white-on-black two-tone, which froze into a "barber pole" on
+// a rotated edge (user 2026-06-14: drop the two-tone; use the colour everyone uses for selection boxes).
+const vec3 kBoxColor = vec3(0.184, 0.502, 0.929);
+
+// S16-f canvas expansion: the part of the crop box OUTSIDE the canvas (area an Apply will ADD)
+// wears green — the same green as the inpaint sample area and the keep-chips, the app's one
+// "this region is being worked with" hue. The box outline switches to it per pixel, and the
+// added area itself gets a faint wash + thick 45° hatching (screen-space pitch, so it reads at
+// any zoom, and rides the view like the rest of the chrome).
+const vec3 kExpandGreen = vec3(0.25, 0.85, 0.40);
+const float kHatchPeriod = 14.0; // px between stripe centrelines (45°)
+const float kHatchHalf = 2.5;    // half stripe width (px): thick, unmistakable
+
+// Spell-check squiggle: a red wavy underline under a misspelled span (deferred §2). The wave is drawn
+// in SCREEN px (fixed thickness like the caret, so it reads at any zoom -- the editor convention).
+const vec3 kSpellRed = vec3(0.898, 0.122, 0.122);
+const float kSquiggleAmp = 1.15;  // wave amplitude (px above/below the underline)
+const float kSquiggleFreq = 0.9;  // radians per px (period ~= 2*pi/0.9 ~ 7 px)
+const float kSquiggleHalf = 0.85; // half stroke width (px)
+
+// Composite the rasterized overlay text tile (uOverlayText) so its top-left lands at `topLeft`
+// (screen px, floored to the pixel grid). The tile's used sub-rect is pc.overlayCenter (content px)
+// at the texture's top-left; transparent padding outside it contributes nothing. The text is drawn
+// with the real UI font into this texture (S16 rework -- the old 5x7 bitmap font is gone).
+vec3 compositeOverlayTile(vec2 p, vec3 col, vec2 topLeft) {
+    vec2 content = pc.overlayCenter;
+    vec2 rel = p - topLeft;
+    if (any(lessThan(rel, vec2(0.0))) || any(greaterThanEqual(rel, content)))
+        return col;
+    vec2 cap = vec2(textureSize(uOverlayText, 0));
+    vec4 t = texture(uOverlayText, rel / cap);
+    return mix(col, t.rgb, t.a);
+}
+
+// Distance from p to the segment ab. Defined above `overlay` so the dial's tick marks can reuse it.
+float segDist(vec2 p, vec2 a, vec2 b) {
+    vec2 ab = b - a;
+    float t = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0);
+    return length(p - (a + ab * t));
+}
+
+// The rotation dial, composited onto `base` at screen pixel `p`. Its centre is the viewport centre
+// (overlayCenter now carries the text-tile size, so it is recomputed here).
+vec3 overlay(vec2 p, vec3 base) {
+    const vec3 ink = vec3(0.93);
+    const vec3 accent = kAccent;
+    vec2 ctr = pc.outSize * 0.5;
+    float R = pc.overlay.y;
+    float ang = pc.overlay.z;
+    vec3 col = base;
+
+    vec2 rel = p - ctr;
+    float d = length(rel);
+    float S = uiScale();
+
+    // Dim disk behind the dial for legibility.
+    col = mix(col, col * 0.5, smoothstep(R + 16.0 * S, R + 10.0 * S, d) * 0.65);
+
+    // Ring.
+    col = mix(col, ink, smoothstep(2.0, 1.0, abs(d - R) / S));
+
+    // Tick marks every 15 degrees, drawn as real radial line SEGMENTS (segDist) so every tick has the
+    // same length, width and AA at any angle. The earlier constant-angular-width wedge elongated the
+    // diagonal ticks into tapered "needles" while the axis-aligned ones stayed short stubs, which read
+    // as inconsistent (user 2026-06-14).
+    float tickD = 1e9;
+    float ri = R - 9.0 * S, ro = R - 1.5 * S; // inner/outer tick radius, just inside the ring
+    for (int i = 0; i < 24; ++i) {
+        vec2 td = vec2(cos(radians(float(i) * 15.0)), sin(radians(float(i) * 15.0)));
+        tickD = min(tickD, segDist(p, ctr + td * ri, ctr + td * ro));
+    }
+    col = mix(col, ink, clamp(1.5 - tickD / S, 0.0, 1.0)); // thicker (~1.3px), crisp at any angle
+
+    // Needle: shows where the document's "up" now points. For Affine2D::rotation(ang) in
+    // y-down screen space, up (0,-1) maps to (sin(ang), -cos(ang)).
+    vec2 dir = vec2(sin(ang), -cos(ang));
+    float t = clamp(dot(rel, dir), 0.0, R);
+    float nd = distance(p, ctr + dir * t);
+    col = mix(col, accent, smoothstep(2.5, 1.3, nd / S));
+
+    // Hub + numeric readout (drawn last so it stays legible over the needle). The degree text is a
+    // rasterized tile, centred just below the hub.
+    col = mix(col, accent, smoothstep(4.0, 3.0, d / S));
+    vec2 tileTL = floor(ctr + vec2(0.0, R * 0.55) - pc.overlayCenter * 0.5);
+    col = compositeOverlayTile(p, col, tileTL);
+    return col;
+}
+
+// Is the document point `doc` selected? Outside the document is never selected, so a selection
+// touching the document edge still gets ants along it. NEAREST sampling (snap to the texel CENTRE)
+// makes membership per-document-pixel, so the marching ants trace EXACT pixel boundaries: sharp
+// 90 deg corners on a (binary) rectangle marquee and a crisp pixel staircase on AA ellipse/lasso
+// masks -- the Photoshop convention (ants ride the "selected >= 50%" pixel boundary; the mask stays
+// AA for fills). Bilinear sampling instead rounded corners and waved the contour along the coverage
+// ramp, which read as not-pixel-aligned (user 2026-06-17). Reuses the bilinear sampler -- a sample
+// at a texel centre collapses to that texel's value, same trick the crisp-pixel doc path uses.
+bool maskSelected(vec2 doc) {
+    if (any(lessThan(doc, vec2(0.0))) || any(greaterThanEqual(doc, pc.docSize)))
+        return false;
+    return texture(uMask, (floor(doc) + 0.5) / pc.docSize).r >= 0.5;
+}
+
+// Raw selection coverage at document point `doc` (the R8 mask value, 0..1); outside the document
+// reads 0. Distinct from maskSelected() -- which thresholds to a bool -- because the circulating
+// tangent (below) needs the SMOOTH coverage: the binary neighbour taps give only 8 directions, which
+// shimmers, while the R8 central difference is a smooth gradient (docs/research-select-brush.md §5).
+float maskCoverage(vec2 doc) {
+    if (any(lessThan(doc, vec2(0.0))) || any(greaterThanEqual(doc, pc.docSize)))
+        return 0.0;
+    return texture(uMask, (floor(doc) + 0.5) / pc.docSize).r;
+}
+
+// Membership at an arbitrary coverage contour `thr` (0..1): the raw R8 ramp thresholded, with the
+// same texel-centre snap + outside-the-doc == 0 that maskCoverage() already applies (maskSelected()
+// is exactly coveredAt(doc, 0.5)). The bracketing feather ants (style A) trace the 0.15 and 0.85
+// contours through this.
+bool coveredAt(vec2 doc, float thr) {
+    return maskCoverage(doc) >= thr;
+}
+
+// Is doc on the marching-ant edge for coverage threshold `thr`? -- covered at that level with an
+// uncovered 4-neighbour, neighbours taken one SCREEN px away (stepX/stepY are the doc image of one
+// screen px), so the outline is one screen px wide at any zoom/rotation, exactly like the 50% ant.
+bool antEdgeAt(vec2 doc, vec2 stepX, vec2 stepY, float thr) {
+    if (!coveredAt(doc, thr))
+        return false;
+    return !coveredAt(doc + stepX, thr) || !coveredAt(doc - stepX, thr) ||
+           !coveredAt(doc + stepY, thr) || !coveredAt(doc - stepY, thr);
+}
+
+// The marching ants, composited onto `base` at screen pixel `s` (whose document point is `doc`):
+// a selected pixel with an unselected 4-neighbour is on the marquee. Neighbours are taken in
+// SCREEN space and mapped through the (linear) inverse view transform, so the outline is one
+// screen pixel wide regardless of zoom/rotation; the inverse's columns are exactly the doc-space
+// steps for one screen px in x and y.
+//
+// Feathered-selection indicator (Settings->Appearance, `featherStyle`): style F (== 1) and every
+// hard-edged selection keep the single crisp 50%-coverage marquee. Style A (== 0, the feather
+// DEFAULT) marches TWO contours instead -- ~15% and ~85% coverage -- that bracket the feather band,
+// so the gap between the two ant lines is the feather width; they coincide (one ant) on a hard edge.
+vec3 ants(vec2 s, vec2 doc, vec3 base) {
+    // The ant line has no width CONSTANT to scale: it is however wide the neighbour test makes it,
+    // and the neighbours are one step away in doc units. Stepping by one PHYSICAL px gives a
+    // one-physical-px marquee, which on a 2x display is half the angular width it should be -- and
+    // a hard black/white line that thin does not read as thin, it reads as FADED, because the eye
+    // integrates it with the content around it. Stepping by one LOGICAL px restores both.
+    const float antScale = uiScale();
+    vec2 stepX = vec2(pc.invR0.x, pc.invR1.x) * antScale;
+    vec2 stepY = vec2(pc.invR0.y, pc.invR1.y) * antScale;
+    bool edge;
+    if (featherStyle == 0u)
+        edge = antEdgeAt(doc, stepX, stepY, kFeatherLoCoverage) ||
+               antEdgeAt(doc, stepX, stepY, kFeatherHiCoverage);
+    else
+        edge = antEdgeAt(doc, stepX, stepY, 0.5);
+    if (!edge)
+        return base;
+    // The dash coordinate. DEFAULT (pc.ants.x == 1): the screen-space x+y diagonal crawl, unchanged.
+    // antsCirculate (pc.ants.x == 2, the hidden Settings key, §5): dash along the local boundary
+    // TANGENT so the dashes circulate around the contour instead of drifting toward one corner. The
+    // tangent is the 90-deg rotation of a RAW-coverage central difference at the same doc +/- step
+    // offsets -- and since stepX/stepY are the doc image of one SCREEN px, that difference is already
+    // a screen-space gradient, so the dash spacing stays screen-uniform. The edge test above chooses
+    // the contour(s); circulate only changes the dash DIRECTION, whichever contour a pixel sits on.
+    float dashCoord = s.x + s.y;
+    if (pc.ants.x > 1.5) {
+        vec2 g = vec2(maskCoverage(doc + stepX) - maskCoverage(doc - stepX),
+                      maskCoverage(doc + stepY) - maskCoverage(doc - stepY));
+        vec2 tangent = vec2(-g.y, g.x);
+        float len = length(tangent);
+        if (len > 1e-4) // a lone selected pixel has no gradient: keep the diagonal there
+            dashCoord = dot(s, tangent / len);
+    }
+    float dash = mod(dashCoord / uiScale() + pc.ants.y, ANTS_PERIOD);
+    return dash < ANTS_PERIOD * 0.5 ? vec3(0.0) : vec3(1.0);
+}
+
+// Signed distance from p to the (convex) controls quad, in screen px: <0 inside, >0 outside. The
+// crop rect winds TL,TR,BR,BL (clockwise in y-down screen space, orientation-preserving view), so
+// an inside point sits on the positive cross-product side of every edge and the perpendicular
+// distance to the nearest edge line is the signed distance. Used to anti-alias the crop shield
+// boundary, which staircased as a hard inside/outside test at non-axis view angles (S16 feedback).
+float controlsQuadDist(vec2 p) {
+    vec2 q[4] = vec2[4](pc.hc01.xy, pc.hc01.zw, pc.hc23.xy, pc.hc23.zw);
+    float inner = 1e9; // min over edges of the signed-inside (positive-inside) distance
+    for (int i = 0; i < 4; ++i) {
+        vec2 a = q[i];
+        vec2 b = q[(i + 1) & 3];
+        float len = max(length(b - a), 1e-6);
+        float c = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+        inner = min(inner, c / len);
+    }
+    return -inner; // flip so it reads as a standard SDF (negative inside)
+}
+
+// The Move tool's transform controls (S15): the selected layer's quad outline plus 8 square
+// handles (corners + edge midpoints), drawn two-tone -- a white core over a black halo -- so
+// they read on any canvas content. Like the dial, FLTK can't draw over the Vulkan surface,
+// so the present pass composites them.
+// One coverage sample of the rect outline at screen point sp, composited over `base`: a single-colour
+// selection-blue line, ~2px wide. No white-on-black two-tone -- a single hue reads on any content and
+// AAs cleanly. edge is in screen px (segDist), so the coverage ramp is a fixed pixel width.
+vec3 outlineSample(vec2 sp, vec3 base, vec3 lineCol, vec2 c0, vec2 c1, vec2 c2, vec2 c3) {
+    float e = min(min(segDist(sp, c0, c1), segDist(sp, c1, c2)),
+                  min(segDist(sp, c2, c3), segDist(sp, c3, c0)));
+    return mix(base, lineCol, clamp(1.5 - e / uiScale(), 0.0, 1.0)); // ~2px single-colour line
+}
+
+// The faint rotate-hotspot dots (user 2026-07-14): one per corner, sitting mid-way through the
+// invisible rotate band -- just past the corner handle, along the outward diagonal -- white core
+// over a black halo like the handles, at the canvas-pushed alpha (dotAlphaBits; 0 = off, ceiling
+// ~0.25). The canvas fades them in with the quad's wackiness (transformQuadWackiness): a plain
+// rectangle shows nothing, a sheared/foreshortened box -- or 3D text whose rotate quad floats off
+// the visible letters -- earns the hint. Mode 1 draws them WITH the Move/Shape handles; mode 6
+// draws them ALONE (the Type box has its own chrome and only needs the hint).
+vec3 rotateDots(vec2 p, vec3 base) {
+    float a = uintBitsToFloat(dotAlphaBits);
+    if (a <= 0.003)
+        return base;
+    vec2 c[4] = vec2[4](pc.hc01.xy, pc.hc01.zw, pc.hc23.xy, pc.hc23.zw);
+    vec2 ctr = 0.25 * (c[0] + c[1] + c[2] + c[3]);
+    float scale = max(pc.ants.w, 2.0) / 4.0; // ants.w carries 4 * content scale
+    // Mid-band: the rotate ring spans ~7..18 logical px from the corner (kHandleHitPx ..
+    // kRotateBandPx), so the dot sits at 12.5 -- inside the very hotspot it advertises.
+    float off = 12.5 * scale;
+    float r = 3.0 * scale;
+    vec3 col = base;
+    for (int i = 0; i < 4; ++i) {
+        vec2 dir = c[i] - ctr;
+        float dl = length(dir);
+        if (dl < 1e-3)
+            continue; // a collapsed quad has no outward diagonal to sit on
+        vec2 dc = c[i] + dir * (off / dl);
+        float d = length(p - dc);
+        float halo = 1.0 - smoothstep(r + 1.5 * scale - 0.8, r + 1.5 * scale + 0.8, d);
+        float core = 1.0 - smoothstep(r - 0.8, r + 0.8, d);
+        col = mix(col, vec3(0.0), a * halo); // the halo keeps the dot readable on light content
+        col = mix(col, vec3(1.0), a * core);
+    }
+    return col;
+}
+
+// `expandTint` (crop only): outline pixels whose DOCUMENT coords fall outside the canvas turn
+// kExpandGreen — exactly the segments that stage an expansion, not whole sides (S16-f).
+// `handles` draws the 8 square knobs. False ONLY for controls mode 8 — an Image-menu preview whose
+// rect is DERIVED from a parameter (Rotate Arbitrary's bounding box) rather than authored by a
+// drag. The outline still frames the staged result; the knobs would be eight things that look
+// grabbable and are not, which is exactly the report this parameter exists to answer.
+vec3 transformHandles(vec2 p, vec3 base, bool expandTint, vec2 doc, bool handles) {
+    vec2 c0 = pc.hc01.xy;
+    vec2 c1 = pc.hc01.zw;
+    vec2 c2 = pc.hc23.xy;
+    vec2 c3 = pc.hc23.zw;
+    vec3 col = base;
+    // Rect outline = a thin single-colour accent line (see outlineSample: dropping the white-on-black
+    // two-tone is what killed the rotated-edge "barber pole" -- user 2026-06-14). SUPERSAMPLE it (3x3
+    // sub-samples -> true area coverage) so the thin line stays crisp when straight AND clean at any
+    // angle, with no along-the-line intensity ripple. Only near the outline (skip the 9x cost
+    // everywhere else); the square handles are axis-aligned and never staircase, so they stay single-sampled.
+    float e0 = min(min(segDist(p, c0, c1), segDist(p, c1, c2)),
+                   min(segDist(p, c2, c3), segDist(p, c3, c0)));
+    if (e0 < 3.5 * uiScale()) {
+        // Per PIXEL, not per sub-sample: the sub-pixel doc-coord spread is invisible, and one
+        // test keeps the 9x supersample loop unchanged. The margin (outline reach: ~2px line +
+        // AA, in doc units) keeps a box sitting exactly ON the canvas edge box-blue — without
+        // it the line's own outer half tested outside and the default full-canvas rect fringed
+        // green (user 2026-07-02).
+        float m = 3.0 * uiScale() * length(vec2(pc.invR0.x, pc.invR1.x));
+        bool outCanvas = expandTint && (any(lessThan(doc, vec2(-m))) ||
+                                        any(greaterThan(doc, pc.docSize + vec2(m))));
+        vec3 lineCol = outCanvas ? kExpandGreen : kBoxColor;
+        const int N = 3;
+        vec3 acc = vec3(0.0);
+        for (int sy = 0; sy < N; ++sy)
+            for (int sx = 0; sx < N; ++sx) {
+                vec2 sp = p + (vec2(float(sx), float(sy)) + 0.5) / float(N) - 0.5;
+                acc += outlineSample(sp, base, lineCol, c0, c1, c2, c3);
+            }
+        col = acc / float(N * N);
+    }
+    if (handles) {
+        vec2 hs[8] = vec2[8](c0, c1, c2, c3, (c0 + c1) * 0.5, (c1 + c2) * 0.5, (c2 + c3) * 0.5,
+                             (c3 + c0) * 0.5);
+        float H = max(pc.ants.w, 2.0); // handle half-size (the canvas scales it for HiDPI)
+        for (int i = 0; i < 8; ++i) {
+            vec2 d = abs(p - hs[i]);
+            float cheb = max(d.x, d.y);
+            col = mix(col, vec3(0.0), smoothstep(H + 1.0, H + 0.1, cheb)); // border
+            col = mix(col, vec3(1.0), smoothstep(H - 0.6, H - 1.4, cheb)); // fill
+        }
+    }
+    return rotateDots(p, col); // the faint corner hints, when the canvas pushed an alpha
+}
+
+// The Move tool's transform ANCHOR / reference point (S15+): the pivot that rotation AND scaling turn
+// around, which the user drags off the box centre (Photoshop-style). A crosshair-in-a-circle at
+// `anchorPos` (physical px), drawn two-tone -- a white ring + cross over a black halo, with a
+// box-blue centre pip -- so it reads on any content and stays distinct from the white square handles.
+// Inactive when anchorPos.x < -1e8 (the canvas sentinel), so the caller gates on that.
+vec3 anchorGlyph(vec2 p, vec3 base) {
+    vec2 d = p - anchorPos;
+    float r = length(d);
+    float sc = max(pc.ants.w, 2.0) / 4.0; // ants.w carries 4 * content scale (HiDPI), like the dots
+    float ringR = 5.0 * sc;               // circle radius
+    float ringW = 0.9 * sc;               // ring band half-thickness
+    float armLen = 8.0 * sc;              // crosshair reaches just past the ring
+    float armW = 0.9 * sc;                // crosshair arm half-thickness
+    // Glyph SDF (screen px, negative inside): the ring band unioned with the two crosshair bars.
+    float ring = abs(r - ringR) - ringW;
+    float barH = max(abs(d.x) - armLen, abs(d.y) - armW);
+    float barV = max(abs(d.y) - armLen, abs(d.x) - armW);
+    float g = min(ring, min(barH, barV));
+    float halo = 1.0 - smoothstep(1.3 * sc - 0.7, 1.3 * sc + 0.7, g); // black casing (glyph dilated)
+    float core = 1.0 - smoothstep(-0.7, 0.7, g);                      // white mark
+    float pip = 1.0 - smoothstep(1.5 * sc - 0.7, 1.5 * sc + 0.7, r);  // box-blue centre dot
+    vec3 col = base;
+    col = mix(col, vec3(0.0), halo);
+    col = mix(col, vec3(1.0), core);
+    col = mix(col, kBoxColor, pip);
+    return col;
+}
+
+// The Line shape's gizmo (S26): NOT a bounding box but a single connector line between the two
+// endpoints, a SQUARE handle at each end, and a ROUND handle in the middle (for bending). Points are
+// pushed via hc01 = {a, b} and hc23.xy = the mid (bend) handle, all screen px.
+vec3 lineGizmo(vec2 p, vec3 base) {
+    vec2 a = pc.hc01.xy;
+    vec2 b = pc.hc01.zw;
+    vec2 m = pc.hc23.xy; // the round bend handle (chord midpoint + bend)
+    vec3 col = base;
+    float S = uiScale();
+    float e = segDist(p, a, b); // the connector line, supersampled like the box outline
+    if (e < 3.5 * S) {
+        const int N = 3;
+        vec3 acc = vec3(0.0);
+        for (int sy = 0; sy < N; ++sy)
+            for (int sx = 0; sx < N; ++sx) {
+                vec2 sp = p + (vec2(float(sx), float(sy)) + 0.5) / float(N) - 0.5;
+                acc += mix(base, kBoxColor, clamp(1.5 - segDist(sp, a, b) / S, 0.0, 1.0));
+            }
+        col = acc / float(N * N);
+    }
+    float H = max(pc.ants.w, 2.0);
+    vec2 ends[2] = vec2[2](a, b); // SQUARE handles at the ends (Chebyshev distance)
+    for (int i = 0; i < 2; ++i) {
+        float cheb = max(abs(p.x - ends[i].x), abs(p.y - ends[i].y));
+        col = mix(col, vec3(0.0), smoothstep(H + 1.0, H + 0.1, cheb));
+        col = mix(col, vec3(1.0), smoothstep(H - 0.6, H - 1.4, cheb));
+    }
+    float rd = length(p - m); // ROUND handle in the middle (Euclidean distance)
+    col = mix(col, vec3(0.0), smoothstep(H + 1.0, H + 0.1, rd));
+    col = mix(col, vec3(1.0), smoothstep(H - 0.6, H - 1.4, rd));
+    // A second ROUND handle: the gradient's elliptical minor-axis edge (S22). It rides the spare
+    // corner slot; every other gizmo repeats the midpoint there, so an identical point means "none".
+    vec2 m2 = pc.hc23.zw;
+    if (distance(m2, m) > 0.5) {
+        float rd2 = length(p - m2);
+        col = mix(col, vec3(0.0), smoothstep(H + 1.0, H + 0.1, rd2));
+        col = mix(col, vec3(1.0), smoothstep(H - 0.6, H - 1.4, rd2));
+    }
+    return col;
+}
+
+// Min distance from sp to the 4 rule-of-thirds guide segments (each parametric between opposing edges
+// of the crop quad, so the grid rides + rotates with the rect -- S16-j).
+float guideDist(vec2 sp, vec2 c0, vec2 c1, vec2 c2, vec2 c3) {
+    float best = 1e9;
+    for (int i = 1; i <= 2; ++i) {
+        float t = float(i) / 3.0;
+        best = min(best, segDist(sp, mix(c0, c1, t), mix(c3, c2, t))); // vertical:   top -> bottom
+        best = min(best, segDist(sp, mix(c0, c3, t), mix(c1, c2, t))); // horizontal: left -> right
+    }
+    return best;
+}
+
+float chromeShadow(float d); // defined below: the fixed-colour chrome's tight always-on casing
+
+// The Crop tool's overlay (S16): the staged crop rect dims everything outside it (the crop
+// "shield"), shows rule-of-thirds guides inside, and wears the same outline + 8 handles as
+// the Move tool (one push lane serves both -- the tools are never active together).
+//
+// The Image menu's live preview rides this same picture (VulkanCanvas::setImageOpPreview), which
+// is not a shortcut: what a resize has to show -- the region that will be discarded, and the region
+// that will be added -- is what a crop box already draws. Its two flavours are the extra arguments:
+//   * `ghostDoc` (mode 7, Image Size) also draws the CURRENT document frame, because an Image Size
+//     stages the document at its NEW pixel size and a size change reads only against the frame it
+//     replaces;
+//   * `handles` false (mode 8) drops the 8 knobs for a preview whose rect is derived, not dragged.
+vec3 cropOverlay(vec2 p, vec2 doc, vec3 base, bool ghostDoc, bool handles) {
+    vec3 col = base;
+    // Feather the shield (dim the cropped-away area) around the rect edge so the dim/bright boundary
+    // doesn't staircase at a rotated view angle. The shield is high-contrast (0.45x), so a 1px
+    // feather still read as stepped -- widen to a ~3px smoothstep (S16 feedback, 2nd pass).
+    float S = uiScale();
+    float sd = controlsQuadDist(p); // <0 inside, >0 outside (screen px)
+    col = mix(col, col * 0.45, smoothstep(-1.5, 1.5, sd / S));
+    // S16-f expansion indicator: inside the crop box but OUTSIDE the canvas = area an Apply
+    // will ADD. A faint green wash + thick 45-degree hatching, feathered against the canvas rim
+    // over ~1.5 screen px so the stripes don't end in a hard staircase on a rotated view. The
+    // outline picks the same green over these pixels (transformHandles' expandTint).
+    if (sd < 0.0) {
+        vec2 od = max(-doc, doc - pc.docSize); // doc-unit distance outside the canvas rect
+        float outDist = length(max(od, vec2(0.0)));
+        float docPerPx = length(vec2(pc.invR0.x, pc.invR1.x));
+        // The feather starts HALF A PIXEL out (not at 0): the quad corners are snapped screen
+        // coords, so an exact-fit box can sit a sub-pixel outside the doc rect — a faint hatch
+        // sliver at the default full-canvas rect without the dead zone (user 2026-07-02).
+        float outCov = smoothstep(0.5 * max(docPerPx, 1e-6), 2.0 * max(docPerPx, 1e-6), outDist);
+        if (outCov > 0.0) {
+            col = mix(col, kExpandGreen, 0.10 * outCov); // the wash
+            float ph = mod((p.x + p.y) / S, kHatchPeriod); // 45° screen-space bands (logical px)
+            float band = min(ph, kHatchPeriod - ph);       // distance to the stripe centreline
+            float stripe = 1.0 - smoothstep(kHatchHalf - 0.5, kHatchHalf + 0.5, band);
+            col = mix(col, kExpandGreen, 0.40 * stripe * outCov);
+        }
+    }
+    // Inside, and mode EXACTLY 3 = the Crop tool with its guides on (mode 2 = off). The upper bound
+    // is load-bearing since the Image-menu preview modes (7, 8) joined this function: the
+    // rule-of-thirds grid is a COMPOSITIONAL crop affordance, and a resize preview must not sprout
+    // one just because its mode number happens to be larger.
+    if (sd < 0.0 && pc.ants.z > 2.5 && pc.ants.z < 3.5) {
+        // Rule-of-thirds guides (parametric between opposing quad edges so the grid rotates with the
+        // rect, S16-j): a thin SINGLE-colour white line -- the Photoshop/Lightroom convention. Any thin
+        // TWO-tone line (white core + dark shadow/halo) poles faintly at shallow angles -- inherent to
+        // true coverage, not a tuning miss -- so the grid drops the shadow and stays single-colour, like
+        // the box. The trade is the accepted norm: white is subtle on light content (the box is the
+        // boundary; the grid is a quiet compositional aid). SUPERSAMPLE (3x3) for clean AA at any angle
+        // with no along-the-line ripple; only near a guide (skip the 9x cost). (user 2026-06-14)
+        vec2 c0 = pc.hc01.xy, c1 = pc.hc01.zw, c2 = pc.hc23.xy, c3 = pc.hc23.zw; // TL,TR,BR,BL
+        if (guideDist(p, c0, c1, c2, c3) < 3.0 * S) {
+            const int N = 3;
+            float cov = 0.0;
+            for (int sy = 0; sy < N; ++sy)
+                for (int sx = 0; sx < N; ++sx) {
+                    vec2 sp = p + (vec2(float(sx), float(sy)) + 0.5) / float(N) - 0.5;
+                    cov += clamp(1.0 - guideDist(sp, c0, c1, c2, c3) / S, 0.0, 1.0);
+                }
+            col = mix(col, vec3(1.0), (cov / float(N * N)) * 0.85); // thin single-colour white guide
+        }
+    }
+    // The CURRENT document frame, as a quiet ghost outline (mode 7, the Image Size preview). That
+    // preview draws its box at the NEW pixel size, and a size CHANGE only reads against the frame
+    // it replaces -- which this pass otherwise never draws: the document's edge is a coverage
+    // feather against the backdrop (see main()), not a line. Derived per pixel in DOCUMENT space
+    // from pc.docSize, exactly like the expansion wash above, so it costs no push lane and rides
+    // pan / zoom / view rotation for free. Thin, single-colour white over the chrome family's
+    // tight always-on casing (chromeShadow) -- the rule-of-thirds guides' language, which is
+    // already this file's word for "a reference line, not something to grab".
+    if (ghostDoc) {
+        vec2 dd = abs(doc - pc.docSize * 0.5) - pc.docSize * 0.5; // doc-rect SDF, DOC units
+        float sdDoc = min(max(dd.x, dd.y), 0.0) + length(max(dd, vec2(0.0)));
+        float dpp = max(length(vec2(pc.invR0.x, pc.invR1.x)), 1e-6); // doc units per screen px
+        float eDoc = abs(sdDoc) / dpp;                              // -> screen px
+        if (eDoc < 4.0 * S) {
+            col = mix(col, vec3(0.0), chromeShadow(eDoc));
+            col = mix(col, vec3(1.0), clamp(1.25 - eDoc / S, 0.0, 1.0) * 0.85);
+        }
+    }
+    return transformHandles(p, col, /*expandTint=*/true, doc, handles);
+}
+
+// The inpaint sample-area preview (S39): a faint blue fill of the neighbourhood the offset
+// statistics analyse, shown while an inpaint runs. Reuses the controls quad (hc01/hc23); selected by
+// controls-mode 4 (ants.z). Just a translucent wash + a soft edge so it reads as "the area being
+// looked at" without obscuring the content.
+vec3 sampleAreaOverlay(vec2 p, vec3 base) {
+    const vec3 kSampleGreen = vec3(0.25, 0.85, 0.40);
+    float sd = controlsQuadDist(p); // <0 inside, >0 outside (screen px)
+    if (sd < 0.0)
+        return mix(base, kSampleGreen, 0.08); // ~8% wash inside the analysed region
+    float edge = 1.0 - smoothstep(0.0, 1.5, sd / uiScale());
+    return mix(base, kSampleGreen, 0.35 * edge); // a thin defining border
+}
+
+// The crop size HUD (S16): a rasterized "W × H px · w × h <unit>" tile (uOverlayText, content size
+// in overlayCenter) composited below the staged rect. The text is rendered with the real UI font on
+// the CPU; here we only place the tile. Anchor below the quad's SCREEN-lowest corner, centred on the
+// centroid X (hc01/hc23 are screen px, so a rotated view spins the quad -- the doc-space bottom edge
+// would mis-place it). Clamp into the viewport, parking at the TOP when the box is taller than the
+// view so the readout never scrolls off (S16 feedback).
+vec3 compositeHud(vec2 p, vec3 col) {
+    vec2 content = pc.overlayCenter;
+    // Move-tool transform HUD (overlay.w == 2): parked at a fixed bottom-right of the viewport,
+    // independent of the box, so the position/size/degrees readout sits in one stable spot (S15).
+    if (pc.overlay.w > 1.5) {
+        vec2 tl = pc.outSize - content - vec2(12.0);
+        return compositeOverlayTile(p, col, floor(max(tl, vec2(4.0))));
+    }
+    vec2 c0 = pc.hc01.xy, c1 = pc.hc01.zw, c2 = pc.hc23.xy, c3 = pc.hc23.zw;
+    float cx = (c0.x + c1.x + c2.x + c3.x) * 0.25;
+    float lowestY = max(max(c0.y, c1.y), max(c2.y, c3.y));
+    float top = lowestY + 10.0;
+    float bottomPark = pc.outSize.y - content.y - 6.0;
+    if (top > bottomPark)
+        top = bottomPark; // box taller than the view / anchor off the bottom -> park near the bottom
+    top = clamp(top, 4.0, max(4.0, bottomPark));
+    float left = clamp(cx - content.x * 0.5, 4.0, max(4.0, pc.outSize.x - content.x - 4.0));
+    return compositeOverlayTile(p, col, floor(vec2(left, top)));
+}
+
+// A vertex whose x is below this is a CONTOUR BREAK, not a point: the run ends there and the next
+// real vertex starts a fresh one. The lane draws a single open polyline, so without a break a
+// multi-contour path (a pen path with two subpaths, a boolean result) would be strung together by a
+// bogus bridging chord between one contour's end and the next one's start. The same
+// out-of-range-sentinel idiom this pass already uses for anchorPos and tBendHandle; no other writer
+// of this lane emits a coordinate anywhere near it. Must match ui::kPolylineBreakX.
+const float kPolyBreak = -1.0e8;
+
+// Min distance (screen px) from p to the OPEN lasso polyline (segments between consecutive verts).
+float lassoDist(vec2 p) {
+    float d = 1e9;
+    for (uint i = 0u; i + 1u < lassoCount; ++i) {
+        vec2 a = lassoPts[i];
+        vec2 b = lassoPts[i + 1u];
+        if (a.x <= kPolyBreak || b.x <= kPolyBreak)
+            continue; // a segment touching a break marker joins nothing
+        d = min(d, segDist(p, a, b));
+    }
+    return d;
+}
+
+// ---- Settings -> Appearance: the overlay-line styles (2026-07-07 design rounds) ----------------
+// `lineStyle` (SSBO binding 4) picks how the shared content-keyed line -- the in-flight lasso, the
+// brush reticle ring, and the Type frames/baseline riding the lasso channel -- colours itself.
+// 0 = Classic (the original hard per-pixel luminance key below). Styles 1 ("Shadowed") and
+// 2 ("Adaptive") both ride a PLATEAU core -- solid for |d| <= 0.625px, gone by 1.25px -- which
+// always saturates at least one full pixel row, so its peak brightness cannot pulse along a shallow
+// line (the "barber pole" a hard-edged two-tone casing shows; the PROFILE decides that, not the
+// supersampling). Their shadow is a gaussian RIM (sigma ~1.6px -- nothing hard-edged left to
+// alternate), and both key on a BLURRED 9-tap neighbourhood of the content rather than the exact
+// pixel, so busy texture cannot flicker the key and the key parks at genuine light/dark boundaries.
+// The FIXED-COLOUR chrome -- the box-blue caret, resize/bend handle squares, and the bend drop-tab
+// -- wears a TIGHT, ALWAYS-ON shadow instead (chromeShadow, sigma ~1.1px at half weight): a fixed
+// colour's failure mode is camouflage on matching content, and a constant subtle casing covers it
+// with zero content reads and nothing to pop in or out (round 8 "smaller but always on"; supersedes
+// round 7's content-keyed rim-on-demand).
+
+vec3 checker(vec2 s); // defined below (S19-c); the blur key composites transparency over it
+
+// The colour of the CONTENT under screen point q: the document (plain bilinear -- no crisp-zoom
+// texel snap; this feeds a blur) over the transparency checker / canvas background, composited like
+// main() does but without any chrome. So the styled line keys on what the eye actually sees under
+// it, on AND off the canvas.
+vec3 contentRgb(vec2 q) {
+    vec2 doc = vec2(pc.invR0.x * q.x + pc.invR0.y * q.y + pc.invT.x,
+                    pc.invR1.x * q.x + pc.invR1.y * q.y + pc.invT.y);
+    vec2 outsideDist = max(-doc, doc - pc.docSize);
+    float sd = length(max(outsideDist, vec2(0.0))) + min(max(outsideDist.x, outsideDist.y), 0.0);
+    float docPerPx = length(vec2(pc.invR0.x, pc.invR1.x));
+    float cov = clamp(0.5 - sd / max(docPerPx, 1e-6), 0.0, 1.0);
+    vec3 rgb = pc.bgColor.rgb;
+    if (cov > 0.0) {
+        vec4 d = docTexel(clamp(doc / pc.docSize, vec2(0.0), vec2(1.0)));
+        rgb = mix(rgb, mix(checker(q), d.rgb, d.a), cov);
+    }
+    return rgb;
+}
+
+// The ~7px blurred neighbourhood: centre + 8 ring taps. Nine texture loads, paid only inside the
+// few-px overlay corridor that already survived each element's bbox cull.
+vec3 blurKeyRgb(vec2 q) {
+    float S = uiScale();  // the ring radius is a LOOK, so it grows with the display
+    float r = 7.0 * S;
+    float o = 4.95 * S;   // the diagonal taps, on the same ring
+    vec3 s = contentRgb(q);
+    s += contentRgb(q + vec2(r, 0.0)) + contentRgb(q + vec2(-r, 0.0));
+    s += contentRgb(q + vec2(0.0, r)) + contentRgb(q + vec2(0.0, -r));
+    s += contentRgb(q + vec2(o, o)) + contentRgb(q + vec2(-o, o));
+    s += contentRgb(q + vec2(o, -o)) + contentRgb(q + vec2(-o, -o));
+    return s / 9.0;
+}
+
+float blurKeyLum(vec2 q) { return dot(blurKeyRgb(q), vec3(0.299, 0.587, 0.114)); }
+
+// ---- Settings -> Appearance: the feathered-selection soft band (indicator style F) ------------
+// Style F keeps the crisp 50% marching ant (ants(), drawn ON TOP in main()) and floats this faint,
+// contrast-adaptive tint across the coverage falloff so a feather's WIDTH and LOCATION become visible
+// -- a single hard ant can convey neither. Emphasis peaks mid-band (4*c*(1-c): 0 in the solid
+// interior and the clear exterior, 1 at the 50% line), so where coverage jumps 0<->1 within a texel
+// (a hard or plain-AA edge) the band vanishes and F degrades to exactly today's single-ant look. The
+// tint flips white-over-dark / near-black-over-light on the styled-line blurred key (blurKeyLum) --
+// the same neighbourhood the Adaptive line style uses -- so it never camouflages on the content it
+// lies over. One maskCoverage read per pixel; the 9-tap key is paid only inside the thin band.
+vec3 featherBand(vec2 s, vec2 doc, vec3 base) {
+    float c = maskCoverage(doc);
+    float emph = 4.0 * c * (1.0 - c);
+    if (emph <= 0.003) // solid interior / clear exterior / a hard edge: nothing to show
+        return base;
+    vec3 tint = blurKeyLum(s) < 0.5 ? vec3(1.0) : vec3(0.06);
+    return mix(base, tint, emph * 0.22); // faint -- a whisper of the feather, never fighting the image
+}
+
+// The fixed-colour chrome's shadow alpha at distance d (px) from the element's silhouette: a snug
+// sigma ~1.1px gaussian at half weight, gone within ~4px. Always on -- it is what keeps box-blue
+// chrome visible over box-blue content, and being constant it costs no content reads and can
+// never be caught missing.
+float chromeShadow(float d) {
+    d /= uiScale(); // the sigma is a look, in logical px -- callers pass a physical-px distance
+    return exp(-d * d / 2.56) * 0.5;
+}
+
+// Colour + composite one styled overlay stroke over `col`. `covPlateau` is the plateau-core
+// coverage; `rim` the gaussian rim coverage (sigma ~1.6px). Callers supersample the core region
+// and pass a smooth centre-sample value for the rim tail.
+//   Style 1, "Shadowed" (design round 4 'R'): a white core; a snug dark rim fades in as the
+//     blurred neighbourhood gets light -- a bare thin line on dark content, a cased line on light.
+//   Style 2, "Adaptive" (design round 6 'P3d'): the core tone ramps white -> graphite as content
+//     lightens, HOLDS graphite 0.42 across the light range (a stable third identity, not a
+//     transit), then finishes to black at the extreme -- continuous, it never flips. A faint rim
+//     shadow rises only where the ramp passes close to the content's own tone (the one unavoidable
+//     crossing of any continuous ramp), so the line never vanishes and nothing pops.
+vec3 styledLine(vec2 p, vec3 col, float covPlateau, float rim) {
+    if (covPlateau <= 0.0 && rim <= 0.0)
+        return col;
+    float k = blurKeyLum(p);
+    if (lineStyle == 1u) {
+        float a = smoothstep(0.25, 0.75, k);
+        col = mix(col, vec3(0.0), rim * 0.65 * a);
+        return mix(col, vec3(1.0), covPlateau);
+    }
+    float tone = 1.0 - 0.58 * smoothstep(0.55, 0.70, k) - 0.42 * smoothstep(0.84, 0.97, k);
+    float def = 1.0 - smoothstep(0.12, 0.35, abs(tone - k));
+    col = mix(col, vec3(0.0), rim * 0.35 * def);
+    return mix(col, vec3(tone), covPlateau);
+}
+
+// The in-flight lasso path as a smooth ~1px INVERTED line: each covered pixel shows 1-colour beneath
+// it (Photopea convention). A single invert op per pixel modulated by coverage -- so unlike a two-tone
+// (white core + dark halo) line it does NOT barber-pole at shallow angles (sub-pixel edges just blend
+// toward mid-grey). SUPERSAMPLE 3x3 only near the line (skip the cost elsewhere), mirroring the crop
+// guide AA; coverage uses the same clamp(1 - dist) thin-line profile.
+vec3 lassoLine(vec2 p, vec3 col) {
+    // The styled lines' rims reach further than the classic ~1.5px stroke, so the bbox pad and the
+    // early-out radius widen with them.
+    float S = uiScale();
+    float pad = (lineStyle == 0u ? 2.0 : 6.0) * S;
+    if (p.x < lassoMin.x - pad || p.x > lassoMax.x + pad || p.y < lassoMin.y - pad ||
+        p.y > lassoMax.y + pad)
+        return col; // outside the path's bbox: skip the whole segment loop (the big win)
+    float d0 = lassoDist(p);
+    const int N = 3;
+    if (lineStyle == 0u) {
+        if (d0 > 1.5 * S)
+            return col;
+        float cov = 0.0;
+        for (int sy = 0; sy < N; ++sy)
+            for (int sx = 0; sx < N; ++sx) {
+                vec2 sp = p + (vec2(float(sx), float(sy)) + 0.5) / float(N) - 0.5;
+                // ~1.5px line. The offset+slope are tuned so the CORE saturates to full coverage (so
+                // it shows the line colour at FULL strength, not a washed-out blend) while the steep
+                // 3.0 slope keeps the line thin; a flat 1px coverage peaks at only ~0.78. The pair
+                // is tuned together, so HiDPI scales the DISTANCE and leaves the profile alone.
+                cov += clamp(2.5 - 3.0 * lassoDist(sp) / S, 0.0, 1.0);
+            }
+        cov /= float(N * N);
+        // HARD luminance-keyed monochrome: PURE white on dark content, PURE black on light -- never
+        // grey (an XOR invert is mid-grey over mid-tone content). A single colour per pixel, so no
+        // two-tone barber-pole; the colour can flip black<->white where content crosses mid-grey
+        // along the line (accepted -- user 2026-06-15).
+        float lum = dot(col, vec3(0.299, 0.587, 0.114));
+        vec3 lineCol = lum < 0.5 ? vec3(1.0) : vec3(0.0);
+        return mix(col, lineCol, cov);
+    }
+    if (d0 > 5.5 * S)
+        return col; // rim(5.5px) < 0.3% -- invisible
+    // Supersample only the core region; past it the rim gaussian is smooth enough that the centre
+    // sample is exact to the eye, so the widened rim corridor does not multiply the segment loop.
+    float covP = 0.0, rim = 0.0;
+    if (d0 <= 3.0 * S) {
+        for (int sy = 0; sy < N; ++sy)
+            for (int sx = 0; sx < N; ++sx) {
+                vec2 sp = p + (vec2(float(sx), float(sy)) + 0.5) / float(N) - 0.5;
+                float d = lassoDist(sp) / S;
+                covP += clamp(2.0 - 1.6 * d, 0.0, 1.0);
+                rim += exp(-d * d / 5.12);
+            }
+        covP /= float(N * N);
+        rim /= float(N * N);
+    } else {
+        float d = d0 / S;
+        rim = exp(-d * d / 5.12);
+    }
+    return styledLine(p, col, covP, rim);
+}
+
+// The transparency checkerboard (S19-c) in SCREEN px, so it holds a constant ~8px size under any
+// zoom or rotation (Photoshop) rather than scaling + spinning with the document, as the old CPU
+// doc-space baked checker did. Two fixed light greys matching that former checker (255 and 205/255).
+// Shown only where the (now true-alpha) document is transparent.
+vec3 checker(vec2 s) {
+    vec2 c = floor(s / (8.0 * uiScale())); // 8 LOGICAL-px squares
+    bool dark = mod(c.x + c.y, 2.0) >= 1.0;
+    return dark ? vec3(0.804) : vec3(1.0); // 205/255, 255/255
+}
+
+// The pixel grid (S19-c): faint hairlines on document-texel boundaries, shown only when zoomed in
+// far enough that each texel spans many screen px (~1000 %, raised from Photoshop's ~600 %). For each
+// doc axis, the perpendicular SCREEN distance from doc to its nearest integer texel line is
+// |doc - round(doc)| divided by that axis's doc-units-per-screen-px (the magnitude of the matching
+// inverse-transform row), so the line stays ~1px at any zoom or rotation. Auto-fades in by texel
+// size; gated by the View toggle in main(). Drawn over the document but under ants/tool overlays.
+vec3 pixelGrid(vec2 doc, vec3 base) {
+    float gx = max(length(pc.invR0), 1e-6); // doc.x units per screen px
+    float gy = max(length(pc.invR1), 1e-6); // doc.y units per screen px
+    float S = uiScale();
+    float pxPerTexel = 1.0 / max(length(vec2(pc.invR0.x, pc.invR1.x)), 1e-6);
+    // Gated on the SCREEN size of one document texel (image-size independent -- it is the zoom
+    // ratio, not docSize). Starts at ~1000 % (10 screen px/texel), full by ~1600 % (user 2026-06-17).
+    // In LOGICAL px, so the grid appears at the same zoom percentage on any display.
+    float fade = smoothstep(10.0, 16.0, pxPerTexel / S);
+    if (fade <= 0.0)
+        return base;
+    float dx = abs(doc.x - round(doc.x)) / gx / S;
+    float dy = abs(doc.y - round(doc.y)) / gy / S;
+    float cov = clamp(1.0 - min(dx, dy), 0.0, 1.0); // ~1px hairline at the nearest texel boundary
+    float lum = dot(base, vec3(0.299, 0.587, 0.114));
+    vec3 line = lum < 0.5 ? vec3(0.55) : vec3(0.35); // subtle, reads on both light and dark content
+    return mix(base, line, cov * fade * 0.6);
+}
+
+// Signed distance to a rounded box (half-size b, corner radius r), centred at the origin.
+float sdRoundBox(vec2 p, vec2 b, float r) {
+    vec2 q = abs(p) - b + vec2(r);
+    return length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - r;
+}
+
+// A small padlock silhouette centred at the origin (screen px): a filled rounded-rect body with a
+// shackle arch over it. Fixed size (independent of the ring) so it reads at any brush diameter.
+float lockGlyph(vec2 q) {
+    q /= uiScale(); // the silhouette is drawn in LOGICAL px, so it grows with the display
+    float body = clamp(0.5 - sdRoundBox(q - vec2(0.0, 1.8), vec2(4.2, 3.2), 1.1), 0.0, 1.0);
+    vec2 s = q - vec2(0.0, -1.6);                 // shackle: the top half of a thin annulus
+    float ring = abs(length(s) - 2.8);
+    float shackle = (s.y <= 0.6) ? clamp(0.9 - ring, 0.0, 1.0) : 0.0;
+    return max(body, shackle);
+}
+
+// Signed distance to that padlock silhouette (negative inside): the body's rounded box united
+// with the shackle stroke. Feeds the styled lock's rim the way lassoDist feeds the line's, so
+// the glyph carries the same dark casing as the ring and never vanishes over light content.
+// (Past the shackle's y-cut the body is the nearer primitive anyway -- the cut ends sit inside
+// the body -- so the cut needs no special casing.)
+// Returns a LOGICAL-px distance (lockGlyph's frame), which is the unit its one caller's rim
+// gaussian is written in.
+float lockDist(vec2 q) {
+    q /= uiScale();
+    float d = sdRoundBox(q - vec2(0.0, 1.8), vec2(4.2, 3.2), 1.1);
+    vec2 s = q - vec2(0.0, -1.6);
+    if (s.y <= 0.6)
+        d = min(d, abs(length(s) - 2.8) - 0.9);
+    return d;
+}
+
+// The tip's SDF (binding 9), bilinearly sampled at grid coords `g` (cells; cell i's centre is at
+// i + 0.5). Returns the NORMALIZED distance the field stores -- fractions of the tip's box width.
+//
+// ⚠ EXTENDED beyond the grid rather than clamped to it. A plain clamp-to-edge hands a pixel 40 px
+// away from a `rect` tip the border cell's value -- half a cell -- and the ring would smear itself
+// across the whole screen, because "half a cell from the outline" is exactly what a pixel ON the ring
+// reads. So: clamp into the grid, then ADD the distance travelled to get there. That is exact for the
+// box's own straight edge and monotone everywhere else, which is all the ring's cull and its
+// antialiasing band ever need from a point that far out.
+float sdfSample(vec2 g) {
+    vec2 hi = vec2(float(sdfW), float(sdfH)) - 0.5;
+    vec2 gc = clamp(g, vec2(0.5), hi);
+    vec2 t = gc - 0.5; // -> cell-index space, where the bilinear weights are the fraction
+    vec2 f = fract(t);
+    ivec2 i0 = clamp(ivec2(floor(t)), ivec2(0), ivec2(int(sdfW) - 1, int(sdfH) - 1));
+    ivec2 i1 = min(i0 + 1, ivec2(int(sdfW) - 1, int(sdfH) - 1));
+    float s00 = sdfData[i0.y * int(sdfW) + i0.x];
+    float s10 = sdfData[i0.y * int(sdfW) + i1.x];
+    float s01 = sdfData[i1.y * int(sdfW) + i0.x];
+    float s11 = sdfData[i1.y * int(sdfW) + i1.x];
+    float s = mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);
+    return s + length(g - gc) / max(sdfBox.x, 1e-6); // the field is normalized by the box width
+}
+
+// Signed distance (screen px, negative inside) from `d` to the TIP'S OUTLINE. Every part of the
+// reticle -- the antialiasing, the 3x3 supersampling, the three Settings->Appearance line styles, the
+// lock punch-out -- is written against this one number, so a tip that is not an ellipse costs the rest
+// of the ring nothing (docs/brushes.md §6.3).
+//
+// TWO IMPLEMENTATIONS, and which one runs is decided on the CPU (core::brush::tipNeedsSdf):
+//
+// (1) sdfActive == 0 -- AN ELLIPSE with semi-axes (a, b), turned by `theta`. What a NULL tip and a
+//     plain round generator get, because for them the ellipse IS the outline, exactly.
+//
+//     ⚠ EXACT FOR A CIRCLE, BY CONSTRUCTION -- not merely close. Rotating by theta = 0 is the identity
+//     (cos 0 is exactly 1, sin 0 exactly 0), the squash factor k = a/b is exactly 1.0 when a == b, and
+//     the metric correction then divides by exactly 1.0. So a round tip evaluates `length(d) - a`, the
+//     very expression this ring used before tips had shapes, bit for bit -- which is what keeps the
+//     pixel-tuned antialiasing of the round reticle untouched.
+//
+//     The correction is what a plain "squash it into a circle and measure there" would get wrong: that
+//     map is not an isometry, so its distances are stretched along the squashed axis and a thin nib's
+//     ring would visibly thin out at its flat ends. Dividing by the local gradient magnitude of the
+//     scaled field puts the width back.
+//
+// (2) sdfActive != 0 -- THE TIP'S OWN CONTOUR, sampled out of the field at binding 9. The pixel goes
+//     into the tip's frame (the same rotation), then into the field's grid: the tip's box is `sdfBox`
+//     build px wide and 2a screen px wide, so one screen px is sdfBox.x/(2a) build px -- and likewise
+//     for y with b. That map is ANISOTROPIC whenever the dab is squashed or the tip's box is not
+//     square, which is why the stored distance cannot simply be scaled back: it is divided by the
+//     magnitude of the field's SCREEN-space gradient, finite-differenced through the very same map.
+//     That is the same metric correction the ellipse above applies, for the same reason -- without it
+//     a flat-ended nib's ring visibly thins out at its ends -- and it is what makes a field stored in
+//     one frame readable as a distance in another.
+float tipDist(vec2 d, float a, float b, float theta) {
+    float c = cos(theta), s = sin(theta);
+    vec2 q = vec2(d.x * c + d.y * s, -d.x * s + d.y * c); // into the tip's own frame
+    if (sdfActive != 0u) {
+        vec2 k = sdfBox / max(vec2(2.0 * a, 2.0 * b), vec2(1e-6)); // build px per screen px
+        // The tip's centre in grid coords: the pad, the pixel-centre convention, and half the box.
+        vec2 org = vec2(float(sdfPadCells) - 0.5) + sdfBox * 0.5;
+        float f0 = sdfSample(q * k + org);
+        // The screen-space gradient, by central differences over one screen px. (Sampling the field
+        // in ITS frame and dividing by k would be the same thing only for an isotropic map.)
+        const float e = 1.0;
+        float gx = sdfSample((q + vec2(e, 0.0)) * k + org) - sdfSample((q - vec2(e, 0.0)) * k + org);
+        float gy = sdfSample((q + vec2(0.0, e)) * k + org) - sdfSample((q - vec2(0.0, e)) * k + org);
+        // ⚠ FLOORED, and not at some epsilon. A distance field's gradient VANISHES on its medial axis
+        // -- the centre of a disc, the spine of a gap between two bristles -- and 1e-6 there would
+        // turn a perfectly good distance into 4e7 px. The floor is the smallest the gradient can
+        // honestly be: the field has a unit gradient in build px, so in screen px it is between
+        // min(k) and max(k), over the box width the field is normalized by. For an ISOTROPIC map the
+        // two coincide and the floor is EXACT everywhere, medial axis included.
+        float gmin = min(k.x, k.y) / max(sdfBox.x, 1e-6);
+        float gm = max(length(vec2(gx, gy)) / (2.0 * e), gmin);
+        return f0 / gm;
+    }
+    float k = a / b; // squash the ellipse to a circle of radius a
+    float le = max(length(vec2(q.x, q.y * k)), 1e-6);
+    float grad = max(length(vec2(q.x, q.y * k * k)) / le, 1e-6); // exactly 1.0 when k == 1
+    return (le - a) / grad;
+}
+
+// The brush-family reticle (S19-a): a thin ring at the cursor showing the live brush diameter,
+// drawn with the SAME luminance-keyed monochrome as the lasso line (lassoLine) -- pure white on dark
+// content, pure black on light, 3x3-supersampled for clean AA at any angle -- so it never barber-poles
+// and tracks the content beneath it. When the active layer is locked (reticleParams.y), a padlock
+// glyph is drawn in the centre to say "this layer can't be painted". `reticleCenter` and
+// `reticleParams.x` (radius) are screen (physical) px (the renderer scales the cursor pos + diameter*
+// zoom/2 by the content scale). Drawn last in main() -- it is a cursor. Reused by eraser/heal/inpaint.
+vec3 brushReticle(vec2 p, vec3 col) {
+    vec2 d = p - reticleCenter;
+    float a = max(reticleShape.x, 0.5); // the tip's two semi-axes, screen px
+    float b = max(reticleShape.y, 0.5);
+    float theta = reticleShape.z;
+    bool locked = reticleShape.w > 0.5;
+    float S = uiScale();
+    float adx = abs(d.x), ady = abs(d.y);
+    float pad = (lineStyle == 0u ? 2.0 : 6.0) * S; // the styled rims reach further (lassoLine)
+    // The cull box holds the ROTATED tip -- the same rotated-bounding-box the dab's stamp uses, so
+    // the ring can never be clipped by a box drawn for a circle it is not. At theta 0 and a == b it
+    // is exactly `a` on both axes, as it always was.
+    float ct = abs(cos(theta)), st = abs(sin(theta));
+    float ex = a * ct + b * st;
+    float ey = a * st + b * ct;
+    bool nearRing = adx <= ex + pad && ady <= ey + pad;
+    // The lock glyph lives near the centre; styled, it wears a rim, so its cull box widens too.
+    float lockPad = (lineStyle == 0u ? 8.0 : 12.0) * S;
+    bool nearCentre = locked && adx < lockPad && ady < lockPad;
+    if (!nearRing && !nearCentre)
+        return col;
+
+    float dist = length(d);      // from the CENTRE -- what the lock punch-out keys off
+    float rd0 = tipDist(d, a, b, theta); // ... to the tip's OUTLINE -- what the ring keys off
+    const int N = 3;
+    if (lineStyle == 0u) {
+        float ringCov = 0.0;
+        if (abs(rd0) <= 2.0 * S) { // only supersample near the rim (skip the disc interior)
+            float c = 0.0;
+            for (int sy = 0; sy < N; ++sy)
+                for (int sx = 0; sx < N; ++sx) {
+                    vec2 sp = d + (vec2(float(sx), float(sy)) + 0.5) / float(N) - 0.5;
+                    c += clamp(2.5 - 3.0 * abs(tipDist(sp, a, b, theta)) / S, 0.0, 1.0); // lassoLine's
+                }
+            ringCov = c / float(N * N);
+        }
+        // Punch-out: the padlock glyph (radius ~6.5 px) owns the centre, so suppress the ring inside
+        // its clear zone -- the rim never cuts through the lock. A small brush whose ring sits inside
+        // the zone shows the lock alone; as the brush grows the ring fades in around it. (Avoids the
+        // size band where the same-coloured ring and lock used to merge into a smudge.)
+        if (locked)
+            ringCov *= smoothstep(7.0, 9.0, dist / S);
+        float cov = max(ringCov, locked ? lockGlyph(d) : 0.0);
+        if (cov <= 0.0)
+            return col;
+        // HARD luminance key (lassoLine): pure white on dark content, black on light -- never grey.
+        float lum = dot(col, vec3(0.299, 0.587, 0.114));
+        vec3 lineCol = lum < 0.5 ? vec3(1.0) : vec3(0.0);
+        return mix(col, lineCol, cov);
+    }
+    // Styled ring: the plateau core + gaussian rim (styledLine), same supersample-the-core /
+    // centre-sample-the-tail split as lassoLine. The padlock glyph rides the core coverage (its
+    // interior is solid, so it needs no rim of its own).
+    float rd = abs(rd0);
+    float covP = 0.0, rim = 0.0;
+    if (rd <= 3.0 * S) {
+        for (int sy = 0; sy < N; ++sy)
+            for (int sx = 0; sx < N; ++sx) {
+                vec2 sp = d + (vec2(float(sx), float(sy)) + 0.5) / float(N) - 0.5;
+                float sd2 = abs(tipDist(sp, a, b, theta)) / S;
+                covP += clamp(2.0 - 1.6 * sd2, 0.0, 1.0);
+                rim += exp(-sd2 * sd2 / 5.12);
+            }
+        covP /= float(N * N);
+        rim /= float(N * N);
+    } else if (rd <= 5.5 * S) {
+        float rl = rd / S;
+        rim = exp(-rl * rl / 5.12);
+    }
+    if (locked) { // the classic ring's lock punch-out, applied to every layer
+        float keep = smoothstep(7.0, 9.0, dist / S);
+        covP *= keep;
+        rim *= keep;
+        covP = max(covP, lockGlyph(d));
+        // The lock wears the ring's rim (it was invisible over white content as a bare white
+        // glyph): the same sigma~1.6px gaussian, off the glyph's own distance field.
+        float dl = max(lockDist(d), 0.0);
+        rim = max(rim, exp(-dl * dl / 5.12));
+    }
+    return styledLine(p, col, covP, rim);
+}
+
+// Positive-inside distance (screen px) of p to the convex quad winding TL,TR,BR,BL (y-down screen
+// space, same winding as the crop/controls quad): >0 inside, <0 outside, magnitude = distance to the
+// nearest edge. Used to anti-alias the selection-highlight fill.
+float quadInside(vec2 p, vec2 a, vec2 b, vec2 c, vec2 d) {
+    vec2 q[4] = vec2[4](a, b, c, d);
+    float inner = 1e9;
+    for (int i = 0; i < 4; ++i) {
+        vec2 e0 = q[i];
+        vec2 e1 = q[(i + 1) & 3];
+        float len = max(length(e1 - e0), 1e-6);
+        float cr = (e1.x - e0.x) * (p.y - e0.y) - (e1.y - e0.y) * (p.x - e0.x);
+        inner = min(inner, cr / len);
+    }
+    return inner;
+}
+
+// The Type baseline BEND handle (S30 §9): a drop-tab hanging on a short stem below the arched baseline
+// bar. tBendHandle = (pill.xy, apex.xy) in screen px; inactive when pill.x < -1e8. The rounded pill is
+// filled the box blue with a near-white up/down (up-and-down arrow) glyph; the stem bridges to the bar.
+vec3 bendHandle(vec2 p, vec3 col) {
+    if (tBendHandle.x < -1e8)
+        return col;
+    vec2 pill = tBendHandle.xy, apex = tBendHandle.zw;
+    const float S = uiScale();
+    vec2 lo = min(pill, apex) - 15.0 * S, hi = max(pill, apex) + 15.0 * S; // 15: room for the shadow
+    if (p.x < lo.x || p.x > hi.x || p.y < lo.y || p.y > hi.y)
+        return col; // cheap per-pixel cull
+    // The tab is drawn in LOGICAL px: its two ANCHORS (pill, apex) are placed by the renderer and
+    // already carry the content scale, so only the shape around them needs it. Distances are
+    // divided rather than the constants multiplied, so every SDF below keeps the proportions it
+    // was tuned with.
+    vec2 h = vec2(9.5, 6.5);
+    float stem = (segDist(p, apex, pill - vec2(0.0, h.y * S)) / S) - 1.3; // stem up to the bar apex
+    float body = sdRoundBox((p - pill) / S, h, 5.0);                      // the rounded pill
+    float sil = min(stem, body); // the tab's silhouette SDF (negative inside), LOGICAL px
+    // The tab's tight always-on shadow (chromeShadow, round 8): box-blue chrome cannot
+    // camouflage on box-blue content.
+    col = mix(col, vec3(0.0), chromeShadow(max(sil, 0.0) * S)); // chromeShadow takes physical px
+    col = mix(col, kBoxColor, clamp(0.75 - sil, 0.0, 1.0));
+    // The up/down glyph: a short vertical bar with a chevron at each end, clipped to the pill interior.
+    vec2 q = (p - pill) / S;
+    float bar = sdRoundBox(q, vec2(0.7, 3.0), 0.4);
+    float up = min(segDist(q, vec2(-2.15, -1.5), vec2(0.0, -3.9)),
+                   segDist(q, vec2(2.15, -1.5), vec2(0.0, -3.9))) - 0.7;
+    float dn = min(segDist(q, vec2(-2.15, 1.5), vec2(0.0, 3.9)),
+                   segDist(q, vec2(2.15, 1.5), vec2(0.0, 3.9))) - 0.7;
+    float ink = clamp(0.6 - min(bar, min(up, dn)), 0.0, 1.0) * clamp(0.5 - body, 0.0, 1.0);
+    return mix(col, vec3(0.97), ink);
+}
+
+// The Type tool's caret + selection (S29-b). The selection highlight is a translucent selection-blue
+// fill of each visual-line quad (culled by the shared bbox); the caret is a box-blue chrome bar with
+// the chrome family's rim-on-demand (chromeDeficit) so it reads on any background -- including the
+// gradients that used to flip its old luminance key mid-bar. Drawn over the document, under the
+// dial/HUD. The blink is the canvas toggling tCaretActive.
+vec3 textOverlay(vec2 p, vec3 base) {
+    vec3 col = bendHandle(p, base);  // the drop-tab handle (drawn even outside the selection bbox)
+    // tSelMin/tSelMax bound the selection quads AND the squiggle segments (the CPU expands the bbox
+    // over both), so this one cull gates the whole decoration block. The pad covers the handles'
+    // shadow reach (~4px past their silhouettes).
+    bool inBox = (p.x >= tSelMin.x - 5.0 * uiScale() && p.x <= tSelMax.x + 5.0 * uiScale() &&
+                  p.y >= tSelMin.y - 5.0 * uiScale() && p.y <= tSelMax.y + 5.0 * uiScale());
+    if (inBox && tSelCount > 0u) {
+        // The Type-edit box's handles (the last `hcnt` quads: resize + bend) are filled SOLID in the
+        // SAME box colour the bounding-box line uses -- not the translucent selection wash. The real
+        // text-selection quads (the rest) stay translucent.
+        uint hcnt = uint(tHandleActive + 0.5);
+        uint selN = tSelCount > hcnt ? tSelCount - hcnt : 0u;
+        float inside = 0.0;
+        for (uint i = 0u; i < selN; ++i) {
+            vec2 tl = tSelQuads[2u * i].xy;
+            vec2 tr = tSelQuads[2u * i].zw;
+            vec2 br = tSelQuads[2u * i + 1u].xy;
+            vec2 bl = tSelQuads[2u * i + 1u].zw;
+            inside = max(inside, smoothstep(-0.75, 0.75, quadInside(p, tl, tr, br, bl)));
+        }
+        col = mix(col, kBoxColor, 0.32 * inside);
+        float hcov = 0.0, hdq = 1e9;
+        for (uint h = selN; h < tSelCount; ++h) { // box-aligned handle squares, solid box-blue
+            float hd = quadInside(p, tSelQuads[2u * h].xy, tSelQuads[2u * h].zw,
+                                  tSelQuads[2u * h + 1u].xy, tSelQuads[2u * h + 1u].zw);
+            hcov = max(hcov, smoothstep(-0.75, 0.75, hd));
+            hdq = min(hdq, max(-hd, 0.0)); // outside distance to the nearest square's silhouette
+        }
+        // The handles' tight always-on shadow (chromeShadow, round 8): a solid box-blue square
+        // is invisible over box-blue content; the constant casing carries it, under the fill.
+        if (tSelCount > selN)
+            col = mix(col, vec3(0.0), chromeShadow(hdq));
+        col = mix(col, kBoxColor, hcov);
+    }
+    // Spell-check squiggles: a red wavy underline under each misspelled span. Each segment (packed
+    // after the selection quads) is the underline baseline A->B; the wave oscillates perpendicular to
+    // it, so a rotated text layer squiggles along its own baseline.
+    if (inBox && tSquiggleCount > 0u) {
+        float S = uiScale();
+        float cover = 0.0;
+        for (uint j = 0u; j < tSquiggleCount; ++j) {
+            vec4 seg = tSelQuads[2u * tSelCount + j];
+            vec2 a = seg.xy;
+            vec2 b = seg.zw;
+            vec2 d = b - a;
+            float len = length(d);
+            if (len < 1.0) continue;
+            vec2 dir = d / len;
+            float t = dot(p - a, dir);
+            if (t < -1.0 * S || t > len + 1.0 * S) continue; // outside the span (+1px AA slack)
+            vec2 nrm = vec2(-dir.y, dir.x);
+            float perp = dot(p - a, nrm);
+            // The wave's amplitude, period and stroke are all in LOGICAL px, so the squiggle keeps
+            // its shape (and stays legible as a squiggle) rather than flattening on a 2x display.
+            float wave = kSquiggleAmp * sin((t / S) * kSquiggleFreq);
+            cover = max(cover, 1.0 - smoothstep(kSquiggleHalf - 0.6, kSquiggleHalf + 0.6,
+                                                abs(perp / S - wave)));
+        }
+        col = mix(col, kSpellRed, cover);
+    }
+    if (tCaretActive != 0u) {
+        // The caret is Type CHROME, not a content-keyed line (design rounds 7-8): the box blue,
+        // so it families with the resize/bend handles it lives amongst, wearing their tight
+        // always-on shadow (chromeShadow) so it can't camouflage on matching content. A fixed
+        // colour has no key to flip, which retires Classic's gradient flip here for good; and it
+        // rides the plateau core + gaussian shadow because bent/path/3D carets project to ANY
+        // angle -- the pole-calm rules bind the caret like every other stroke. Independent of the
+        // Settings line style.
+        float cd = segDist(p, tCaretA, tCaretB);
+        if (cd <= 4.5 * uiScale()) {
+            float covP = clamp(2.0 - 1.6 * cd / uiScale(), 0.0, 1.0);
+            col = mix(col, vec3(0.0), chromeShadow(cd));
+            col = mix(col, kBoxColor, covP);
+        }
+    }
+    return col;
+}
+
+// Smart Resize keep-region chips (S16-f): a thin AA'd outline per chip, coloured by the chip's
+// LIVE state against the staged crop rect (meta.x, computed per frame by the canvas):
+//   0 disabled (user toggled off)          -> dim grey outline
+//   1 kept (fully inside the staged rect)  -> green outline + faint green wash (the inpaint
+//                                             sample-area green, NOT the crop box-blue)
+//   2 sliced (the rect edge cuts through)  -> amber outline (the warning the feature exists for)
+//   3 lost (fully outside the rect)        -> dim red outline (marked, but this crop drops it)
+// Drawn over the crop chrome so chips outside the staged rect stay legible through the dim shield.
+vec3 keepChips(vec2 p, vec3 base) {
+    float S = uiScale();
+    if (p.x < kChipMin.x - 3.0 * S || p.x > kChipMax.x + 3.0 * S || p.y < kChipMin.y - 3.0 * S ||
+        p.y > kChipMax.y + 3.0 * S)
+        return base;
+    const vec3 kChipGreen = vec3(0.25, 0.85, 0.40); // == the inpaint sample-area green
+    const vec3 kChipAmber = vec3(0.95, 0.66, 0.15);
+    const vec3 kChipRed = vec3(0.85, 0.30, 0.25);
+    vec3 col = base;
+    for (uint i = 0u; i < kChipCount; ++i) {
+        vec2 tl = kChipData[3u * i].xy;
+        vec2 tr = kChipData[3u * i].zw;
+        vec2 br = kChipData[3u * i + 1u].xy;
+        vec2 bl = kChipData[3u * i + 1u].zw;
+        float d = quadInside(p, tl, tr, br, bl);
+        float line = 1.0 - smoothstep(0.7, 1.5, abs(d) / S); // ~1.5px outline centred on the edge
+        float st = kChipData[3u * i + 2u].x;
+        if (st < 0.5) {
+            col = mix(col, vec3(0.62), 0.55 * line); // disabled
+        } else if (st < 1.5) {
+            col = mix(col, kChipGreen, 0.10 * smoothstep(-0.75, 0.75, d)); // kept: wash...
+            col = mix(col, kChipGreen, 0.90 * line);                       // ...+ solid outline
+        } else if (st < 2.5) {
+            col = mix(col, kChipAmber, 0.95 * line); // sliced
+        } else {
+            col = mix(col, kChipRed, 0.60 * line); // lost
+        }
+    }
+    return col;
+}
+
+// The Depth-of-Field focus-band gizmo (S33): hairline guides in the crop/transform chrome idiom.
+// The focus (centre) line draws at full chrome alpha, the band edges at 0.8x, the feather edges at
+// 0.45x -- "the further from focus, the quieter", so the falloff reads without dashes -- plus two
+// square knobs drawn exactly like the transform handles' squares (same size constants). The
+// hovered/dragged element (dofHot = id + 1) brightens: a hot line lightens toward white at full
+// alpha, a hot knob swaps its black border for box-blue. ⚠ INVARIANT: GEOMETRY only rides this
+// chrome -- amounts are never scrubbed on canvas, and no pin-centred rotatable ring or dial ever
+// appears here. Square knobs and hairline guides on the image; amounts scrub in the popover.
+vec3 dofOverlay(vec2 p, vec3 base) {
+    vec4 segs[5] = vec4[5](dLine, dBandA, dBandB, dFeatherA, dFeatherB);
+    float dl[5];
+    for (int i = 0; i < 5; ++i)
+        dl[i] = segDist(p, segs[i].xy, segs[i].zw);
+    float S = uiScale();
+    float H = max(pc.ants.w, 2.0); // the transform handles' half-size (canvas-scaled for HiDPI)
+    float chebC = max(abs(p.x - dKnobs.x), abs(p.y - dKnobs.y));
+    float chebR = max(abs(p.x - dKnobs.z), abs(p.y - dKnobs.w));
+    // Early-out on the distance to EVERY primitive: the guides cross the whole viewport, so a
+    // bbox cull (the keep-chips' gate) would keep nothing -- the distance gate is its stand-in.
+    float nearest = min(min(min(dl[0], dl[1]), min(dl[2], dl[3])), min(dl[4], min(chebC, chebR)));
+    if (nearest > H + 4.0 * S)
+        return base;
+    vec3 col = base;
+    // The five guide hairlines, supersampled 3x3 only near a line (the box-outline idiom). The
+    // centre line has no handle id of its own (its knob is the grab); the edges carry ids 2..5.
+    const float alphas[5] = float[5](1.0, 0.8, 0.8, 0.45, 0.45);
+    const int ids[5] = int[5](-1, 2, 3, 4, 5);
+    const int N = 3;
+    for (int i = 0; i < 5; ++i) {
+        if (dl[i] >= 3.5 * S)
+            continue;
+        bool hot = ids[i] >= 0 && dofHot == uint(ids[i] + 1);
+        vec3 lineCol = hot ? mix(kBoxColor, vec3(1.0), 0.35) : kBoxColor;
+        float a = hot ? 1.0 : alphas[i];
+        float cov = 0.0;
+        for (int sy = 0; sy < N; ++sy)
+            for (int sx = 0; sx < N; ++sx) {
+                vec2 sp = p + (vec2(float(sx), float(sy)) + 0.5) / float(N) - 0.5;
+                cov += clamp(1.5 - segDist(sp, segs[i].xy, segs[i].zw) / S, 0.0, 1.0);
+            }
+        col = mix(col, lineCol, a * (cov / float(N * N)));
+    }
+    // Two knobs in the transform-handles' exact border/fill constants, but different SHAPES so the
+    // handle says what it does: the centre is a SQUARE (move), the rotate knob a CIRCLE (spin). The
+    // hot knob's border turns box-blue -- the brightening the lines get, in knob form.
+    {
+        bool hot = dofHot == 1u; // centre knob (id 0, stored +1)
+        vec3 borderCol = hot ? kBoxColor : vec3(0.0);
+        col = mix(col, borderCol, smoothstep(H + 1.0, H + 0.1, chebC)); // square border
+        col = mix(col, vec3(1.0), smoothstep(H - 0.6, H - 1.4, chebC)); // square fill
+    }
+    {
+        bool hot = dofHot == 2u;             // rotate knob (id 1, stored +1)
+        float rd = length(p - dKnobs.zw);    // Euclidean radius -> a round handle
+        vec3 borderCol = hot ? kBoxColor : vec3(0.0);
+        col = mix(col, borderCol, smoothstep(H + 1.0, H + 0.1, rd)); // ring
+        col = mix(col, vec3(1.0), smoothstep(H - 0.6, H - 1.4, rd)); // disc fill
+    }
+    return col;
+}
+
+// The RadialBlur centre crosshair (S33): a single target mark at the blur centre -- a thin ring
+// with a hairline cross reaching just past it, the pivot for Spin / the vanishing point for Zoom.
+// Deliberately NOT the DoF square knob, so "centre point" reads at a glance. Box-blue in the crop/
+// transform idiom over a soft dark casing (contrast on light content, like the square knobs' black
+// border), brightening toward white when hovered/dragged. ⚠ INVARIANT: geometry only -- amount and
+// mode stay in the popover, and this mark never grows into a rotatable ring/dial that scrubs a
+// value on the image.
+vec3 blurCrosshair(vec2 p, vec3 base) {
+    vec2 c = dKnobs.xy;
+    float S = uiScale();
+    float H = max(pc.ants.w, 2.0);   // the handle half-size (canvas-scaled for HiDPI)
+    float arm = H + 6.0 * S;         // half-length of each cross arm
+    float R = H + 1.0 * S;           // the ring radius
+    vec2 d = p - c;
+    if (max(abs(d.x), abs(d.y)) > arm + 2.0 * S)
+        return base;                 // the distance-gate cull (the guides' idiom)
+    // Supersampled coverage over the cross + ring, the box-outline idiom the guide lines use.
+    const int N = 3;
+    float cov = 0.0;
+    for (int sy = 0; sy < N; ++sy)
+        for (int sx = 0; sx < N; ++sx) {
+            vec2 sp = p + (vec2(float(sx), float(sy)) + 0.5) / float(N) - 0.5;
+            float dh = segDist(sp, vec2(c.x - arm, c.y), vec2(c.x + arm, c.y));
+            float dv = segDist(sp, vec2(c.x, c.y - arm), vec2(c.x, c.y + arm));
+            float ring = abs(length(sp - c) - R);
+            cov += clamp(1.5 - min(min(dh, dv), ring) / S, 0.0, 1.0);
+        }
+    cov /= float(N * N);
+    if (cov <= 0.0)
+        return base;
+    bool hot = dofHot != 0u;
+    vec3 ink = hot ? mix(kBoxColor, vec3(1.0), 0.5) : kBoxColor;
+    vec3 col = mix(base, vec3(0.0), 0.30 * cov); // the soft dark casing under the mark
+    return mix(col, ink, cov);
+}
+
+// The eyedropper's loupe (S24), composited onto `col` at screen pixel `p`. Centred on the cursor:
+// the magnified content is the neighbourhood AROUND the sampled pixel, with that pixel in the middle
+// cell. GPU-magnified -- it samples uDoc through the same texel-centre snap the crisp-pixel present
+// path uses, so the loupe shows exactly the on-screen composite, blown up, at any canvas zoom (the
+// loupe's magnification is its own, not the view's). Drawn last, over everything: it is the cursor.
+//
+// The frame is a COLOUR-COMPARISON RING (the pro-picker convention): an annulus whose TOP arc shows
+// the resolved sample -- what a click right now would pick, honouring Source + the sample-size
+// average, which is why it can legitimately differ from the magnified composite -- and whose BOTTOM
+// arc shows the swatch that pick would replace. New above, current below: the comparison is read in
+// place, without glancing at the toolbar. The arcs sit in NEUTRAL near-black casing lines (a
+// coloured frame would tint the very colours being judged -- box-blue is reserved for the centre
+// cell, the picked-pixel marker), and the silhouette wears the chrome family's tight always-on
+// shadow (chromeShadow) so the disk reads on any content.
+vec3 loupe(vec2 p, vec3 col) {
+    vec2 d = p - loupeCenter;
+    float S = uiScale();
+    float R = loupeRadius;
+    float dist = length(d);
+    float ringW = max(5.0 * S, R * 0.115); // the colour ring's band width, scales with the radius
+    float Ri = R - ringW;                  // content disk | colour ring boundary
+    // Where the readout tile sits (below the ring, or above it when that would clip the viewport
+    // bottom): computed here so the cull below covers it too.
+    float readoutTop = loupeCenter.y + R + 8.0 * S;
+    if (readoutTop + pc.overlayCenter.y + 4.0 * S > pc.outSize.y)
+        readoutTop = loupeCenter.y - R - 8.0 * S - pc.overlayCenter.y;
+    bool nearRing = dist <= R + 4.0 * S;
+    bool nearReadout = loupeReadout > 0.5 &&
+                       abs(p.x - loupeCenter.x) <= pc.overlayCenter.x * 0.5 + 1.0 &&
+                       p.y >= readoutTop - 1.0 && p.y <= readoutTop + pc.overlayCenter.y + 1.0;
+    if (!nearRing && !nearReadout)
+        return col; // the big cull: the loupe touches only a small disk + a small tile
+
+    vec3 outC = col;
+    if (dist <= Ri + 1.0 * S) { // +1: give the ring's inner feather a content base to blend from
+        // Nearest-neighbour magnify: this screen offset maps to a continuous doc coord; one doc texel
+        // spans loupeMag screen px, and loupeSampleDoc (the sampled texel centre) sits at the centre.
+        //
+        // The offset goes through the VIEW's own frame, not straight into document axes. The canvas
+        // rotates, and the loupe rides the cursor over it, so screen-right has to mean inside the
+        // loupe what it means on the canvas underneath -- otherwise the magnified content slides off
+        // at the view angle while the cursor moves straight, which reads as the loupe drifting in a
+        // direction of its own. Direction (and handedness, so a mirrored view follows too) comes from
+        // the inverse view transform's linear part; the SCALE comes from loupeMag, because the
+        // loupe's magnification is its own and not the view's. At zero rotation the matrix is
+        // docPerPx * identity and this reduces to exactly `d / loupeMag`.
+        float docPerPx = max(length(vec2(pc.invR0.x, pc.invR1.x)), 1e-6);
+        vec2 viewDir = vec2(pc.invR0.x * d.x + pc.invR0.y * d.y,
+                            pc.invR1.x * d.x + pc.invR1.y * d.y);
+        vec2 docF = loupeSampleDoc + viewDir / (docPerPx * loupeMag);
+        vec2 texel = floor(docF);
+        vec3 mag;
+        if (any(lessThan(texel, vec2(0.0))) || any(greaterThanEqual(texel, pc.docSize))) {
+            mag = pc.bgColor.rgb; // beyond the document edge: the canvas backdrop
+        } else {
+            vec4 t = docTexel((texel + 0.5) / pc.docSize); // texel-centre snap == NEAREST
+            mag = mix(checker(p), t.rgb, t.a);             // transparency over the checker
+        }
+        // The loupe's own pixel grid: a faint hairline on texel boundaries. Distance (screen px) to
+        // the nearest texel edge = min over axes of (fractional distance to 0/1) * the magnification.
+        vec2 fr = fract(docF);
+        vec2 edge = min(fr, vec2(1.0) - fr) * loupeMag;
+        float gridCov = 1.0 - smoothstep(0.5, 1.25, min(edge.x, edge.y) / S);
+        float lum = dot(mag, vec3(0.299, 0.587, 0.114));
+        mag = mix(mag, vec3(lum < 0.5 ? 0.55 : 0.30), gridCov * 0.5);
+
+        // The sampled centre cell: loupeSampleDoc = centreTexel + 0.5, so the cell is the central
+        // square of side loupeMag, centred on the loupe. Outline it box-blue over the chrome
+        // family's tight always-on casing (chromeShadow) -- the exact picked pixel must be
+        // unmistakable amongst its neighbours, including on content that matches box-blue.
+        // Measured in DOC space so the marker turns with the view like the magnified content does
+        // (a rotated canvas's texel is a rotated square); × loupeMag puts it back in screen px. At
+        // zero rotation this is exactly max(|d.x|, |d.y|) - 0.5 * loupeMag, as it always was.
+        vec2 cellOff = docF - loupeSampleDoc;
+        float cellSd = (max(abs(cellOff.x), abs(cellOff.y)) - 0.5) * loupeMag; // Chebyshev SDF
+        mag = mix(mag, vec3(0.0), chromeShadow(abs(cellSd)));
+        mag = mix(mag, kBoxColor, 1.0 - smoothstep(0.5, 1.5, abs(cellSd) / S));
+
+        outC = mag;
+    }
+
+    // The colour-comparison ring: top arc = the resolved sample (neutral graphite when there is
+    // nothing to pick -- off the pixels the top arc goes quiet instead of lying), bottom arc = the
+    // swatch it would replace. A 1px near-black hairline seats each boundary (inner edge, outer
+    // edge, and the two horizontal seams where the arcs meet).
+    if (dist >= Ri - 1.5 * S && dist <= R + 1.5 * S) {
+        vec3 arc = d.y < 0.0 ? (loupeReadout > 0.5 ? loupeSampleRgba.rgb : vec3(0.16))
+                             : loupePrevRgba.rgb;
+        float cov = smoothstep(Ri - 0.75, Ri + 0.75, dist) *
+                    (1.0 - smoothstep(R - 0.75, R + 0.75, dist));
+        outC = mix(outC, arc, cov);
+        // The seams between the two arcs: only within the band, fading with its coverage.
+        float seam = (1.0 - smoothstep(0.4, 1.4, abs(d.y) / S)) * cov;
+        outC = mix(outC, vec3(0.09), seam * 0.9);
+    }
+    // Casing hairlines + the silhouette's tight always-on shadow (outside only: the band owns its
+    // interior). Near-black rather than pure black, matching the overlay chrome's shadow tone.
+    outC = mix(outC, vec3(0.09), (1.0 - smoothstep(0.4, 1.4, abs(dist - Ri) / S)) * 0.9);
+    if (dist > R)
+        outC = mix(outC, vec3(0.0), chromeShadow(dist - R));
+    outC = mix(outC, vec3(0.09), (1.0 - smoothstep(0.4, 1.4, abs(dist - R) / S)) * 0.95);
+
+    // The hex/RGB readout tile (uOverlayText), anchored by the ring and centred on the loupe. The
+    // canvas rasterizes the string into the shared overlay tile when the eyedropper is sampling; the
+    // dial/crop/Move HUDs are never active alongside it, so the tile is the loupe's alone.
+    if (nearReadout)
+        outC = compositeOverlayTile(p, outC, floor(vec2(loupeCenter.x - pc.overlayCenter.x * 0.5,
+                                                        readoutTop)));
+    return outC;
+}
+
+// ---- The canvas FPS readout (binding 12, debug builds only) -------------------------------------
+// A 5-wide x 7-tall bitmap font, 14 glyphs (0..9, space, F, P, S). Each row is a 5-bit mask, bit 4
+// = leftmost pixel. Small and pixel-crisp -- the idiom for a corner FPS counter, and it needs no
+// texture/descriptor (the push block is full; this rides its own SSBO like every overlay family).
+#ifdef MOSAIC_DEBUG
+const uint kFpsFont[98] = uint[98](
+    14u, 17u, 19u, 21u, 25u, 17u, 14u, //  0: '0'
+    4u, 12u, 4u, 4u, 4u, 4u, 14u,      //  1: '1'
+    14u, 17u, 1u, 2u, 4u, 8u, 31u,     //  2: '2'
+    31u, 2u, 4u, 2u, 1u, 17u, 14u,     //  3: '3'
+    2u, 6u, 10u, 18u, 31u, 2u, 2u,     //  4: '4'
+    31u, 16u, 30u, 1u, 1u, 17u, 14u,   //  5: '5'
+    6u, 8u, 16u, 30u, 17u, 17u, 14u,   //  6: '6'
+    31u, 1u, 2u, 4u, 8u, 8u, 8u,       //  7: '7'
+    14u, 17u, 17u, 14u, 17u, 17u, 14u, //  8: '8'
+    14u, 17u, 17u, 15u, 1u, 2u, 12u,   //  9: '9'
+    0u, 0u, 0u, 0u, 0u, 0u, 0u,        // 10: space
+    31u, 16u, 16u, 30u, 16u, 16u, 16u, // 11: 'F'
+    30u, 17u, 17u, 30u, 16u, 16u, 16u, // 12: 'P'
+    15u, 16u, 16u, 14u, 1u, 1u, 30u    // 13: 'S'
+);
+
+// Composite the FPS badge (top-right): a translucent dark plate for legibility over any content,
+// then white glyph pixels. `p` is the physical pixel centre.
+vec3 fpsReadout(vec2 p, vec3 base) {
+    float S = float(fpsPx);
+    float adv = 6.0 * S;                              // 5 px glyph + 1 px gap
+    float textW = float(fpsCount) * adv - S;          // no trailing gap after the last glyph
+    float textH = 7.0 * S;
+    vec2 pad = vec2(2.0 * S);                          // interior padding of the plate
+    vec2 tl = vec2(pc.outSize.x - textW - pad.x - 3.0 * S, pad.y + 2.0 * S); // top-right, inset
+    vec2 plateMin = tl - pad;
+    vec2 plateMax = tl + vec2(textW, textH) + pad;
+    if (any(lessThan(p, plateMin)) || any(greaterThanEqual(p, plateMax)))
+        return base;
+    vec3 col = mix(base, vec3(0.0), 0.6); // dark badge plate
+    vec2 local = p - tl;
+    if (local.x >= 0.0 && local.y >= 0.0 && local.y < textH) {
+        int gi = int(floor(local.x / adv));
+        float gx = local.x - float(gi) * adv;
+        if (gi >= 0 && gi < int(fpsCount) && gx < 5.0 * S) {
+            uint g = fpsGlyphs[gi];
+            if (g < 14u) {
+                int cx = int(floor(gx / S));
+                int ry = int(floor(local.y / S));
+                uint bits = kFpsFont[g * 7u + uint(ry)];
+                if (((bits >> uint(4 - cx)) & 1u) != 0u)
+                    col = vec3(1.0); // white glyph pixel
+            }
+        }
+    }
+    return col;
+}
+#endif // MOSAIC_DEBUG
+
+// The Gradient tool's shape-outline ring (S22), drawn ANALYTICALLY on the guide lane. `c` is the
+// ring centre and `ux`/`uy` the two basis vectors (screen px) whose unit circle the ring is -- read
+// straight off the gizmo's handle anchors, so a rotated view, a sheared layer and a squashed
+// ellipse all come out right. M = [ux uy], so the ring is the zero set of
+// F(p) = |M^-1 (p - c)|^2 - 1, and the signed distance to it is the first-order (Taubin) estimate
+// F / |grad F| with grad F = 2 (M^-1)^T M^-1 (p - c): zero exactly ON the curve, correct to first
+// order beside it, which is all a 1 px hairline needs. That is the whole point of doing it here --
+// a CHORDED ring needed ~pi*sqrt(2R) segments to keep its sag under a quarter pixel, blowing the
+// entire 64-entry lane (and starving the document's own guides) above a ~200 px radius, and reading
+// as a visible polygon whenever it was clamped. ui::gradientRingDistance is this same expression on
+// the CPU, unit-tested against a brute-force distance-to-ellipse.
+vec3 gradientRing(vec2 p, vec3 base, vec2 c, vec2 ux, vec2 uy, vec3 ink, float S) {
+    float det = ux.x * uy.y - uy.x * ux.y;
+    if (abs(det) < 1e-6)
+        return base; // degenerate basis: no ring to draw
+    vec2 d = p - c;
+    vec2 q = vec2(uy.y * d.x - uy.x * d.y, ux.x * d.y - ux.y * d.x) / det;   // M^-1 * d
+    vec2 gr = vec2(uy.y * q.x - ux.y * q.y, ux.x * q.y - uy.x * q.x) / det;  // (M^-1)^T * q
+    float gl = length(gr);
+    if (gl < 1e-9)
+        return base;
+    float dist = (dot(q, q) - 1.0) / (2.0 * gl);
+    // The same thin-line coverage profile the straight guides use, but with no supersampling: the
+    // distance field is smooth, so one evaluation already anti-aliases cleanly.
+    float cov = clamp(1.5 - abs(dist) / S, 0.0, 1.0);
+    return cov > 0.0 ? mix(base, ink, cov) : base;
+}
+
+// Document guides + the Move tool's smart-alignment guides (binding 13): thin ~1px coloured lines.
+// Supersampled 3x3 near a line (the crop-guide idiom) so a rotated view -- or an angled smart guide
+// between two objects -- stays clean with no along-the-line ripple. The segment loop only runs the
+// supersample near a line (dist gate), and the guide count is small.
+//
+// The lane also carries the Gradient tool's ELLIPSE ring as a two-entry pair. It has no kind field
+// of its own (the renderer hard-writes the trailing std430 float as zero), so the pair is flagged by
+// an IMPOSSIBLE colour -- a negative red -- the same out-of-range-sentinel idiom this pass already
+// uses for anchorPos and tBendHandle. Entry k: a = centre, b = the major-axis tip, colour = the
+// marker. Entry k+1: a = the minor-axis tip, colour = the ring's real ink. Written by
+// VulkanCanvas::syncGuidesOverlay, which always pushes the pair FIRST so the lane's tail clamp can
+// never split it.
+vec3 guideOverlay(vec2 p, vec3 base) {
+    vec3 col = base;
+    float S = uiScale();
+    for (uint i = 0u; i < gLineCount; ++i) {
+        vec2 a = gLineData[2u * i].xy;
+        vec2 b = gLineData[2u * i].zw;
+        vec3 lineCol = gLineData[2u * i + 1u].rgb;
+        if (lineCol.r < 0.0) { // the ellipse-pair marker -- consume BOTH entries
+            if (i + 1u >= gLineCount)
+                break; // a truncated pair draws nothing rather than a stray chord
+            col = gradientRing(p, col, a, b - a, gLineData[2u * (i + 1u)].xy - a,
+                               gLineData[2u * (i + 1u) + 1u].rgb, S);
+            ++i; // the payload entry is not a segment of its own
+            continue;
+        }
+        if (segDist(p, a, b) >= 2.5 * S)
+            continue;
+        const int N = 3;
+        float cov = 0.0;
+        for (int sy = 0; sy < N; ++sy)
+            for (int sx = 0; sx < N; ++sx) {
+                vec2 sp = p + (vec2(float(sx), float(sy)) + 0.5) / float(N) - 0.5;
+                cov += clamp(1.5 - segDist(sp, a, b) / S, 0.0, 1.0);
+            }
+        col = mix(col, lineCol, clamp(cov / float(N * N), 0.0, 1.0));
+    }
+    return col;
+}
+
+// The Pen tool's node / handle chrome (binding 6, S28). Written in the SAME language as the crop /
+// transform controls, deliberately and to the letter, because that is what makes on-canvas chrome
+// read as one tool rather than as a pile of features:
+//   * knobs are the transform handles' exact border/fill pair around H = max(pc.ants.w, 2.0), so a
+//     pen anchor and a Move handle carry identical weight at every DPI;
+//   * SHAPE carries meaning, as it does on the DoF gizmo -- a square anchor is a cusp (a corner you
+//     can steer each side of independently), a round one is a smooth/symmetric node, and a handle
+//     tip is a smaller round knob (0.8 H) so it never reads as an anchor you could drag the curve by;
+//   * FILL carries selection -- hollow (white) is unselected, box-blue filled is selected, the
+//     universal vector-editor convention;
+//   * a hovered knob swaps its black border for box-blue (dofOverlay's hot-knob idiom) and, when it
+//     is also selected, lifts its fill toward white, so hover reads in both states;
+//   * every knob and stem wears chromeShadow -- the tight always-on casing (sigma ~1.1 logical px)
+//     that fixed-colour chrome needs, since box-blue over box-blue content is otherwise invisible.
+//     Its absence is precisely why the borrowed guide lane looked weak.
+// Stems stay a SINGLE hue over that casing: no white-core/black-halo two-tone on a long line, which
+// froze into a barber pole on rotated edges (user 2026-06-14). Two-tone is for compact marks only.
+vec3 penChrome(vec2 p, vec3 base) {
+    float S = uiScale();
+    float H = max(pc.ants.w, 2.0); // the transform handles' half-size (canvas-scaled for HiDPI)
+    float pad = 1.0 + 4.0 * S;     // a knob's border edge (+1 px) plus the casing's tail (~4 logical)
+    float reach = H + pad;         // ... measured from the widest knob's centre
+    if (p.x < pMin.x - reach || p.x > pMax.x + reach || p.y < pMin.y - reach ||
+        p.y > pMax.y + reach)
+        return base; // outside the chrome's bbox: skip both loops (the big win, as for the lasso)
+    vec3 col = base;
+
+    // The closing-loop affordance: a ring at the click radius around the first node, shown while
+    // the pointer is inside it. Single smooth distance sample -- an analytic circle needs no
+    // supersampling, exactly as gradientRing's field does not.
+    if (pCloseActive != 0u) {
+        float rd = abs(length(p - pCloseCenter) - pCloseRadius);
+        col = mix(col, vec3(0.0), chromeShadow(rd));
+        col = mix(col, kBoxColor, clamp(1.5 - rd / S, 0.0, 1.0));
+    }
+
+    // Stems first, so the knobs at both ends sit ON them rather than under them.
+    for (uint i = 0u; i < pStemCount; ++i) {
+        vec4 st = pData[pMarkCount + i];
+        float d = segDist(p, st.xy, st.zw);
+        if (d >= 4.5 * S)
+            continue; // past the line's coverage (1.5 px) AND its casing (the caret's own radius)
+        const int N = 3;
+        float cov = 0.0;
+        for (int sy = 0; sy < N; ++sy)
+            for (int sx = 0; sx < N; ++sx) {
+                vec2 sp = p + (vec2(float(sx), float(sy)) + 0.5) / float(N) - 0.5;
+                cov += clamp(1.5 - segDist(sp, st.xy, st.zw) / S, 0.0, 1.0);
+            }
+        col = mix(col, vec3(0.0), chromeShadow(d));
+        col = mix(col, kBoxColor, clamp(cov / float(N * N), 0.0, 1.0));
+    }
+
+    for (uint i = 0u; i < pMarkCount; ++i) {
+        vec4 mk = pData[i];
+        int kind = int(mk.z + 0.5);
+        int state = int(mk.w + 0.5);
+        float R = kind == 2 ? H * 0.8 : H;
+        vec2 d = abs(p - mk.xy);
+        if (d.x > R + pad || d.y > R + pad)
+            continue;
+        // Chebyshev for the square cusp anchor, Euclidean for the round ones -- the two knob shapes
+        // the transform/DoF chrome already speaks in, differing only in that one distance.
+        float sd = (kind == 0 ? max(d.x, d.y) : length(d)) - R;
+        bool selected = (state & 1) != 0;
+        bool hovered = (state & 2) != 0;
+        vec3 borderCol = hovered ? kBoxColor : vec3(0.0);
+        vec3 fillCol = selected ? (hovered ? mix(kBoxColor, vec3(1.0), 0.35) : kBoxColor)
+                                : vec3(1.0);
+        col = mix(col, vec3(0.0), chromeShadow(max(sd, 0.0)));
+        col = mix(col, borderCol, smoothstep(1.0, 0.1, sd));  // border
+        col = mix(col, fillCol, smoothstep(-0.6, -1.4, sd));  // fill
+    }
+    return col;
+}
+
+void main() {
+    ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    if (px.x >= int(pc.outSize.x) || px.y >= int(pc.outSize.y))
+        return;
+
+    vec2 s = vec2(px) + vec2(0.5); // sample at the pixel centre
+    vec2 doc = vec2(pc.invR0.x * s.x + pc.invR0.y * s.y + pc.invT.x,
+                    pc.invR1.x * s.x + pc.invR1.y * s.y + pc.invT.y);
+
+    // Anti-alias the document boundary: a hard inside/outside test staircases the rotated canvas
+    // edge (S16 feedback). Blend by edge COVERAGE instead -- the signed distance to the document
+    // rect (in doc px) feathered over ~1 screen pixel (docPerPx = doc px spanned by one screen px,
+    // from the inverse transform's linear part; uniform under rotation + isotropic zoom).
+    vec4 color = pc.bgColor;
+    vec2 outsideDist = max(-doc, doc - pc.docSize);
+    float sd = length(max(outsideDist, vec2(0.0))) + min(max(outsideDist.x, outsideDist.y), 0.0);
+    float docPerPx = length(vec2(pc.invR0.x, pc.invR1.x));
+    float cov = clamp(0.5 - sd / max(docPerPx, 1e-6), 0.0, 1.0);
+    if (cov > 0.0) {
+        // Crisp pixels when MAGNIFYING (zoom > 100% == less than one doc texel per screen px): snap
+        // the sample to the texel CENTRE so the bilinear sampler returns that texel exactly -- the
+        // raster-editor convention (Photoshop/Krita), discrete single-colour rectangles, no blur and
+        // no anti-aliasing. Below 100% (docPerPx >= 1) keep bilinear so minified content does not
+        // shimmer/alias. Hardcoded on the zoom ratio -- not a toggle (S19-c).
+        vec2 sampleDoc = docPerPx < 1.0 ? floor(doc) + 0.5 : doc;
+        // docTexel, not a bare texture(): the Channels tab's on-canvas isolation is applied HERE,
+        // on the way out of the composite, so the texture itself stays the true composite.
+        vec4 d = docTexel(clamp(sampleDoc / pc.docSize, vec2(0.0), vec2(1.0)));
+        // The composite now carries TRUE alpha (the checkerboard is no longer baked in). Transparent
+        // areas reveal the SCREEN-space checkerboard; composite the straight-alpha document over it.
+        vec3 docRgb = mix(checker(s), d.rgb, d.a);
+        // Feather the document's outer edge against the backdrop over the ~1px coverage ramp.
+        color = vec4(mix(color.rgb, docRgb, cov), 1.0);
+    }
+
+    // Pixel grid (View toggle in pc.bgColor.a), only over the document and only at high zoom.
+    if (pc.bgColor.a > 0.5 && cov > 0.0)
+        color = vec4(pixelGrid(doc, color.rgb), 1.0);
+
+    if (pc.ants.x > 0.5) {
+        // Feathered-selection indicator style F (featherStyle == 1): the soft falloff band sits
+        // UNDER the crisp 50% ant. Style A (== 0, the default) paints no band -- its two bracketing
+        // ant contours are drawn by ants() itself.
+        if (featherStyle == 1u)
+            color = vec4(featherBand(s, doc, color.rgb), 1.0);
+        color = vec4(ants(s, doc, color.rgb), 1.0);
+    }
+
+    // The in-flight lasso path (on top of the document + any committed-selection ants).
+    if (lassoCount > 1u)
+        color = vec4(lassoLine(s, color.rgb), 1.0);
+
+    if (pc.ants.z > 7.5)
+        // mode 8: an Image-menu preview whose rect is DERIVED (Rotate Arbitrary's bounding box) --
+        // the crop picture without the 8 knobs, because no drag stands behind them.
+        color = vec4(cropOverlay(s, doc, color.rgb, /*ghostDoc=*/false, /*handles=*/false), 1.0);
+    else if (pc.ants.z > 6.5)
+        // mode 7: the Image Size resample preview -- the crop picture PLUS the ghost outline of the
+        // current document frame, which is what makes a same-shaped box read as a size change.
+        color = vec4(cropOverlay(s, doc, color.rgb, /*ghostDoc=*/true, /*handles=*/true), 1.0);
+    else if (pc.ants.z > 5.5)
+        color = vec4(rotateDots(s, color.rgb), 1.0); // mode 6: rotate-hotspot dots alone (Type box)
+    else if (pc.ants.z > 4.5) {
+        // mode 5: the Line/Gradient gizmo is DEFERRED past the guide lane -- see below.
+    } else if (pc.ants.z > 3.5)
+        color = vec4(sampleAreaOverlay(s, color.rgb), 1.0); // mode 4: inpaint sample area (S39)
+    else if (pc.ants.z > 1.5)
+        color = vec4(cropOverlay(s, doc, color.rgb, /*ghostDoc=*/false, /*handles=*/true), 1.0);
+    else if (pc.ants.z > 0.5)
+        color = vec4(transformHandles(s, color.rgb, /*expandTint=*/false, doc, /*handles=*/true),
+                     1.0);
+
+    // The Move tool's transform ANCHOR (pivot / reference point), over the handles (S15+): the canvas
+    // parks anchorPos at the sentinel unless the Move box is up, so this one test gates the glyph.
+    if (anchorPos.x > -1e8)
+        color = vec4(anchorGlyph(s, color.rgb), 1.0);
+
+    // Smart Resize keep-region chips (S16-f), over the crop chrome (see keepChips).
+    if (kChipCount > 0u)
+        color = vec4(keepChips(s, color.rgb), 1.0);
+
+    // The S33 blur-adjustment centre gizmo, over the chips and under the Type decoration: the DoF
+    // focus band or the Radial crosshair, picked by dofKind.
+    if (dofActive != 0u)
+        color = vec4(dofKind == 1u ? blurCrosshair(s, color.rgb) : dofOverlay(s, color.rgb), 1.0);
+
+    // Document guides + the Move tool's smart-alignment guides (binding 13), over the content and
+    // any gizmo/handles, under the Type decoration + cursor tools.
+    if (gLineCount > 0u)
+        color = vec4(guideOverlay(s, color.rgb), 1.0);
+
+    // The Pen tool's node/handle chrome (binding 6, S28), over the guides for the same reason the
+    // Line/Gradient gizmo below is: it is the direct-manipulation surface, and a node you cannot see
+    // is a node you cannot grab. Under the Type decoration + the cursor tools, like the guides.
+    if (pMarkCount > 0u || pStemCount > 0u || pCloseActive != 0u)
+        color = vec4(penChrome(s, color.rgb), 1.0);
+
+    // Mode 5 -- the Line shape / Gradient axis gizmo -- draws AFTER the guide lane, alone among the
+    // gizmo modes. The Gradient tool's own shape-outline ring rides that lane (see guideOverlay),
+    // and with the ordinary ordering the ring painted straight over the handle sitting on it: a
+    // handle you cannot see is a handle you cannot grab (S22). The gizmo is the direct-manipulation
+    // surface, so it wins over BOTH the ring and any document guide crossing it.
+    if (pc.ants.z > 4.5 && pc.ants.z < 5.5)
+        color = vec4(lineGizmo(s, color.rgb), 1.0);
+
+    // The Type tool's selection highlight + blinking caret (S29-b) + spell squiggles (deferred §2),
+    // over the document and any gizmo.
+    if (tCaretActive != 0u || tSelCount > 0u || tSquiggleCount > 0u || tBendHandle.x > -1e8)
+        color = vec4(textOverlay(s, color.rgb), 1.0);
+
+    if (pc.overlay.x > 0.5)
+        color = vec4(overlay(s, color.rgb), 1.0); // rotation dial
+    else if (pc.overlay.w > 0.5)
+        color = vec4(compositeHud(s, color.rgb), 1.0); // crop size HUD (dial off; shares the lanes)
+
+    // The brush reticle sits on top of everything -- it is the cursor (S19-a).
+    if (reticleActive != 0u)
+        color = vec4(brushReticle(s, color.rgb), 1.0);
+
+    // The eyedropper's loupe (S24) is likewise the cursor for its tool, and never coexists with the
+    // reticle (different tools), so it draws last of all.
+    if (loupeActive != 0u)
+        color = vec4(loupe(s, color.rgb), 1.0);
+
+    // The FPS readout is a diagnostic HUD -- it sits above literally everything, the cursor tools
+    // included, so it is always legible while you watch the number. Debug builds only.
+#ifdef MOSAIC_DEBUG
+    if (fpsActive != 0u)
+        color = vec4(fpsReadout(s, color.rgb), 1.0);
+#endif
+
+    imageStore(uOut, px, vec4(color.rgb, 1.0)); // opaque swapchain; bgColor.a was the grid toggle
+}

@@ -1,0 +1,237 @@
+#version 450
+// Extruded-text compute rasterizer (S30-c, docs/type-tool.md §10.5): the Vulkan lane of the 3D
+// text renderer, mirroring core/text/extrude_render.cpp formula-for-formula so the two lanes stay
+// parity-testable. All-compute like the rest of the renderer (no graphics pipeline): pass 0 walks
+// each triangle's pixel bbox and atomicMax-es 1/depth into the depth grid (positive-float bits
+// order like uints); pass 1 re-walks and shades the fragments that WON their pixel. Blinn-Phong /
+// PBR-lite per §10.3; lights live in the un-rotated design frame. One thread per triangle.
+//
+// Push constant selects the pass so both dispatches share this module and its layout.
+
+layout(local_size_x = 64) in;
+
+layout(push_constant) uniform Push { uint mode; } pc;  // 0 = depth prepass, 1 = shade
+
+// Three vec4s per vertex: [3i] = model-space position (w = 1 on caps, 0 on walls/bevels),
+// [3i+1] = model-space normal (w = design-space u), [3i+2] = (design-space v, unrolled side s,
+// side t, 0) -- the side coords are the wrap-mode wall map's sampling domain.
+layout(std430, binding = 0) readonly buffer Verts   { vec4 vdata[]; };
+layout(std430, binding = 1) readonly buffer Indices { uint idx[]; };
+layout(std430, binding = 2) readonly buffer TriMat  { uint triMat[]; };  // per-triangle material slot
+// Three vec4s per material slot: [3m] = albedo rgba, [3m+1] = (metalness, roughness, design-map
+// texel offset, design-map width -- 0 = no overlay for this slot), [3m+2] = (design-map height,
+// wall-map texel offset, wall-map width, wall-map height -- width 0 = no wall map).
+layout(std430, binding = 3) readonly buffer Mats    { vec4 mdata[]; };
+layout(std430, binding = 4) buffer Depth            { uint depthBits[]; };
+layout(std430, binding = 5) buffer Color            { vec4 outColor[]; };
+
+layout(std430, binding = 6) readonly buffer Params {
+    mat4  rot;            // Extrude::orientation as a matrix (rotation only)
+    vec4  camCenterDist;  // pivot.xyz, camDist
+    vec4  pixelLin;       // toPixel linear: m00 m01 m10 m11
+    vec4  pixelOff;       // toPixel tx ty, supersample S, ortho flag (>0.5 = ortho)
+    ivec4 tile;           // tx0 ty0 tw th (supersampled pixels)
+    vec4  ambient;        // rgb, w = lightingEnabled (>0.5)
+    ivec4 counts;         // triangleCount, lightCount, -, -
+    vec4  lightDir[8];    // direction the light travels (design frame), w = intensity
+    vec4  lightCol[8];
+    vec4  envLin;         // ExtrudeEnv::layerToEnv linear: m00 m01 m10 m11
+    vec4  envOff;         // layerToEnv tx ty, env width, env height (texels)
+    vec4  envMisc;        // zEnv (back-cap plane), reflectCanvas && snapshot present (>0.5),
+                          // reflectSidesOnly (>0.5: caps keep the studio),
+                          // overlayWrapSides (>0.5: walls/bevels sample the overlay maps too)
+} u;
+
+// The canvas-reflection snapshot (binding 7): straight-alpha float RGBA texels, row-major,
+// dimensions in u.envOff.zw. A 1-texel transparent dummy rides here when reflections are off.
+layout(std430, binding = 7) readonly buffer EnvTex { vec4 envTexels[]; };
+
+// The S30-e Layer-Effects overlay maps (binding 8, docs/type-tool.md §12): per-material design-
+// space albedo maps, concatenated row-major float RGBA texels; each mats row carries its slot's
+// offset/extent. A 1-texel dummy rides here when no overlay draws.
+layout(std430, binding = 8) readonly buffer OverlayTex { vec4 ovTexels[]; };
+
+struct PV { vec2 px; float invD; vec3 view; vec3 n; vec2 uv; vec2 side; };
+
+PV transformVertex(uint vi) {
+    vec3 p = vdata[3u * vi + 0u].xyz;
+    vec3 n = vdata[3u * vi + 1u].xyz;
+    vec3 pr = (u.rot * vec4(p - u.camCenterDist.xyz, 0.0)).xyz;
+    float camDist = u.camCenterDist.w;
+    bool ortho = u.pixelOff.w > 0.5;
+    float depth = camDist - pr.z;
+    vec2 design;
+    if (ortho) {
+        design = u.camCenterDist.xy + pr.xy;
+    } else {
+        float d = max(depth, camDist * 0.05);  // never divide across the eye plane
+        design = u.camCenterDist.xy + pr.xy * (camDist / d);
+    }
+    vec2 dev = vec2(u.pixelLin.x * design.x + u.pixelLin.y * design.y + u.pixelOff.x,
+                    u.pixelLin.z * design.x + u.pixelLin.w * design.y + u.pixelOff.y);
+    PV o;
+    o.px = dev * u.pixelOff.z;  // supersampled pixels
+    o.invD = 1.0 / max(depth, 1e-6);
+    o.view = pr;
+    o.n = (u.rot * vec4(n, 0.0)).xyz;
+    o.uv = vec2(vdata[3u * vi + 1u].w, vdata[3u * vi + 2u].x);
+    o.side = vdata[3u * vi + 2u].yz;
+    return o;
+}
+
+// The procedural studio gradient metals mirror (formula-identical with the CPU lane): bright
+// zenith, mid horizon, dark floor; roughness widens the horizon = the analytic blur stand-in.
+float studioEnv(vec3 r, float rough) {
+    float up = -r.y;  // design frame is y-DOWN
+    float w = 0.08 + 0.6 * rough;
+    float t = smoothstep(-w, w, up);
+    float sky = 0.65 + (1.25 - 0.65) * clamp(up, 0.0, 1.0);
+    float ground = 0.65 + (0.15 - 0.65) * clamp(-up, 0.0, 1.0);
+    return ground + (sky - ground) * t;
+}
+
+// Bilinear, edge-clamped, straight-alpha sample of the canvas snapshot.
+vec4 sampleEnv(vec2 p) {
+    float ew = u.envOff.z, eh = u.envOff.w;
+    float fx = clamp(p.x - 0.5, 0.0, ew - 1.0);
+    float fy = clamp(p.y - 0.5, 0.0, eh - 1.0);
+    uint x0 = uint(fx), y0 = uint(fy);
+    uint x1 = min(x0 + 1u, uint(ew) - 1u);
+    uint y1 = min(y0 + 1u, uint(eh) - 1u);
+    float tx = fx - float(x0), ty = fy - float(y0);
+    uint w = uint(ew);
+    vec4 top = mix(envTexels[y0 * w + x0], envTexels[y0 * w + x1], tx);
+    vec4 bot = mix(envTexels[y1 * w + x0], envTexels[y1 * w + x1], tx);
+    return mix(top, bot, ty);
+}
+
+// Bilinear, edge-clamped sample of one S30-e overlay map (base texel offset + extent) -- the
+// sampleEnv formula over the concatenated buffer, mirroring the CPU lane's map sampling.
+vec3 sampleOverlay(float base, float mapW, float mapH, vec2 p) {
+    float fx = clamp(p.x - 0.5, 0.0, mapW - 1.0);
+    float fy = clamp(p.y - 0.5, 0.0, mapH - 1.0);
+    uint x0 = uint(fx), y0 = uint(fy);
+    uint x1 = min(x0 + 1u, uint(mapW) - 1u);
+    uint y1 = min(y0 + 1u, uint(mapH) - 1u);
+    float tx = fx - float(x0), ty = fy - float(y0);
+    uint w = uint(mapW);
+    uint b = uint(base);
+    vec4 top = mix(ovTexels[b + y0 * w + x0], ovTexels[b + y0 * w + x1], tx);
+    vec4 bot = mix(ovTexels[b + y1 * w + x0], ovTexels[b + y1 * w + x1], tx);
+    return mix(top, bot, ty).rgb;
+}
+
+// `albedoRgb` is the material albedo, or the overlay map's sample on the faces that carry the
+// design (§12) -- either way it feeds the diffuse fill AND the metal F0 tint, so the design is
+// lit exactly like the surface it sits on.
+vec3 shadePixel(uint mat, vec3 albedoRgb, vec3 n, vec3 viewDir, vec3 p, bool capSurface) {
+    if (u.ambient.w < 0.5) return albedoRgb;  // lighting off: flat self-lit faces
+    float metal = clamp(mdata[3u * mat + 1u].x, 0.0, 1.0);
+    float rough = clamp(mdata[3u * mat + 1u].y, 0.0, 1.0);
+    float kd = 1.0 - metal;  // a true metal has no diffuse lobe
+    vec3 ks = vec3(0.06) + (albedoRgb - vec3(0.06)) * metal;  // F0
+    float shininess = exp2(2.0 + 8.0 * (1.0 - rough));
+    float specGain = 0.25 + 0.75 * (1.0 - rough);
+
+    vec3 c = albedoRgb * u.ambient.rgb * kd;
+    for (int i = 0; i < u.counts.y; ++i) {
+        vec3 l = normalize(-u.lightDir[i].xyz);
+        float ndl = max(0.0, dot(n, l));
+        if (ndl <= 0.0) continue;
+        float di = u.lightDir[i].w;
+        c += albedoRgb * kd * u.lightCol[i].rgb * di * ndl;
+        vec3 h = normalize(l + viewDir);
+        float spec = pow(max(0.0, dot(n, h)), shininess) * specGain * di;
+        c += ks * u.lightCol[i].rgb * spec;
+    }
+
+    // Environment reflection, Fresnel-Schlick weighted (F0 = ks): the reflected view ray samples
+    // the canvas snapshot where it hits the back-cap plane, else the studio gradient.
+    float cosNV = max(0.0, dot(n, viewDir));
+    float f1 = 1.0 - cosNV;
+    float f5 = f1 * f1 * f1 * f1 * f1;
+    vec3 refl = n * (2.0 * cosNV) - viewDir;
+    vec3 envC = vec3(studioEnv(refl, rough));
+    if (u.envMisc.y > 0.5 && !(u.envMisc.z > 0.5 && capSurface) && refl.z < -1e-9) {
+        float t = (u.envMisc.x - p.z) / refl.z;
+        vec3 hit = p + refl * t;
+        vec2 design = hit.xy + u.camCenterDist.xy;
+        vec2 envPx = vec2(u.envLin.x * design.x + u.envLin.y * design.y + u.envOff.x,
+                          u.envLin.z * design.x + u.envLin.w * design.y + u.envOff.y);
+        vec4 s = sampleEnv(envPx);
+        envC = mix(envC, s.rgb, clamp(s.a, 0.0, 1.0));  // transparent canvas -> studio
+    }
+    float envDim = 1.0 - 0.55 * rough;
+    c += (ks + (vec3(1.0) - ks) * f5) * envC * envDim;
+    return min(c, vec3(8.0));
+}
+
+void main() {
+    uint tri = gl_GlobalInvocationID.x;
+    if (tri >= uint(u.counts.x)) return;
+
+    PV a = transformVertex(idx[3u * tri + 0u]);
+    PV b = transformVertex(idx[3u * tri + 1u]);
+    PV c = transformVertex(idx[3u * tri + 2u]);
+    bool capTri = vdata[3u * idx[3u * tri + 0u]].w > 0.5;  // per-triangle (the mesher never mixes)
+    // §12: the FRONT cap (model z = +depth/2) always carries the overlay design. Wrap mode paints
+    // the WHOLE solid: the back cap takes the design map too (mirrored from behind), and the
+    // walls/bevels take the UNROLLED wall map by their side coords.
+    bool frontTri = capTri && vdata[3u * idx[3u * tri + 0u]].z > 0.0;
+
+    float area = (b.px.x - a.px.x) * (c.px.y - a.px.y) - (c.px.x - a.px.x) * (b.px.y - a.px.y);
+    if (abs(area) < 1e-12) return;
+    float inv = 1.0 / area;
+
+    int tx0 = u.tile.x, ty0 = u.tile.y, tw = u.tile.z, th = u.tile.w;
+    int bx0 = max(tx0, int(floor(min(min(a.px.x, b.px.x), c.px.x))));
+    int by0 = max(ty0, int(floor(min(min(a.px.y, b.px.y), c.px.y))));
+    int bx1 = min(tx0 + tw - 1, int(ceil(max(max(a.px.x, b.px.x), c.px.x))));
+    int by1 = min(ty0 + th - 1, int(ceil(max(max(a.px.y, b.px.y), c.px.y))));
+
+    bool ortho = u.pixelOff.w > 0.5;
+    vec3 eye = vec3(0.0, 0.0, u.camCenterDist.w);
+    uint mat = triMat[tri];
+    float alpha = clamp(mdata[3u * mat + 0u].a, 0.0, 1.0);
+    if (alpha <= 0.0) return;
+    float mapOff = mdata[3u * mat + 1u].z, mapW = mdata[3u * mat + 1u].w;
+    float mapH = mdata[3u * mat + 2u].x;
+    float wallOff = mdata[3u * mat + 2u].y, wallW = mdata[3u * mat + 2u].z;
+    float wallH = mdata[3u * mat + 2u].w;
+    bool wrap = u.envMisc.w > 0.5;
+    bool capSample = capTri && mapW > 0.5 && (frontTri || wrap);
+    bool wallSample = !capTri && wrap && wallW > 0.5;
+
+    for (int py = by0; py <= by1; ++py) {
+        for (int px = bx0; px <= bx1; ++px) {
+            float sx = float(px) + 0.5, sy = float(py) + 0.5;
+            float w0 = ((b.px.x - sx) * (c.px.y - sy) - (c.px.x - sx) * (b.px.y - sy)) * inv;
+            float w1 = ((c.px.x - sx) * (a.px.y - sy) - (a.px.x - sx) * (c.px.y - sy)) * inv;
+            float w2 = 1.0 - w0 - w1;
+            if (w0 < 0.0 || w1 < 0.0 || w2 < 0.0) continue;
+            float invD = w0 * a.invD + w1 * b.invD + w2 * c.invD;  // affine in screen space
+            uint at = uint(py - ty0) * uint(tw) + uint(px - tx0);
+            uint bits = floatBitsToUint(max(invD, 0.0));  // positive floats order like uints
+            if (pc.mode == 0u) {
+                atomicMax(depthBits[at], bits);
+            } else {
+                if (depthBits[at] != bits) continue;  // lost the depth race
+                float q0 = w0 * a.invD, q1 = w1 * b.invD, q2 = w2 * c.invD;
+                float qs = 1.0 / (q0 + q1 + q2);
+                vec3 n = normalize((a.n * q0 + b.n * q1 + c.n * q2) * qs);
+                vec3 p = (a.view * q0 + b.view * q1 + c.view * q2) * qs;
+                vec3 viewDir = ortho ? vec3(0.0, 0.0, 1.0) : normalize(eye - p);
+                if (dot(n, viewDir) < 0.0) n = -n;  // two-sided
+                vec3 alb = mdata[3u * mat + 0u].rgb;
+                if (capSample) {  // the overlay map replaces the albedo (rgb only; §12)
+                    vec2 uv = (a.uv * q0 + b.uv * q1 + c.uv * q2) * qs;
+                    alb = sampleOverlay(mapOff, mapW, mapH, uv * vec2(mapW, mapH));
+                } else if (wallSample) {  // walls/bevels: the unrolled wall map (wrap mode)
+                    vec2 sc = (a.side * q0 + b.side * q1 + c.side * q2) * qs;
+                    alb = sampleOverlay(wallOff, wallW, wallH, sc * vec2(wallW, wallH));
+                }
+                outColor[at] = vec4(shadePixel(mat, alb, n, viewDir, p, capTri), alpha);
+            }
+        }
+    }
+}

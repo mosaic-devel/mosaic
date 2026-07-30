@@ -1,0 +1,11 @@
+{
+    "CacheThumbnail": true,
+    "KPlugin": {
+        "Id": "mosaicthumbnail",
+        "Name": "Mosaic Documents",
+        "MimeTypes": [
+            "image/x-mosaic"
+        ]
+    },
+    "MimeType": "image/x-mosaic;"
+}

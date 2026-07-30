@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Mosaic's Win32 application manifest (PLAN.md S57). Compiled into mosaic.exe as resource type 24
+  (RT_MANIFEST), id 1, by packaging/windows/mosaic.rc.in.
+
+  A manifest is read by the loader BEFORE the first instruction of main() runs, which is the whole
+  point: everything declared here has to be true of the process from its very first window, and
+  none of it can be undone later. That also makes a malformed manifest fatal — Windows refuses to
+  start the image with 0xc0000020 (STATUS_INVALID_IMAGE_FORMAT) rather than ignoring the bad XML —
+  so this file stays as small as the requirements allow.
+
+  There is deliberately NO <assemblyIdentity> for the application itself. An identity is what a
+  side-by-side ASSEMBLY needs so others can bind to it; an application manifest does not, and
+  Microsoft's own "Enabling Visual Styles" sample omits it. Adding one would mean hard-coding a
+  four-part version here — a second place for the frozen 0.2.17 to drift out of step with
+  project(VERSION), while the authoritative copy in the VERSIONINFO resource is generated.
+
+  FLTK 1.4.5 embeds no manifest of its own (only test/sudoku.rc, a demo), and it is built here as a
+  DLL besides, so there is no second RT_MANIFEST id 1 to collide with this one.
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0"
+          xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">
+
+  <!-- asInvoker: Mosaic is an image editor, it has no business asking for administrator rights.
+       Without this element Windows applies "installer detection" heuristics to un-manifested
+       executables and can decide a program deserves a UAC prompt on the strength of its filename;
+       saying asInvoker explicitly is how you opt out of being guessed about. uiAccess=false is the
+       default and is spelled out because the attribute is required for the element to validate on
+       some toolchains. -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <!-- ComCtl32 version 6. Without this dependency the loader binds the process to the Windows-95-era
+       comctl32 v5, and every common control the shell puts in front of the user on our behalf — the
+       GetOpenFileName / GetSaveFileName dialogs FLTK's Fl_Native_File_Chooser drives, the message
+       boxes, the scroll bars in them — draws unthemed. It costs one manifest block and there is no
+       code side to it. -->
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls"
+                        version="6.0.0.0" processorArchitecture="*"
+                        publicKeyToken="6595b64144ccf1df" language="*"/>
+    </dependentAssembly>
+  </dependency>
+
+  <asmv3:application>
+    <asmv3:windowsSettings>
+      <!-- PER-MONITOR-V2 DPI awareness. Mosaic is a canvas application: if the process is DPI
+           UNAWARE, Windows renders it at 96 DPI into an off-screen surface and bitmap-stretches the
+           result to the monitor's scale, so the user's pixels stop being pixels — a 1:1 zoom is no
+           longer 1:1, and the overlay hairlines blur. Per-monitor-v2 (rather than plain
+           per-monitor) is what also scales the non-client area, dialogs and menus when a window is
+           dragged between monitors of different scale.
+
+           Doing it HERE and not at run time matters. FLTK does try at run time
+           (Fl_WinAPI_Screen_Driver::open_display_platform calls SetProcessDpiAwarenessContext), but
+           only when the process is still DPI-unaware at that point — and by then the first window
+           may already exist. It reads the manifest state back with GetProcessDpiAwareness, which
+           reports PROCESS_PER_MONITOR_DPI_AWARE (2) for a PerMonitorV2 process because the legacy
+           enum has no V2 value, so FLTK sets its own is_dpi_aware flag and skips the call. The two
+           agree; the manifest simply gets there first. -->
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <!-- The pre-1703 spelling of the same request. Redundant on this build's Windows 10 1809
+           floor — 1703+ reads dpiAwareness and ignores dpiAware — and kept anyway because a
+           manifest is the one thing in the payload that cannot be fixed in the field. -->
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+
+      <!-- UTF-8 as the process ACTIVE CODE PAGE (Windows 10 1903+). What this buys: every -A entry
+           point in the process — ours, and every third-party DLL's — starts interpreting char*
+           as UTF-8 instead of the machine's legacy ANSI code page (1252 in Warsaw, 932 in Tokyo).
+           That is what makes fopen("<cyrillic>.png") in a dependency work on a Japanese Windows.
+
+           Mosaic's own path handling does NOT depend on this: the toolchain compiles with
+           UNICODE/_UNICODE and src/common/fs_path.cpp keeps std::filesystem::path in UTF-16 on
+           Windows, so our code is correct with or without the manifest. The declaration exists for
+           the libraries in the payload that were never taught the difference — fontconfig's cache
+           paths, libpng/libjpeg's fopen, gettext's catalog lookup. Ignored below 1903, where the
+           legacy code page applies and those libraries are as broken as they always were. -->
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+
+      <!-- Opt out of the MAX_PATH (260 character) limit for this process. An image editor is handed
+           paths it did not choose — a camera import three folders deep inside a synced cloud
+           directory reaches 260 characters routinely. This only takes effect when the machine's
+           LongPathsEnabled policy is on (Windows 10 1607+, off by default), so it is an
+           opportunistic improvement rather than a guarantee; it can never make things worse. -->
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+    </asmv3:windowsSettings>
+  </asmv3:application>
+</assembly>

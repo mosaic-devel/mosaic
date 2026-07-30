@@ -1,0 +1,85 @@
+#version 450
+
+// One separable blur pass for the S33 blur lane (docs/blur-filters.md §8): GPU mirror of
+// src/render/blur.cpp's gaussPassRgba (mode 0) and bilateralPass (mode 1), one invocation per
+// output sample. The CPU lane stays the permanent reference and tests/test_blur_gpu.cpp holds
+// this shader to it with tolerance-based parity: BOTH lanes run float and share every formula,
+// so drift is fused-multiply-add and transcendental rounding, never formula divergence.
+//
+// Pixels are PREMULTIPLIED RGBA (blur.cpp's §2 working space; blur_gpu.cpp ran the convert
+// pass first). Edge policy: CLAMP indexing (replicate) -- blur.cpp's content edge policy,
+// deliberately not reflect-101. blur_gpu.cpp dispatches this twice per blur: dir 0 walks the
+// pixel's row, dir 1 its column, exactly separableRgba's two passes.
+//
+// DETERMINISM: a pure function of (push constants, kernel table, pixel) -- no atomics, no
+// shared memory -- so a given device produces identical bytes at any dispatch split.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer Src { vec4 src[]; };
+layout(std430, binding = 1) writeonly buffer Dst { vec4 dst[]; };
+// Half-kernel weights [0..r], baked host-side by blur_gpu.cpp with the SAME std::exp on the
+// same floats the CPU tables use (bit-identical tables). Gaussian passes carry the normalised
+// half-kernel; bilateral passes the unnormalised spatial taper (the per-pixel range
+// normalisation absorbs any constant factor, blur.cpp). DoF-soft levels concatenate their
+// kernels into one buffer, each pass addressing its own at kernOff.
+layout(std430, binding = 2) readonly buffer Kern { float kern[]; };
+
+layout(push_constant) uniform Push {
+    int w;             // image width, px
+    int h;             // image height, px
+    int r;             // kernel support radius, taps
+    int dir;           // 0 = along rows (x), 1 = along columns (y)
+    int mode;          // 0 = fixed Gaussian half-kernel, 1 = bilateral (range term on luma)
+    int kernOff;       // this pass's first weight in kern[]
+    float rangeCoeff;  // bilateral: -1 / (2 * sigmaR^2) on premultiplied luma
+} pc;
+
+// Premultiplied Rec.709 luma (blur.cpp premulLumaPlane): the CPU precomputes a plane of these
+// from the pass's own source buffer; recomputing per tap reads the same values.
+float lumaOf(vec4 p) { return 0.2126 * p.r + 0.7152 * p.g + 0.0722 * p.b; }
+
+void main() {
+    const int x = int(gl_GlobalInvocationID.x);
+    const int y = int(gl_GlobalInvocationID.y);
+    if (x >= pc.w || y >= pc.h) return;
+    const int len = pc.dir == 0 ? pc.w : pc.h;
+    const int i = pc.dir == 0 ? x : y;
+    // A line sample j sits at base + j * stride (separableRgba's row/column strides, in
+    // pixels rather than floats).
+    const int base = pc.dir == 0 ? y * pc.w : x;
+    const int stride = pc.dir == 0 ? 1 : pc.w;
+
+    // ⚠ RADV/ACO: both loops below are single-level with a dynamically-UNIFORM bound (r is a
+    // push constant). Never wrap nested scans in a per-invocation data-dependent bound -- the
+    // miscompile pinned in texture_sky.comp's worley shells.
+    if (pc.mode == 0) {
+        // gaussPassRgba: centre tap, then symmetric pairs, edges clamped.
+        vec4 acc = src[base + i * stride] * kern[pc.kernOff];
+        for (int k = 1; k <= pc.r; ++k) {
+            const int lo = clamp(i - k, 0, len - 1);
+            const int hi = clamp(i + k, 0, len - 1);
+            acc += (src[base + lo * stride] + src[base + hi * stride]) * kern[pc.kernOff + k];
+        }
+        dst[base + i * stride] = acc;
+    } else {
+        // bilateralPass: spatial taper times a Gaussian on the luma difference to the centre,
+        // normalised per pixel because the range term varies per pixel.
+        const float centreLuma = lumaOf(src[base + i * stride]);
+        vec4 acc = vec4(0.0);
+        float wsum = 0.0;
+        for (int k = -pc.r; k <= pc.r; ++k) {
+            const int j = clamp(i + k, 0, len - 1);
+            const vec4 s = src[base + j * stride];
+            const float d = lumaOf(s) - centreLuma;
+            const float wgt = kern[pc.kernOff + abs(k)] * exp(d * d * pc.rangeCoeff);
+            acc += s * wgt;
+            wsum += wgt;
+        }
+        // The centre tap contributes kern[kernOff] * exp(0) = 1, so wsum >= 1: this division
+        // never sees a near-zero denominator (the reciprocal-lowering trap pinned in
+        // texture_paper.comp needs no correction here).
+        const float inv = 1.0 / wsum;
+        dst[base + i * stride] = acc * inv;
+    }
+}

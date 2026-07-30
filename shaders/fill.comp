@@ -1,0 +1,21 @@
+#version 450
+
+// Fill every texel of a storage image with a solid color (passed via push constant).
+// This is the S2-b proof of the GLSL -> SPIR-V -> embedded-bytes -> compute-pipeline chain.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(binding = 0, rgba8) uniform writeonly image2D uOutput;
+
+layout(push_constant) uniform Push {
+    vec4 color;  // components in [0, 1]
+} pc;
+
+void main() {
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(uOutput);
+    if (pos.x >= size.x || pos.y >= size.y) {
+        return;
+    }
+    imageStore(uOutput, pos, pc.color);
+}

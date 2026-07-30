@@ -1,0 +1,491 @@
+#version 450
+
+// The FUSED per-macrotile ADJUSTMENT step (S60-a; docs/s60-performance-plan.md §4.1). The twin of
+// composite_tile.comp, and the difference is the whole design:
+//
+//   composite_tile.comp  reads a SOURCE SHEET, places it, blends it ONTO the accumulator.
+//   adjust_tile.comp     reads the ACCUMULATOR, applies a per-pixel transfer, writes it BACK.
+//
+// An adjustment layer is not a source. It is a function of the backdrop the layers below it
+// already built, which on this lane is exactly the resident accumulator -- so the port is a second
+// dispatch over the same dirty macrotiles, with the same tile geometry and the same descriptor set
+// layout, and nothing ever leaves the device. Reading the backdrop back to the host to grade it
+// would reinstate precisely the per-layer round trip residency exists to remove.
+//
+// CPU REFERENCE, mirrored expression for expression:
+//   src/render/compositor.cpp -- applyAdjustment's scalar colour loop (every kind arm below is a
+//   transcription of its `case`), adjustmentMaskAt (the mask read), curveSample / gradientSample
+//   (the two lookup kinds), srgbToLinear / linearToSrgb, rgbToHsl / hslToRgb / hueToRgb,
+//   smoothstepf, and walkStep's adjustment branch (which is where the modulation comes from);
+//   src/core/blend_math.hpp -- detail::lum / clipColor / setLum, reused verbatim from
+//   composite_tile.comp's mirror of the same functions.
+//
+// ⚠ THREE THINGS THE CPU WALK DOES THAT LOOK LIKE OVERSIGHTS HERE AND ARE NOT:
+//
+//   1. AN ADJUSTMENT'S BLEND MODE IS NEVER READ. walkStep pulls `mode` out of the layer and then
+//      hands the adjustment branch nothing but the accumulator, the clip coverage and the walk's
+//      placement: applyAdjustment lerps the graded colour back over the original by
+//      opacity x mask x clip and returns. There is no compositeOver anywhere on that path. A
+//      kernel that "respected" the blend mode would draw a DIFFERENT picture from the golden lane,
+//      which is the one outcome the lane is not allowed to produce -- so the mode is absent here
+//      too, and the host deliberately does not even hash it into the plan-diff fingerprint.
+//   2. ALPHA IS NEVER WRITTEN. An adjustment recolours coverage; it does not add any. The store
+//      below puts the loaded alpha back bit-for-bit.
+//   3. AN ADJUSTMENT NEVER PUBLISHES A CLIP BASE -- walkStep returns before the capture -- so
+//      binding 4 (uClipOut) is declared by the shared set layout and deliberately not read here.
+//
+// PER-KIND ADMISSION. This kernel serves the PER-PIXEL, FINITE-SLOPE transfers and nothing else;
+// `planAdjustment` in tile_compositor.cpp is the gate and every other kind is a named refusal that
+// sends the whole document to the CPU walk. The bound that decides admission is stated once, here,
+// because it is a property of the accumulator rather than of any one kind: the reference works in
+// fp32 and the accumulator is rgba16f, so the backdrop this kernel reads differs from the one the
+// reference reads by up to ~2^-11 relative (~2.4e-4 near 0.5), and a transfer amplifies that by
+// its own |f'|. A finite slope keeps the result inside the 1/255 parity bound; a LATTICE (Threshold,
+// Posterize, a quantised Grayscale) has an infinite slope at every step and flips a whole level for
+// any pixel that lands near one, which a real image does thousands of times. Those refuse.
+//
+// VULKAN 1.0 FLOOR (§2): plain `#version 450`, no `#extension`, no subgroup ops, no 16/64-bit
+// types. 8x8x1 = 64 invocations (the guaranteed minimum is 128).
+// 1 storage image + 3 sampled images + 1 storage buffer (guaranteed 4 / 16 / 4) -- STRICTLY LESS
+// than composite_tile.comp asks for, so admitting this kernel needs no new caps question.
+// 108 bytes of push constants (guaranteed 128). One descriptor set (guaranteed 4).
+//
+// TWO BINARIES, ONE SOURCE, exactly as composite_tile.comp: compiled plain at the vulkan1.0 target
+// env, and again with -DMOSAIC_TILE_INDEXED for the descriptor-indexed variant.
+//
+// DETERMINISM: a pure function of (push constants, bound images, accumulator texel) -- no atomics,
+// no shared memory, and every tile touches a disjoint region of the accumulator, so a dispatch
+// split (or tiles submitted in any order) produces identical bytes.
+
+#ifdef MOSAIC_TILE_INDEXED
+#extension GL_EXT_nonuniform_qualifier : require
+#endif
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// The DISPATCH SHAPE, verbatim from composite_tile.comp: 0 = one dispatch per macrotile with the
+// geometry in push constants, 1 = one dispatch per layer with the geometry in `uTiles`. Both shapes
+// evaluate every pixel at the same TARGET integer, so they are byte-identical by construction.
+#ifdef MOSAIC_TILE_INDEXED
+#define kTileList 1
+#else
+layout(constant_id = 0) const int kTileList = 0;
+#endif
+
+// ---- Bindings ---------------------------------------------------------------------------------
+//
+// THE SAME SET LAYOUT composite_tile.comp uses, so the two kernels share one pipeline layout, one
+// descriptor pool and one per-(layer, atlas image) set -- the dispatch loop switches pipelines and
+// nothing else. What each binding carries differs:
+//
+// uAcc   the macrotile accumulator, read+write, in the working format. This kernel's INPUT and its
+//        output: the backdrop the layers below already composited.
+// uLut   the 256x1 transfer TABLE, for the two lookup kinds only (Curves: the three composed
+//        channel LUTs in .rgb; Gradient Map: the ramp's own RGBA, the stop alpha riding along as
+//        the per-tone strength). Every other kind leaves this bound to a 1x1 stand-in and never
+//        reads it. Occupies composite_tile.comp's uSrc slot, which is free here for the same
+//        reason its per-tile push lanes are free in the list shapes: an adjustment has no source.
+// uMask  the layer mask's coverage, ONE channel, .r in [0,1]. ⚠ Read through a DIFFERENT rule from
+//        a leaf's -- see adjustMaskAt.
+// uClip  the clip base -- the alpha of the nearest non-clipped layer beneath, in the ACCUMULATOR's
+//        coordinate space. Same binding, same publisher (composite_tile.comp's uClipOut), same
+//        meaning; an adjustment only ever READS it.
+// uTiles the DIRTY-MACROTILE LIST, read only when kTileList != 0.
+layout(binding = 0, rgba16f) uniform image2D uAcc;
+#ifdef MOSAIC_TILE_INDEXED
+// One runtime-sized array for both sheets a layer owns, interleaved (see composite_tile.comp): slot
+// 2i is layer i's pixels -- the transfer table, here -- and slot 2i+1 is its mask coverage.
+layout(binding = 6) uniform sampler2D uSources[];
+#define uLut  uSources[nonuniformEXT(2 * uLayer)]
+#define uMask uSources[nonuniformEXT(2 * uLayer + 1)]
+#else
+layout(binding = 1) uniform sampler2D uLut;
+layout(binding = 2) uniform sampler2D uMask;
+#endif
+layout(binding = 3) uniform sampler2D uClip;
+layout(std430, binding = 5) readonly buffer TileList {
+    ivec4 uTiles[];
+};
+
+// ---- Push constants (108 bytes; the Vulkan 1.0 guarantee is 128) -------------------------------
+layout(push_constant) uniform Push {
+    // DOC pixel -> MASK texel, as the (scale, origin) PAIR compositor.cpp's adjustmentMaskAt
+    // multiplies out -- (sx, sy, originX, originY) -- rather than a composed affine, so the
+    // subtraction the CPU performs before the scale survives the mirror.
+    vec4 uMaskMap;      //   0
+    // The kind's scalars. WHICH lane means what is per kind, and the table is in the arms below;
+    // the host mirror (tile_compositor.cpp's planAdjustment) fills the same lanes in the same
+    // order, and there is deliberately no shared struct -- 12 floats is smaller than the union of
+    // every kind's fields and a named union would be a second thing to keep in step.
+    vec4 uP[3];         //  16
+    ivec2 uTileOrigin;  //  64  this tile's origin in the TARGET buffer (document space)
+    ivec2 uAccOrigin;   //  72  where this tile starts inside uAcc / uClip (the atlas slot)
+    ivec2 uExtent;      //  80  the tile's VALID extent -- edge tiles are partial, not square
+    int uKind;          //  88  this shader's OWN dense kind enum (never core::AdjustmentKind's)
+    float uOpacity;     //  92  the adjustment layer's opacity
+    int uMaskMode;      //  96  0 no mask, 1 the clamped-domain stretch below
+    int uClipMode;      // 100  0 unclipped, 1 multiply the amount by uClip.r
+    int uFlags;         // 104  bit 0..2 Curves channel active, bit 3 preserve luminosity,
+                        //      bits 4..7 a small per-kind choice (Grayscale's projection method)
+};
+//                      // 108 total
+
+#ifdef MOSAIC_TILE_INDEXED
+// Which slot pair of uSources this dispatch grades through. It rides in uTileOrigin.x because the
+// indexed variant is always list-driven and the per-tile group is therefore free -- the same trick
+// composite_tile.comp plays, and it has to be the same one, because the two kernels share a set.
+#define uLayer uTileOrigin.x
+#endif
+
+// ---- The kinds (this shader's OWN enum) --------------------------------------------------------
+//
+// Deliberately a dense numbering of its own rather than core::AdjustmentKind's. That enum is
+// APPEND-ONLY but its ORDER is explicitly free (kinds serialize by token string), so a kernel that
+// indexed it directly would silently re-point every arm the day a kind is inserted.
+// tile_compositor.cpp's `planAdjustment` is the single place the two vocabularies meet.
+const int kAdjInvert            = 0;
+const int kAdjBrightnessContrast = 1;
+const int kAdjLevels            = 2;
+const int kAdjExposure          = 3;
+const int kAdjHueSaturation     = 4;
+const int kAdjColorBalance      = 5;
+const int kAdjGrayscale         = 6;
+const int kAdjCurves            = 7;
+const int kAdjGradientMap       = 8;
+const int kAdjVibrance          = 9;
+const int kAdjPhotoFilter       = 10;
+const int kAdjHazeRemoval       = 11;
+
+const int kFlagCurveR      = 1;
+const int kFlagCurveG      = 2;
+const int kFlagCurveB      = 4;
+const int kFlagPreserveLum = 8;
+const int kChoiceShift     = 4;   // bits 4..7
+
+// core::GrayscaleMethod's stored indices. These ARE stable -- the enum's comment forbids
+// reordering, because the index is what a .mosaic file carries -- so unlike the kind enum above
+// they are mirrored by value. 5 (Dithered) and 7 (Adaptive threshold) are SPATIAL and never reach
+// this kernel; the host refuses them.
+const int kGrayNoChrominance = 0;
+const int kGrayLuma          = 1;
+const int kGrayRed           = 2;
+const int kGrayGreen         = 3;
+const int kGrayBlue          = 4;
+const int kGrayMaxChannel    = 6;
+const int kGrayMinChannel    = 8;
+
+// ---- Colour-space helpers ----------------------------------------------------------------------
+//
+// ⚠ ANALYTIC, where the CPU reference reads a 2049-entry interpolated LUT over [0,1] (and falls
+// back to these same analytic curves outside it). The two differ by at most ~7e-5 -- the LUT's own
+// linear-interpolation error, worst in the bin straddling the 0.0031308 knee, and ~0.02/255 in the
+// units the parity test measures. Mirroring the LUT instead would cost a fourth sampled image for
+// a two-hundredth of an LSB, which is not a trade this lane makes.
+float srgbToLinear(float e) {
+    if (e <= 0.04045) return max(0.0, e) / 12.92;
+    return pow((e + 0.055) / 1.055, 2.4);
+}
+float linearToSrgb(float l) {
+    if (l <= 0.0031308) return max(0.0, l) * 12.92;
+    return 1.055 * pow(l, 1.0 / 2.4) - 0.055;
+}
+vec3 srgbToLinear3(vec3 c) {
+    return vec3(srgbToLinear(c.r), srgbToLinear(c.g), srgbToLinear(c.b));
+}
+
+// W3C luminance -- core::detail::lum, the encoded-space blend weights, and NOT Rec 709.
+float lum(vec3 c) { return 0.3 * c.r + 0.59 * c.g + 0.11 * c.b; }
+
+// Rec 709 luminance on LINEAR values -- compositor.cpp's linearLum, a different animal.
+float linearLum(vec3 c) { return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }
+
+vec3 clipColor(vec3 c) {
+    float l = lum(c);
+    float n = min(min(c.r, c.g), c.b);
+    float x = max(max(c.r, c.g), c.b);
+    if (n < 0.0 && l - n > 0.0) c = l + (c - l) * (l / (l - n));
+    if (x > 1.0 && x - l > 0.0) c = l + (c - l) * ((1.0 - l) / (x - l));
+    return c;
+}
+
+vec3 setLum(vec3 c, float l) { return clipColor(c + (l - lum(c))); }
+
+// compositor.cpp's smoothstepf, written out rather than reached for as the built-in: GLSL's
+// smoothstep is the same polynomial, but "the same polynomial" is exactly the kind of assumption a
+// mirror is not allowed to make.
+float smoothstepf(float e0, float e1, float x) {
+    float t = clamp((x - e0) / (e1 - e0), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+
+// ---- RGB <-> HSL (the CSS / Foley-van Dam hexcone model) ---------------------------------------
+//
+// Mirrors rgbToHsl / hueToRgb / hslToRgb branch for branch, including the `mx == mn` early-out that
+// makes a grey pixel round-trip exactly. `h` is in turns.
+vec3 rgbToHsl(vec3 c) {
+    float mx = max(max(c.r, c.g), c.b);
+    float mn = min(min(c.r, c.g), c.b);
+    float l = 0.5 * (mx + mn);
+    if (mx == mn) return vec3(0.0, 0.0, l);
+    float d = mx - mn;
+    float s = l > 0.5 ? d / (2.0 - mx - mn) : d / (mx + mn);
+    float h;
+    if (mx == c.r) h = (c.g - c.b) / d + (c.g < c.b ? 6.0 : 0.0);
+    else if (mx == c.g) h = (c.b - c.r) / d + 2.0;
+    else h = (c.r - c.g) / d + 4.0;
+    return vec3(h / 6.0, s, l);
+}
+
+float hueToRgb(float p, float q, float t) {
+    if (t < 0.0) t += 1.0;
+    if (t > 1.0) t -= 1.0;
+    if (t < 1.0 / 6.0) return p + (q - p) * 6.0 * t;
+    if (t < 0.5) return q;
+    if (t < 2.0 / 3.0) return p + (q - p) * (2.0 / 3.0 - t) * 6.0;
+    return p;
+}
+
+vec3 hslToRgb(vec3 v) {
+    if (v.y <= 0.0) return vec3(v.z);
+    float q = v.z < 0.5 ? v.z * (1.0 + v.y) : v.z + v.y - v.z * v.y;
+    float p = 2.0 * v.z - q;
+    return vec3(hueToRgb(p, q, v.x + 1.0 / 3.0), hueToRgb(p, q, v.x),
+                hueToRgb(p, q, v.x - 1.0 / 3.0));
+}
+
+// ---- The 256-entry transfer table --------------------------------------------------------------
+//
+// ONE function for both lookup kinds, because compositor.cpp's curveSample and gradientSample are
+// the same expression at different widths: clamp into [0,1], scale onto the 8-bit lattice, and
+// interpolate linearly between the two neighbouring entries (the last one saturating). Curves reads
+// .r/.g/.b of the result as three independent lookups; Gradient Map reads all four.
+vec4 tableSample(float v) {
+    float t = clamp(v, 0.0, 1.0) * 255.0;
+    int i = int(t);
+    if (i >= 255) return texelFetch(uLut, ivec2(255, 0), 0);
+    vec4 a = texelFetch(uLut, ivec2(i, 0), 0);
+    vec4 b = texelFetch(uLut, ivec2(i + 1, 0), 0);
+    return a + (b - a) * (t - float(i));
+}
+
+// ---- The mask ----------------------------------------------------------------------------------
+//
+// ⚠ AN ADJUSTMENT'S MASK IS READ BY A DIFFERENT RULE FROM A LEAF'S, and the difference is not
+// cosmetic. compositor.cpp's adjustmentMaskAt stretches the sheet over a parent-space DOMAIN rect
+// and CLAMPS the sample into it -- so beyond the mask's own footprint the edge texel's coverage
+// carries on, where a leaf's fold (foldMaskThrough) reads ZERO outside the sheet. That clamp is why
+// the host has to treat a masked adjustment's dirty footprint as the WHOLE CANVAS: there is no
+// rectangle outside which the effect is guaranteed to be nothing.
+//
+// It also samples at the pixel's INTEGER index, not at its centre -- `preInv->apply({x, y})`, with
+// `pre` the identity at the document root -- so there is no +0.5 here either.
+//
+// The one place this can pick a neighbouring texel from the CPU's choice: uMaskMap.xy is a ratio
+// rounded to float host-side, so `(x - origin) * ratio` can land the other side of an integer when
+// the exact value is within ~1e-7 relative of one. For the cases that actually occur -- a sheet at
+// document resolution, or at a power-of-two fraction of it -- the ratio is exact and so is the
+// product.
+float adjustMaskAt(ivec2 tp) {
+    ivec2 ms = textureSize(uMask, 0);
+    vec2 m = (vec2(tp) - uMaskMap.zw) * uMaskMap.xy;
+    ivec2 mi = clamp(ivec2(floor(m)), ivec2(0), ms - ivec2(1));
+    return texelFetch(uMask, mi, 0).r;
+}
+
+// ---- The transfer ------------------------------------------------------------------------------
+//
+// One arm per served kind, each a transcription of the matching `case` in applyAdjustment's colour
+// loop. `c` is the backdrop's straight-alpha RGB, and that is ALL a served kind is a function of:
+// the one kind whose transfer also reads the pixel's own coverage (Matte Removal) is refused,
+// because dividing by an fp16 alpha is exactly what 1/255 cannot survive.
+vec3 applyTransfer(vec3 c) {
+    if (uKind == kAdjInvert) return vec3(1.0) - c;
+
+    if (uKind == kAdjBrightnessContrast) {
+        // Raw (non-schema) reads on the host, kept byte-compatible with the pre-S32 behaviour.
+        float brightness = uP[0].x, contrast = uP[0].y;
+        return clamp((c - 0.5) * (1.0 + contrast) + 0.5 + brightness, 0.0, 1.0);
+    }
+
+    if (uKind == kAdjLevels) {
+        // Input-range remap + gamma + output-range remap, per channel in the encoded working
+        // space. Levels inherently clamps its input window.
+        float inB = uP[0].x, invRange = uP[0].y, invGamma = uP[0].z;
+        float outB = uP[0].w, outW = uP[1].x;
+        vec3 t = clamp((c - inB) * invRange, 0.0, 1.0);
+        return outB + (outW - outB) * pow(t, vec3(invGamma));
+    }
+
+    if (uKind == kAdjExposure) {
+        // Photographic exposure works in linear light: scale by 2^EV, add the offset,
+        // gamma-correct, encode back.
+        float expScale = uP[0].x, offset = uP[0].y, expInvGamma = uP[0].z;
+        vec3 lin = srgbToLinear3(c) * expScale + offset;
+        lin = max(lin, vec3(0.0));
+        if (expInvGamma != 1.0) lin = pow(lin, vec3(expInvGamma));
+        return clamp(vec3(linearToSrgb(lin.r), linearToSrgb(lin.g), linearToSrgb(lin.b)),
+                     0.0, 1.0);
+    }
+
+    if (uKind == kAdjHueSaturation) {
+        // Hexcone HSL: rotate hue, scale saturation, then Photoshop-style lightness (positive
+        // fades toward white, negative toward black).
+        float hueShift = uP[0].x, satScale = uP[0].y, light = uP[0].z;
+        vec3 v = rgbToHsl(clamp(c, 0.0, 1.0));
+        v.x += hueShift;
+        v.x -= floor(v.x);
+        v.y = clamp(v.y * satScale, 0.0, 1.0);
+        vec3 o = hslToRgb(v);
+        if (light > 0.0) o = o + (vec3(1.0) - o) * light;
+        else if (light < 0.0) o = o * (1.0 + light);
+        return o;
+    }
+
+    if (uKind == kAdjColorBalance) {
+        // Smooth partition of unity over the tonal axis (shadows fade out by mid-grey, highlights
+        // fade in from it, midtones take the rest); each band shifts its channels by the
+        // pre-scaled slider deltas. One vec4 per BAND -- uP[0] shadows, uP[1] midtones, uP[2]
+        // highlights -- .xyz being that band's r/g/b delta and .w unused.
+        vec3 ci = clamp(c, 0.0, 1.0);
+        float l = lum(ci);
+        float ws = 1.0 - smoothstepf(0.0, 0.5, l);
+        float wh = smoothstepf(0.5, 1.0, l);
+        float wm = 1.0 - ws - wh;
+        vec3 o = clamp(vec3(ci.r + uP[0].x * ws + uP[1].x * wm + uP[2].x * wh,
+                            ci.g + uP[0].y * ws + uP[1].y * wm + uP[2].y * wh,
+                            ci.b + uP[0].z * ws + uP[1].z * wm + uP[2].z * wh),
+                       0.0, 1.0);
+        if ((uFlags & kFlagPreserveLum) != 0) o = setLum(o, l);
+        return o;
+    }
+
+    if (uKind == kAdjGrayscale) {
+        // The chosen projection, mixed into the original by strength. Luma is the pre-S32 formula
+        // on raw (possibly HDR) encoded values -- kept UNCLAMPED so an old document's bag stays
+        // byte-identical. The quantised (palette) variant is refused by the host: see the lattice
+        // note at the top of this file.
+        int method = (uFlags >> kChoiceShift) & 15;
+        float g;
+        if (method == kGrayNoChrominance) {
+            // Zero the chroma, keep the photometric luminance (Rec 709 linear, re-encoded).
+            g = linearToSrgb(linearLum(srgbToLinear3(c)));
+        } else if (method == kGrayRed) {
+            g = c.r;
+        } else if (method == kGrayGreen) {
+            g = c.g;
+        } else if (method == kGrayBlue) {
+            g = c.b;
+        } else if (method == kGrayMaxChannel) {
+            g = max(max(c.r, c.g), c.b);
+        } else if (method == kGrayMinChannel) {
+            g = min(min(c.r, c.g), c.b);
+        } else {
+            g = lum(c);   // kGrayLuma, and the CPU's own fall-through for the spatial pair
+        }
+        return mix(c, vec3(g), uP[0].x);
+    }
+
+    if (uKind == kAdjCurves) {
+        // Three composed lookups. An untouched channel is passed through VERBATIM rather than
+        // through a nominally-identity lookup, because a lerp between two lattice points is not
+        // bit-exact and the channels the user did not touch must not move at all.
+        vec4 r = tableSample(c.r);
+        vec4 g = tableSample(c.g);
+        vec4 b = tableSample(c.b);
+        return vec3((uFlags & kFlagCurveR) != 0 ? r.r : c.r,
+                    (uFlags & kFlagCurveG) != 0 ? g.g : c.g,
+                    (uFlags & kFlagCurveB) != 0 ? b.b : c.b);
+    }
+
+    if (uKind == kAdjGradientMap) {
+        // The backdrop's LUMA indexes the user's ramp and the sampled colour replaces the pixel.
+        // The stop ALPHA is the per-tone STRENGTH: a stop at a = 0 leaves its tone exactly as it
+        // found it, so one ramp can grade the shadows and let the highlights through.
+        float l = clamp(lum(clamp(c, 0.0, 1.0)), 0.0, 1.0);
+        vec4 s = tableSample(l);
+        return mix(c, s.rgb, s.a);
+    }
+
+    if (uKind == kAdjVibrance) {
+        // Saturation weighted by how saturated the pixel ALREADY is: the gain fades to nothing at
+        // full chroma. A neutral pixel has s == 0 and so is byte-identical without a special case.
+        vec3 v = rgbToHsl(clamp(c, 0.0, 1.0));
+        float s2 = clamp(v.y * (1.0 + uP[0].x * (1.0 - v.y)), 0.0, 1.0);
+        if (s2 == v.y) return c;   // nothing to move: keep the backdrop as it was
+        v.y = s2;
+        return hslToRgb(v);
+    }
+
+    if (uKind == kAdjPhotoFilter) {
+        // A gel over the lens ABSORBS: multiply the linear-light signal by the filter colour
+        // (already decoded host-side), mix by density, and optionally put the backdrop's own
+        // luminance back -- a dense filter otherwise just darkens the frame.
+        vec3 gel = vec3(uP[0].x, uP[0].y, uP[0].z);
+        float density = uP[0].w;
+        vec3 lin = srgbToLinear3(c);
+        vec3 o = mix(lin, lin * gel, density);
+        if ((uFlags & kFlagPreserveLum) != 0) {
+            float srcY = linearLum(lin);
+            float outY = linearLum(o);
+            // A black pixel has no luminance to restore, and scaling by 1/0 is not a colour.
+            if (outY > 1e-6 && srcY > 0.0) o *= srcY / outY;
+        }
+        return clamp(vec3(linearToSrgb(o.r), linearToSrgb(o.g), linearToSrgb(o.b)), 0.0, 1.0);
+    }
+
+    if (uKind == kAdjHazeRemoval) {
+        // Koschmieder's 1924 atmospheric-scattering model inverted about the airlight colour, at
+        // a CONSTANT transmission: J = A + (I - A)/t.
+        vec3 air = vec3(uP[0].x, uP[0].y, uP[0].z);
+        float invT = uP[0].w, hazeSat = uP[1].x;
+        vec3 o = clamp(air + (c - air) * invT, 0.0, 1.0);
+        if (hazeSat != 1.0) {   // restore the chroma the atmosphere washed out
+            float l = lum(o);
+            o = clamp(l + (o - l) * hazeSat, 0.0, 1.0);
+        }
+        return o;
+    }
+
+    return c;   // unreachable: the host dispatches only the kinds above
+}
+
+// ---- The fused step ----------------------------------------------------------------------------
+
+void main() {
+    // WHERE THIS INVOCATION IS, and it is the ONLY thing the dispatch shape changes -- verbatim
+    // from composite_tile.comp, so the two kernels agree about what a macrotile is even when they
+    // read the geometry from different couriers.
+    ivec2 tileOrigin = uTileOrigin;
+    ivec2 accOrigin = uAccOrigin;
+    ivec2 extent = uExtent;
+    if (kTileList != 0) {
+        const int rec = int(gl_WorkGroupID.z) * 2;
+        const ivec4 a = uTiles[rec];
+        const ivec4 b = uTiles[rec + 1];
+        tileOrigin = a.xy;
+        accOrigin = a.zw;
+        extent = b.xy;
+    }
+
+    ivec2 lp = ivec2(gl_GlobalInvocationID.xy);
+    if (lp.x >= extent.x || lp.y >= extent.y) return;   // partial edge tiles
+    ivec2 tp = tileOrigin + lp;                         // this pixel in the TARGET buffer
+    ivec2 ap = accOrigin + lp;                          // ... and inside the accumulator atlas
+
+    // THE MODULATION, and it is the whole of walkStep's adjustment branch: layer opacity x layer
+    // mask (sampled in parent space, which at the document root is the target buffer's own space)
+    // x clip-to-below coverage. Computed BEFORE the transfer so a fully masked-out pixel costs one
+    // fetch instead of a graded colour it then throws away.
+    float amt = uOpacity;
+    if (uMaskMode != 0) amt *= adjustMaskAt(tp);
+    if (uClipMode != 0) amt *= texelFetch(uClip, ap, 0).r;
+    // std::lerp(a, b, 0) returns `a` EXACTLY, so skipping the store here is byte-identical to the
+    // reference rather than merely close -- and it keeps a transfer that produced an inf or a NaN
+    // (a degenerate params bag) from reaching a pixel the mask hid anyway.
+    if (amt <= 0.0) return;
+
+    vec4 acc = imageLoad(uAcc, ap);
+    vec3 adjusted = applyTransfer(acc.rgb);
+    // Alpha goes back bit-for-bit: an adjustment recolours the backdrop, it does not add coverage.
+    imageStore(uAcc, ap, vec4(mix(acc.rgb, adjusted, amt), acc.a));
+}

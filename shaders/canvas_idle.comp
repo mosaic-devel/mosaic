@@ -1,0 +1,115 @@
+#version 450
+
+// The documentless idle pass: an ambient "ripple basin" dot field behind the open-an-image
+// invitation, rendered by the canvas itself so it can fade against the document (an FLTK
+// sub-window can only be opaque over the Vulkan surface -- the reason the old EmptyStateView
+// could never fade). Design settled interactively 2026-07-23 (ripple direction "C", copy
+// option "A"); the field's motion numbers are the draft's, its alpha re-tuned in-app.
+//
+// Two modes, chosen by the renderer per frame (push .bgColor.a):
+//   0 standalone -- no document: write background + field + invitation (then blitted 1:1, the
+//     branch that replaces the old bare vkCmdClearColorImage);
+//   1 blend-over -- a document just opened: run AFTER the present pass and blend the settling
+//     field over its output (the fade-out crossfade). Reads uOut, hence no `writeonly`.
+//
+// The invitation is a pre-rasterized atlas of THREE stacked rows -- idle / hover / drag-hot --
+// sampled with texelFetch (exact texels; the quad is drawn 1:1 at device resolution, and
+// integer row offsets cannot bleed across rows). Hover and hot crossfade between rows, which
+// is how the frame colour swap and the drag-over headline ("Drop it anywhere") animate.
+//
+// The field's three rules (the design contract):
+//   - it QUIETS to 16% inside a rounded zone behind the invitation, so the text sits on calm
+//     ground (quietZone below);
+//   - colour stays in the ink range and tints toward accent only at ripple crests (and the
+//     drag-over bloom, hotGlow);
+//   - the fade SETTLES the wave -- amplitude ramps down with alpha (a = amp * fade), so dots
+//     sink back into the canvas rather than dissolving in place.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(binding = 0, rgba8) uniform image2D uOut; // view image (read in blend-over mode)
+layout(binding = 1) uniform sampler2D uInvite;   // invitation atlas (3 rows: idle/hover/hot)
+
+// 112 bytes; mirrored by IdlePush in window_renderer.cpp (static_assert'd there).
+layout(push_constant) uniform Push {
+    vec4 bgColor;  // .rgb canvas background (straight 0..1); .a = mode (0 standalone, 1 blend)
+    vec4 ink;      // .rgb dot ink; .a = field fade (0..1, scales amplitude AND alpha)
+    vec4 accent;   // .rgb accent; .a = drag-hot (0..1)
+    vec2 outSize;  // view image size, device px
+    float timePhase; // seconds * field speed, wrapped on the CPU (double) for float precision
+    float scale;   // logical -> device px (the ripple wavelengths are authored in logical px)
+    vec2 center;   // invitation centre, device px (the main ripple emitter)
+    vec2 quiet;    // quiet-zone half extents, device px (< 0 disables, for a bare field)
+    vec2 invPos;   // invitation quad top-left, device px
+    vec2 invSize;  // invitation quad (== atlas row) size, device px
+    float invAlpha; // invitation opacity (its own fade timeline)
+    float hover;   // hover row crossfade (0..1)
+    float amp;     // field amplitude at rest (the chosen temperament)
+    float pitch;   // dot lattice pitch, device px
+} pc;
+
+// Calm ground behind the invitation: a rounded-rect falloff from full field to 16%.
+float quietZone(vec2 p) {
+    if (pc.quiet.x < 0.0)
+        return 1.0;
+    vec2 q = abs(p - pc.center) - pc.quiet;
+    float d = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0);
+    return mix(0.16, 1.0, smoothstep(0.0, 110.0 * pc.scale, d));
+}
+
+// Drag-over bloom: accent gathers around the drop target while a file hovers the window.
+float hotGlow(vec2 p) {
+    return pc.accent.a *
+           (1.0 - smoothstep(120.0 * pc.scale, 460.0 * pc.scale, length(p - pc.center)));
+}
+
+void main() {
+    ivec2 ip = ivec2(gl_GlobalInvocationID.xy);
+    if (ip.x >= int(pc.outSize.x) || ip.y >= int(pc.outSize.y))
+        return;
+    vec2 p = vec2(ip) + vec2(0.5);
+    float t = pc.timePhase;
+
+    // -- the ripple basin ---------------------------------------------------------------------
+    // Two interference emitters: the invitation itself, and a faint far source up-right so the
+    // rings never read as a static bullseye. A drag-over adds a faster, brighter impulse ring.
+    // Distances are in LOGICAL px so wavelength and decay survive DPI changes.
+    vec2 cell = floor(p / pc.pitch);
+    vec2 cc = (cell + vec2(0.5)) * pc.pitch; // dot centre of this pixel's lattice cell
+    vec2 lc = p - cc;
+    vec2 c2 = pc.outSize * vec2(0.82, 0.24);
+    float d1 = length(cc - pc.center) / pc.scale;
+    float d2 = length(cc - c2) / pc.scale;
+    float w = sin(d1 * 0.055 - t * 1.5) * exp(-d1 / 650.0) +
+              0.55 * sin(d2 * 0.043 - t * 1.07) * exp(-d2 / 720.0);
+    w += pc.accent.a * 0.8 * sin(d1 * 0.09 - t * 3.2) * exp(-d1 / 420.0);
+    w = clamp(w, -1.0, 1.0);
+
+    float a = pc.amp * pc.ink.a; // the fade settles amplitude, not just alpha
+    float r = pc.pitch * (0.015 + 0.09 + 0.12 * (0.5 + 0.5 * w) * a);
+    float cover = smoothstep(r, r - 1.5 * pc.scale, length(lc)); // analytic AA dot edge
+    // Alpha tuned down from the draft's 0.16/0.60 after the first in-app pass (2026-07-23):
+    // at full draft strength the field read too busy behind real chrome.
+    float alpha = (0.11 + 0.42 * max(w, 0.0) * a) * quietZone(p) * pc.ink.a;
+    vec3 dotColor = mix(pc.ink.rgb, pc.accent.rgb,
+                        clamp(smoothstep(0.5, 1.0, w) * (0.18 + 0.5 * pc.accent.a) +
+                                  hotGlow(p) * 0.35,
+                              0.0, 1.0));
+
+    vec3 col = pc.bgColor.a > 0.5 ? imageLoad(uOut, ip).rgb : pc.bgColor.rgb;
+    col = mix(col, dotColor, cover * alpha);
+
+    // -- the invitation quad ------------------------------------------------------------------
+    if (pc.invAlpha > 0.0 && p.x >= pc.invPos.x && p.y >= pc.invPos.y &&
+        p.x < pc.invPos.x + pc.invSize.x && p.y < pc.invPos.y + pc.invSize.y) {
+        ivec2 tp = ivec2(p - pc.invPos);
+        int rowH = int(pc.invSize.y);
+        vec4 rowIdle = texelFetch(uInvite, tp, 0);
+        vec4 rowHover = texelFetch(uInvite, tp + ivec2(0, rowH), 0);
+        vec4 rowHot = texelFetch(uInvite, tp + ivec2(0, rowH * 2), 0);
+        vec4 inv = mix(mix(rowIdle, rowHover, pc.hover), rowHot, pc.accent.a);
+        col = mix(col, inv.rgb, inv.a * pc.invAlpha);
+    }
+
+    imageStore(uOut, ip, vec4(col, 1.0));
+}

@@ -1,0 +1,68 @@
+#version 450
+
+// Per-pixel format conversions for the S33 blur lane (docs/blur-filters.md §8): the
+// straight<->premultiplied round trip (src/render/blur.cpp premultiplyInPlace /
+// unpremultiplyInPlace) and the lens-blur linear pre-pass (blur.cpp lensBlurImage's
+// decode + premultiply + boost loop), transcribed. One invocation reads one pixel from Src
+// and writes one to Dst. Parity discipline as in blur_separable.comp: both lanes run float,
+// tests/test_blur_gpu.cpp holds this shader to the CPU reference.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer Src { vec4 src[]; };
+layout(std430, binding = 1) writeonly buffer Dst { vec4 dst[]; };
+// The CPU lane's 1024-entry sRGB decode table (blur.cpp srgbDecodeTable), uploaded VERBATIM so
+// the piecewise-linear decode -- and the boost-threshold compare sitting downstream of it --
+// walks the CPU lane's exact values instead of an analytic pow()'s (the parity-faithful
+// choice, the texture_sky.comp chord-form precedent).
+layout(std430, binding = 2) readonly buffer Lut { float lut[]; };
+
+layout(push_constant) uniform Push {
+    int w;
+    int h;
+    int mode;     // 0 straight -> premul, 1 premul -> straight, 2 sRGB straight -> linear premul
+    int boostOn;  // mode 2: gain-boost pixels above thr (the lens specular boost)
+    float gain;   // mode 2: 1 + 4 * boost01 (blur.cpp)
+    float thr;    // mode 2: the SINGLE lower luma threshold -- never an upper+lower pair
+} pc;
+
+// blur.cpp srgbToLinear: table lookup with linear interpolation between entries.
+float srgbToLinear(float encoded) {
+    const float f = clamp(encoded, 0.0, 1.0) * 1023.0;
+    const int i = min(int(f), 1022);
+    const float t = f - float(i);
+    return lut[i] + (lut[i + 1] - lut[i]) * t;
+}
+
+void main() {
+    const int x = int(gl_GlobalInvocationID.x);
+    const int y = int(gl_GlobalInvocationID.y);
+    if (x >= pc.w || y >= pc.h) return;
+    const int idx = y * pc.w + x;
+    const vec4 p = src[idx];
+    if (pc.mode == 0) {
+        dst[idx] = vec4(p.rgb * p.a, p.a);
+    } else if (pc.mode == 1) {
+        // A zero-coverage result holds no colour information: RGB pins to 0 (rather than 0/0)
+        // so downstream math stays NaN-free (blur.cpp).
+        if (p.a > 0.0) {
+            const float inv = 1.0 / p.a;
+            dst[idx] = vec4(p.rgb * inv, p.a);
+        } else {
+            dst[idx] = vec4(0.0, 0.0, 0.0, p.a);
+        }
+    } else {
+        // Decode sRGB to linear, premultiply IN LINEAR, and gain-boost highlight pixels before
+        // the gather; the boost is never undone afterwards -- clipped SDR highlights blooming
+        // into aperture shapes is the point of the lever (blur.cpp lensBlurImage).
+        // ⚠ INVARIANT: the boost stays a SINGLE lower threshold applied as this separate
+        // global pre-pass on pixel VALUES -- never an upper+lower "light range" pair, and
+        // never a per-tap gather weight. That is a hard constraint on this lane, not an
+        // oversight; do not "improve" it into a range or fold it into the gather.
+        const float a = p.a;
+        vec3 lin = vec3(srgbToLinear(p.r), srgbToLinear(p.g), srgbToLinear(p.b)) * a;
+        if (pc.boostOn != 0 && 0.2126 * lin.r + 0.7152 * lin.g + 0.0722 * lin.b > pc.thr)
+            lin *= pc.gain;
+        dst[idx] = vec4(lin, a);
+    }
+}

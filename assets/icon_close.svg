@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Panel-chrome icon: a single WHITE ink on transparent. ui::drawIcon replaces the RGB with a
+       palette colour and keeps the coverage in the alpha, so one raster serves every theme and
+       the enabled/disabled/hover states. Never add colour here.
+
+       AUTHORED AT 16x16 AND DRAWN AT 16px -- scale 1.0. See icon_plus.svg for why.
+
+       The close X of a document tab (S49). The two strokes are exact 45 degree diagonals, which
+       cannot sit on the pixel grid at any width -- the same problem the eye icons have with their
+       curves. They carry 1.5px (not the straight-edge 2px) so the AA leaves a solid core instead
+       of two grey smears, and the ends stop 4px in from every edge so the glyph reads as an X
+       rather than a filled corner-to-corner cross. -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round">
+    <path d="M4.5 4.5 L11.5 11.5"/>
+    <path d="M11.5 4.5 L4.5 11.5"/>
+  </g>
+</svg>

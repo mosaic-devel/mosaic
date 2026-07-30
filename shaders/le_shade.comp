@@ -1,0 +1,303 @@
+#version 450
+
+// The COLOURISE-AND-COMPOSITE half of the layer-effects Vulkan lane (S60-e;
+// render/layer_effects_gpu.cpp). One invocation per ROI pixel, one dispatch per effect instance,
+// in the canonical z-order the CPU reference walks (docs/layer-effects.md §4): drop shadow ->
+// outer glow -> layer fill -> colour overlay -> satin -> inner shadow -> inner glow -> stroke.
+//
+// Each mode below is a line-for-line mirror of one loop body in
+// render/layer_effects_render.cpp -- the reference lane, which stays golden. Every effect this
+// shader serves paints a CONSTANT colour times a coverage field: the paint evaluator
+// (core::vec::sampleAt) is NOT mirrored here, and a stack containing any gradient or pattern paint
+// is refused whole by layer_effects_gpu.cpp before a dispatch is planned. See that header for why.
+//
+// DETERMINISM: a pure function of (push constants, planes, target pixel) -- no atomics, no shared
+// memory. Every mode writes only its own pixel, so the picture does not depend on the dispatch
+// split or on workgroup scheduling.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// The target buffer: the ROI window of the layer's own RGBA (straight alpha), or the transparent
+// `below` scratch that drop shadows / outer glow / outside strokes are drawn into.
+layout(std430, binding = 0) buffer Target { vec4 img[]; };
+// The coverage field this effect keys off: a blurred/seeded plane, or the anti-aliased signed
+// distance field for the stroke modes.
+layout(std430, binding = 1) readonly buffer PlaneA { float fieldA[]; };
+// The layer's ORIGINAL coverage, captured before fill-opacity dimmed it -- the clip every "inside"
+// effect is clamped to.
+layout(std430, binding = 2) readonly buffer PlaneB { float alphaB[]; };
+// The `below` scratch, read only by kPlaceBelow (a 1-vec4 stand-in is bound otherwise).
+layout(std430, binding = 3) readonly buffer Below { vec4 below[]; };
+
+layout(push_constant) uniform Push {
+    int w;         // ROI width, px
+    int h;         // ROI height, px
+    int mode;      // see the kMode* constants below
+    int blend;     // core::BlendMode (Normal = 0 .. Luminosity = 22)
+    int i0;        // fill-opacity: content x0 | satin: invert | stroke-over: inside
+    int i1;        // fill-opacity: content y0
+    int i2;        // fill-opacity: content x1
+    int i3;        // fill-opacity: content y1
+    float cr;      // the effect's colour (a solid paint, or a shadow/satin colour)
+    float cg;
+    float cb;
+    float ca;
+    float opacity; // the effect's own opacity
+    float p0;      // shadows/satin: offset x | strokes: the band's inner edge | fill: the factor
+    float p1;      // shadows/satin: offset y | strokes: the band's outer edge
+    float p2;      // spare
+    float p3;      // spare
+} pc;
+
+const int kFillOpacity = 0;
+const int kShadowInto = 1;   // drop shadow  -> the `below` scratch
+const int kGlowInto = 2;     // outer glow   -> the `below` scratch
+const int kPlaceBelow = 3;   // the scratch, placed UNDER the layer's own pixels
+const int kOverlay = 4;      // a solid overlay, clipped to the silhouette
+const int kInnerShadow = 5;
+const int kInnerGlow = 6;
+const int kSatin = 7;
+const int kStrokeBelow = 8;  // an OUTSIDE ring -> the `below` scratch
+const int kStrokeOver = 9;   // an INSIDE / CENTRE ring, over the layer
+
+// The stroke feather: a 1px LINEAR ramp (not smoothstep), applyStrokes' kAa.
+const float kAa = 1.0;
+
+// ---- Blend math: the VERBATIM mirror of core/blend_math.hpp (via composite_tile.comp) ---------
+
+// Separable (per-channel) blend modes (enum 0..18).
+float blendChannel(int m, float b, float s) {
+    if (m == 0) return s;                                   // Normal
+    if (m == 1) return min(b, s);                           // Darken
+    if (m == 2) return b * s;                               // Multiply
+    if (m == 3) return s <= 0.0 ? 0.0 : 1.0 - min(1.0, (1.0 - b) / s);  // ColorBurn
+    if (m == 4) return max(0.0, b + s - 1.0);              // LinearBurn
+    if (m == 5) return max(b, s);                           // Lighten
+    if (m == 6) return b + s - b * s;                      // Screen
+    if (m == 7) return s >= 1.0 ? 1.0 : min(1.0, b / (1.0 - s));        // ColorDodge
+    if (m == 8) return min(1.0, b + s);                    // LinearDodge
+    if (m == 9) return b <= 0.5 ? 2.0 * b * s : 1.0 - 2.0 * (1.0 - b) * (1.0 - s);  // Overlay
+    if (m == 10) {                                          // SoftLight
+        if (s <= 0.5) return b - (1.0 - 2.0 * s) * b * (1.0 - b);
+        float d = b <= 0.25 ? ((16.0 * b - 12.0) * b + 4.0) * b : sqrt(b);
+        return b + (2.0 * s - 1.0) * (d - b);
+    }
+    if (m == 11) return s <= 0.5 ? 2.0 * b * s : 1.0 - 2.0 * (1.0 - b) * (1.0 - s);  // HardLight
+    if (m == 12) {                                          // VividLight
+        if (s <= 0.5) { float d = 2.0 * s; return d <= 0.0 ? 0.0 : max(0.0, 1.0 - (1.0 - b) / d); }
+        float d = 2.0 * (1.0 - s);
+        return d <= 0.0 ? 1.0 : min(1.0, b / d);
+    }
+    if (m == 13) return clamp(b + 2.0 * s - 1.0, 0.0, 1.0);             // LinearLight
+    if (m == 14) return s <= 0.5 ? min(b, 2.0 * s) : max(b, 2.0 * s - 1.0);  // PinLight
+    if (m == 15) return abs(b - s);                        // Difference
+    if (m == 16) return b + s - 2.0 * b * s;               // Exclusion
+    if (m == 17) return max(0.0, b - s);                   // Subtract
+    if (m == 18) return s <= 0.0 ? 1.0 : min(1.0, b / s);  // Divide
+    return s;
+}
+
+float lum(vec3 c) { return 0.3 * c.r + 0.59 * c.g + 0.11 * c.b; }
+
+vec3 clipColor(vec3 c) {
+    float l = lum(c);
+    float n = min(min(c.r, c.g), c.b);
+    float x = max(max(c.r, c.g), c.b);
+    if (n < 0.0 && l - n > 0.0) c = l + (c - l) * (l / (l - n));
+    if (x > 1.0 && x - l > 0.0) c = l + (c - l) * ((1.0 - l) / (x - l));
+    return c;
+}
+
+vec3 setLum(vec3 c, float l) { return clipColor(c + (l - lum(c))); }
+
+float sat(vec3 c) { return max(max(c.r, c.g), c.b) - min(min(c.r, c.g), c.b); }
+
+vec3 setSat(vec3 c, float s) {
+    float mn = min(min(c.r, c.g), c.b);
+    float mx = max(max(c.r, c.g), c.b);
+    return mx <= mn ? vec3(0.0) : (c - mn) * (s / (mx - mn));
+}
+
+// Non-separable (HSL) blend modes (enum 19..22).
+vec3 blendNonSep(int m, vec3 b, vec3 s) {
+    if (m == 19) return setLum(setSat(s, sat(b)), lum(b));  // Hue
+    if (m == 20) return setLum(setSat(b, sat(s)), lum(b));  // Saturation
+    if (m == 21) return setLum(s, lum(b));                  // Color
+    if (m == 22) return setLum(b, lum(s));                  // Luminosity
+    return s;
+}
+
+// Source-over-with-blend (W3C), straight alpha.
+vec4 compositeOver(int m, vec4 cb, vec4 cs, float opacity) {
+    float asrc = cs.a * opacity;
+    if (asrc <= 0.0) return cb;
+    float ab = cb.a;
+    float ao = asrc + ab * (1.0 - asrc);
+    if (ao <= 0.0) return vec4(0.0);
+    vec3 bl = m <= 18 ? vec3(blendChannel(m, cb.r, cs.r), blendChannel(m, cb.g, cs.g),
+                             blendChannel(m, cb.b, cs.b))
+                      : blendNonSep(m, cb.rgb, cs.rgb);
+    vec3 mixed = (1.0 - ab) * cs.rgb + ab * bl;
+    vec3 co = (asrc * mixed + ab * (1.0 - asrc) * cb.rgb) / ao;
+    return vec4(co, ao);
+}
+
+// ---- The shared field sampler -----------------------------------------------------------------
+
+// layer_effects_render.cpp's `sampleField` (and applySatin's identical local `sample`): bilinear
+// over the ROI-local field, anything off the ROI reading 0 -- the reach-padded ROI already
+// contains every sample an in-bounds effect can reach.
+float fieldAt(int x, int y) {
+    if (x < 0 || y < 0 || x >= pc.w || y >= pc.h) return 0.0;
+    return fieldA[y * pc.w + x];
+}
+
+float sampleField(float fx, float fy) {
+    const int x0 = int(floor(fx));
+    const int y0 = int(floor(fy));
+    const float tx = fx - float(x0);
+    const float ty = fy - float(y0);
+    const float top = fieldAt(x0, y0) * (1.0 - tx) + fieldAt(x0 + 1, y0) * tx;
+    const float bot = fieldAt(x0, y0 + 1) * (1.0 - tx) + fieldAt(x0 + 1, y0 + 1) * tx;
+    return top * (1.0 - ty) + bot * ty;
+}
+
+void main() {
+    const int x = int(gl_GlobalInvocationID.x);
+    const int y = int(gl_GlobalInvocationID.y);
+    if (x >= pc.w || y >= pc.h) return;
+    const int idx = y * pc.w + x;
+    const vec4 colour = vec4(pc.cr, pc.cg, pc.cb, pc.ca);
+
+    if (pc.mode == kFillOpacity) {
+        // The layer's own pixels, dimmed by fill-opacity over the CONTENT BOX only (straight
+        // alpha; colour intact) -- effects still key off the full, undimmed coverage.
+        if (x < pc.i0 || x >= pc.i2 || y < pc.i1 || y >= pc.i3) return;
+        img[idx].a = img[idx].a * pc.p0;
+        return;
+    }
+
+    if (pc.mode == kPlaceBelow) {
+        // The scratch placed UNDER the layer, so shadows/glows/outside strokes show through the
+        // layer's transparent and anti-aliased-rim areas.
+        const vec4 b = below[idx];
+        if (b.a <= 0.0) return;
+        img[idx] = compositeOver(0, b, img[idx], 1.0);  // BlendMode::Normal
+        return;
+    }
+
+    if (pc.mode == kShadowInto) {
+        // applyDropShadows: the dilated, blurred core sampled at (p - offset), colourised.
+        const float f = sampleField(float(x) - pc.p0, float(y) - pc.p1);
+        if (f <= 0.0) return;
+        const vec4 src = vec4(colour.rgb, colour.a * f);
+        img[idx] = compositeOver(pc.blend, img[idx], src, pc.opacity);
+        return;
+    }
+
+    if (pc.mode == kGlowInto) {
+        // applyOuterGlow: symmetric (no offset); the outside ramp of the blurred core IS the halo.
+        const float f = fieldA[idx];
+        if (f <= 0.0) return;
+        if (colour.a <= 0.0) return;
+        const vec4 src = vec4(colour.rgb, colour.a * f);
+        img[idx] = compositeOver(pc.blend, img[idx], src, pc.opacity);
+        return;
+    }
+
+    // Everything below composites OVER the layer and is CLIPPED to the captured coverage.
+    const float cov = alphaB[idx];
+
+    if (pc.mode == kOverlay) {
+        // applyOverlay: composite at the overlay's OWN alpha and clamp the RESULT to the coverage
+        // -- fading the source by coverage instead would let the layer colour bleed through the
+        // anti-aliased rim (the user-reported defect the CPU comment pins).
+        if (cov <= 0.0) return;
+        if (colour.a <= 0.0) return;
+        vec4 res = compositeOver(pc.blend, img[idx], colour, pc.opacity);
+        res.a = min(res.a, cov);
+        img[idx] = res;
+        return;
+    }
+
+    if (pc.mode == kInnerShadow) {
+        // applyInnerShadows: the blurred, eroded COMPLEMENT sampled at (p - offset) rides up the
+        // light-facing interior edges.
+        if (cov <= 0.0) return;
+        const float f = sampleField(float(x) - pc.p0, float(y) - pc.p1);
+        if (f <= 0.0) return;
+        const vec4 src = vec4(colour.rgb, colour.a * f);
+        vec4 res = compositeOver(pc.blend, img[idx], src, pc.opacity);
+        res.a = min(res.a, cov);
+        img[idx] = res;
+        return;
+    }
+
+    if (pc.mode == kInnerGlow) {
+        // applyInnerGlow: the seeded field is already the Edge band or the Centre ramp.
+        if (cov <= 0.0) return;
+        const float f = fieldA[idx];
+        if (f <= 0.0) return;
+        if (colour.a <= 0.0) return;
+        const vec4 src = vec4(colour.rgb, colour.a * f);
+        vec4 res = compositeOver(pc.blend, img[idx], src, pc.opacity);
+        res.a = min(res.a, cov);
+        img[idx] = res;
+        return;
+    }
+
+    if (pc.mode == kSatin) {
+        // applySatin: blur and translation COMMUTE, so the CPU blurs the coverage ONCE and samples
+        // the blurred plane at +/- the offset; this reads the same single blurred plane.
+        if (cov <= 0.0) return;
+        const float a1 = sampleField(float(x) - pc.p0, float(y) - pc.p1);
+        const float a2 = sampleField(float(x) + pc.p0, float(y) + pc.p1);
+        const float s = pc.i0 != 0 ? abs(a1 - a2) : min(1.0, a1 + a2);
+        if (s <= 0.0) return;
+        vec4 src = colour;
+        src.a = colour.a * s;
+        if (src.a <= 0.0) return;
+        vec4 res = compositeOver(pc.blend, img[idx], src, pc.opacity);
+        res.a = min(res.a, cov);
+        img[idx] = res;
+        return;
+    }
+
+    // The stroke modes read the ANTI-ALIASED signed distance field in fieldA (px, neg inside).
+    const float d = fieldA[idx];
+
+    if (pc.mode == kStrokeBelow) {
+        // An OUTSIDE ring, drawn under the layer content so the content's own AA rim blends over
+        // it -- the translucent-seam fix applyStrokes documents. p0 is the ring's inner edge
+        // (already backed off by kInnerBack for the innermost ring), p1 its outer edge.
+        if (d < pc.p0 - kAa || d > pc.p1 + kAa) return;
+        const float c = clamp((d - pc.p0) / kAa + 0.5, 0.0, 1.0) *
+                        clamp((pc.p1 - d) / kAa + 0.5, 0.0, 1.0);
+        if (c <= 0.0) return;
+        vec4 src = colour;
+        src.a = src.a * c;
+        img[idx] = compositeOver(pc.blend, img[idx], src, pc.opacity);
+        return;
+    }
+
+    if (pc.mode == kStrokeOver) {
+        const bool inside = pc.i0 != 0;
+        float c;
+        if (inside) {
+            // Fills from its inner edge OUTWARD (AA on the inner edge only) and is clipped to the
+            // shape's own coverage below, so the silhouette becomes the stroke's outer edge.
+            if (d < pc.p0 - kAa || cov <= 0.0) return;
+            c = clamp((d - pc.p0) / kAa + 0.5, 0.0, 1.0);
+        } else {
+            if (d < pc.p0 - kAa || d > pc.p1 + kAa) return;
+            c = clamp((d - pc.p0) / kAa + 0.5, 0.0, 1.0) *
+                clamp((pc.p1 - d) / kAa + 0.5, 0.0, 1.0);
+        }
+        if (c <= 0.0) return;
+        vec4 src = colour;
+        src.a = src.a * c;
+        vec4 res = compositeOver(pc.blend, img[idx], src, pc.opacity);
+        if (inside) res.a = min(res.a, cov);
+        img[idx] = res;
+    }
+}

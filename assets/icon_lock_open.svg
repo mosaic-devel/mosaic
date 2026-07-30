@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Single WHITE ink, 16x16 native. Layer is unlocked: the shackle's right leg is GONE -- the arc
+       breaks off in the air, up and to the right. Locked/unlocked must differ in SILHOUETTE, never
+       in colour alone; an earlier draft only shortened the right leg and the two states were
+       indistinguishable. Compare icon_lock_closed.svg: same body, same left leg. -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="1">
+    <path d="M5.5 7.5 V5 A2.5 2.5 0 0 1 10.17 3.75" stroke-linecap="round"/>
+    <path d="M3.5 7.5 H12.5 V13.5 H3.5 Z"/>
+  </g>
+  <circle cx="8" cy="10.5" r="1.4" fill="#FFFFFF"/>
+</svg>

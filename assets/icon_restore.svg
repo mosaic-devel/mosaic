@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F2F4FA"/>
+      <stop offset="1" stop-color="#CBD1E0"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#B7BFD6"/>
+      <stop offset="1" stop-color="#99A2BE"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.4"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5FE0A4"/>
+      <stop offset="1" stop-color="#17A05F"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(-1.93,-1.37) scale(1.058)">
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 48 A 3 3 0 0 1 43.5 51 L 16.5 51 A 3 3 0 0 1 13.5 48 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="url(#paper)"/>
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 48 A 3 3 0 0 1 43.5 51 L 16.5 51 A 3 3 0 0 1 13.5 48 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="none" stroke="url(#sheen)" stroke-width="1.6"/>
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 48 A 3 3 0 0 1 43.5 51 L 16.5 51 A 3 3 0 0 1 13.5 48 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="none" stroke="#667089" stroke-width="1.1" opacity="0.65"/>
+  <path d="M 35.5 6.5 L 46.5 17.5 L 35.5 17.5 Z" fill="url(#fold)"/>
+  <path d="M 35.5 6.5 L 46.5 17.5 L 35.5 17.5 Z" fill="none" stroke="#667089" stroke-width="1" opacity="0.55"/>
+  <path d="M 19.5 22.5 L 40.5 22.5" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 28 L 40.5 28" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 34 L 40.5 34" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 39.5 L 31 39.5" fill="none" stroke="#AEB8D0" stroke-width="2.8" stroke-linecap="round"/>
+  <circle cx="45.5" cy="44.5" r="10.5" fill="url(#green)"/>
+  <circle cx="45.5" cy="44.5" r="10.5" fill="none" stroke="url(#sheen)" stroke-width="1.2"/>
+  <circle cx="45.5" cy="44.5" r="10.5" fill="none" stroke="#0E6B41" stroke-width="1" opacity="0.55"/>
+  <g transform="translate(0,0.7)" opacity="0.35">
+    <path d="M 48.3 49.35 A 5.6 5.6 0 1 0 39.9 44.5" fill="none" stroke="#0B5D39" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M 36.9 43.9 L 42.9 43.9 L 39.9 48.4 Z" fill="#0B5D39"/>
+  </g>
+  <path d="M 48.3 49.35 A 5.6 5.6 0 1 0 39.9 44.5" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M 36.9 43.9 L 42.9 43.9 L 39.9 48.4 Z" fill="#FFFFFF"/>
+  </g>
+</svg>

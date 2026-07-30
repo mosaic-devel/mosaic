@@ -1,0 +1,6565 @@
+# Mosaic -- Japanese translation.
+# Copyright (C) 2026 The Mosaic contributors
+# This file is distributed under the same license as the Mosaic package.
+#
+# Machine-assisted first draft (S54). It is a starting point, not a finished
+# translation: corrections from native speakers are welcome and expected. Entries
+# left as msgstr "" fall back to the English text, which is intended.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Mosaic 0.2.17\n"
+"Report-Msgid-Bugs-To: https://github.com/mosaic-devel/mosaic/issues\n"
+"POT-Creation-Date: 2026-07-29 10:08+0200\n"
+"PO-Revision-Date: 2026-07-24 12:00+0000\n"
+"Last-Translator: Mosaic i18n bootstrap <noreply@localhost>\n"
+"Language-Team: Japanese\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: src/core/commands.hpp:73
+msgid "Add Layer"
+msgstr ""
+
+#: src/core/commands.hpp:89 src/ui/layer_panel.cpp:2025
+msgid "Delete Layer"
+msgstr "レイヤーを削除"
+
+#: src/core/commands.hpp:131
+msgid "Move Layer"
+msgstr ""
+
+#: src/core/commands.hpp:147
+msgid "Rename Layer"
+msgstr ""
+
+#: src/core/commands.hpp:170 src/ui/app_window.cpp:4045
+msgid "Rename Document"
+msgstr "ドキュメント名を変更"
+
+#: src/core/commands.hpp:183
+msgid "Toggle Visibility"
+msgstr ""
+
+#: src/core/commands.hpp:215
+msgid "Set Blend Mode"
+msgstr ""
+
+#: src/core/commands.hpp:229
+msgid "Clip to Layer Below"
+msgstr ""
+
+#: src/core/commands.hpp:246 src/core/commands.hpp:337
+msgid "Set Opacity"
+msgstr ""
+
+#: src/core/commands.hpp:268 src/ui/layer_effects_dialog.cpp:270
+msgid "Layer Effects"
+msgstr "レイヤー効果"
+
+#: src/core/commands.hpp:285
+msgid "Transform Layer"
+msgstr ""
+
+#: src/core/commands.hpp:310
+msgid "Transform Layers"
+msgstr ""
+
+#: src/core/commands.hpp:366 src/core/commands.hpp:401
+msgid "Edit Pixels"
+msgstr ""
+
+#: src/core/commands.hpp:431 src/ui/fill_dialog.cpp:73
+#: src/ui/fill_dialog.cpp:210 src/ui/image_ops_panel.cpp:757
+#: src/ui/layer_effects_dialog.cpp:533 src/ui/tool.cpp:307 src/ui/tool.cpp:503
+msgid "Fill"
+msgstr "塗りつぶし"
+
+#: src/core/commands.hpp:512
+msgid "Paint Mask"
+msgstr ""
+
+#: src/core/commands.hpp:642
+msgid "Resize Canvas"
+msgstr ""
+
+#: src/core/commands.hpp:689
+msgid "Add Guide"
+msgstr ""
+
+#: src/core/commands.hpp:702
+msgid "Remove Guide"
+msgstr ""
+
+#: src/core/commands.hpp:719
+msgid "Move Guide"
+msgstr ""
+
+#: src/core/commands.hpp:735
+msgid "Clear Guides"
+msgstr ""
+
+#: src/core/commands.hpp:752
+msgid "Move Guides"
+msgstr ""
+
+#: src/core/inpaint/backends/he_sun/offset_stats_backend.hpp:19
+msgid "Offset statistics (He & Sun)"
+msgstr ""
+
+#: src/core/inpaint/backends/pde/pde_backend.hpp:23
+msgid "Diffusion (PDE)"
+msgstr ""
+
+#: src/core/inpaint/backends/resynth/resynth_backend.hpp:42
+msgid "Resynthesizer"
+msgstr ""
+
+#: src/core/inpaint/backends/script/script_backend.hpp:31
+msgid "Script provider"
+msgstr ""
+
+#: src/ui/about_dialog.cpp:258 src/ui/app_window.cpp:13556
+msgid "About Mosaic"
+msgstr "Mosaic について"
+
+#: src/ui/about_dialog.cpp:275 src/ui/brush_editor.cpp:1151
+msgid "Close"
+msgstr "閉じる"
+
+#: src/ui/about_dialog.cpp:428
+msgid "Version "
+msgstr "バージョン "
+
+#: src/ui/about_dialog.cpp:452
+msgid "copied ✓"
+msgstr "コピーしました ✓"
+
+#: src/ui/about_dialog.cpp:457
+msgid "by "
+msgstr "作者: "
+
+#: src/ui/about_dialog.cpp:508
+msgid "A professional, GPU-accelerated image editor."
+msgstr "プロ向けの、GPU アクセラレーション対応画像エディターです。"
+
+#: src/ui/about_dialog.cpp:512
+msgid "Licensed under "
+msgstr "ライセンス: "
+
+#: src/ui/adjustment_panel.cpp:537
+msgid "Channel"
+msgstr ""
+
+#: src/ui/adjustment_panel.cpp:605 src/ui/app_window.cpp:9556
+#: src/ui/layer_effects_dialog.cpp:990
+msgid "Gradient"
+msgstr "グラデーション"
+
+#: src/ui/adjustment_panel.cpp:772
+msgid "Filter color"
+msgstr ""
+
+#: src/ui/adjustment_panel.cpp:789 src/ui/brush_editor.cpp:1115
+#: src/ui/settings_dialog.cpp:1853
+msgid "Reset"
+msgstr "リセット"
+
+#: src/ui/adjustment_panel.cpp:920
+msgid "Click to choose the filter color"
+msgstr ""
+
+#: src/ui/app_window.cpp:592 src/ui/app_window.cpp:3466
+#: src/ui/app_window.cpp:3966 src/ui/app_window.cpp:4073
+#: src/ui/app_window.cpp:11359 src/ui/brush_editor.cpp:1911
+#: src/ui/export_dialog.cpp:1135 src/ui/fill_dialog.cpp:213
+#: src/ui/image_ops_panel.cpp:865 src/ui/layer_effects_dialog.cpp:584
+#: src/ui/new_document_dialog.cpp:1932 src/ui/select_modify_dialog.cpp:116
+#: src/ui/select_morph_panel.cpp:155 src/ui/texture_generator_dialog.cpp:1017
+#: src/ui/tool.cpp:319
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: src/ui/app_window.cpp:615
+msgid "&File/&New..."
+msgstr "ファイル(&F)/新規(&N)..."
+
+#: src/ui/app_window.cpp:616
+msgid "&File/&Open..."
+msgstr "ファイル(&F)/開く(&O)..."
+
+#: src/ui/app_window.cpp:619
+msgid "&File/Open &Recent/&Clear Recents"
+msgstr "ファイル(&F)/最近使用したファイル(&R)/履歴を消去(&C)"
+
+#: src/ui/app_window.cpp:620
+msgid "&File/Open as &Layer..."
+msgstr "ファイル(&F)/レイヤーとして開く(&L)..."
+
+#: src/ui/app_window.cpp:621
+msgid "&File/&Save"
+msgstr "ファイル(&F)/保存(&S)"
+
+#: src/ui/app_window.cpp:622
+msgid "&File/Save &As..."
+msgstr "ファイル(&F)/名前を付けて保存(&A)..."
+
+#: src/ui/app_window.cpp:624
+msgid "&File/Rena&me Document..."
+msgstr "ファイル(&F)/ドキュメント名を変更(&M)..."
+
+#: src/ui/app_window.cpp:627
+msgid "&File/Flatten &History..."
+msgstr "ファイル(&F)/履歴を統合(&H)..."
+
+#: src/ui/app_window.cpp:631
+msgid "&File/&Export As..."
+msgstr "ファイル(&F)/書き出し(&E)..."
+
+#: src/ui/app_window.cpp:634
+msgid "&File/Export to Last File"
+msgstr "ファイル(&F)/Export to Last File"
+
+#: src/ui/app_window.cpp:635
+msgid "&File/&Quick Export as PNG"
+msgstr "ファイル(&F)/PNG でクイック書き出し(&Q)"
+
+#: src/ui/app_window.cpp:636
+msgid "&File/Quick Export as &JPEG"
+msgstr "ファイル(&F)/JPEG でクイック書き出し(&J)"
+
+#: src/ui/app_window.cpp:639
+msgid "&File/Quick Export as JPEG &XL"
+msgstr "ファイル(&F)/JPEG XL でクイック書き出し(&X)"
+
+#: src/ui/app_window.cpp:641 src/ui/app_window.cpp:645
+msgid "&File/&Close"
+msgstr "ファイル(&F)/閉じる(&C)"
+
+#: src/ui/app_window.cpp:646
+msgid "&File/&Quit"
+msgstr "ファイル(&F)/終了(&Q)"
+
+#: src/ui/app_window.cpp:649
+msgid "&Edit/&Undo"
+msgstr "編集(&E)/元に戻す(&U)"
+
+#: src/ui/app_window.cpp:650
+msgid "&Edit/&Redo"
+msgstr "編集(&E)/やり直す(&R)"
+
+#: src/ui/app_window.cpp:651
+msgid "&Edit/Cu&t"
+msgstr "編集(&E)/切り取り(&T)"
+
+#: src/ui/app_window.cpp:652
+msgid "&Edit/&Copy"
+msgstr "編集(&E)/コピー(&C)"
+
+#: src/ui/app_window.cpp:653
+msgid "&Edit/Copy &Merged"
+msgstr "編集(&E)/結合部分をコピー(&M)"
+
+#: src/ui/app_window.cpp:654
+msgid "&Edit/&Paste"
+msgstr "編集(&E)/貼り付け(&P)"
+
+#: src/ui/app_window.cpp:658
+msgid "&Edit/Paste in P&lace"
+msgstr "編集(&E)/Paste in P&lace"
+
+#: src/ui/app_window.cpp:662
+msgid "&Edit/Cl&ear"
+msgstr "編集(&E)/Cl&ear"
+
+#: src/ui/app_window.cpp:664 src/ui/app_window.cpp:666
+msgid "&Edit/Fi&ll..."
+msgstr "編集(&E)/塗りつぶし(&L)..."
+
+#: src/ui/app_window.cpp:667
+msgid "&Edit/&Settings..."
+msgstr "編集(&E)/設定(&S)..."
+
+#: src/ui/app_window.cpp:676
+msgid "&Image/Image Si&ze..."
+msgstr "画像(&I)/画像サイズ(&Z)..."
+
+#: src/ui/app_window.cpp:677
+msgid "&Image/&Canvas Size..."
+msgstr "画像(&I)/キャンバスサイズ(&C)..."
+
+#: src/ui/app_window.cpp:679
+msgid "&Image/&Rotate/&90° Clockwise"
+msgstr "画像(&I)/&Rotate/&90° Clockwise"
+
+#: src/ui/app_window.cpp:680
+msgid "&Image/&Rotate/9&0° Counter-Clockwise"
+msgstr "画像(&I)/&Rotate/9&0° Counter-Clockwise"
+
+#: src/ui/app_window.cpp:682
+msgid "&Image/&Rotate/&180°"
+msgstr "画像(&I)/&Rotate/&180°"
+
+#: src/ui/app_window.cpp:686
+msgid "&Image/&Rotate/&Arbitrary..."
+msgstr "画像(&I)/&Rotate/&Arbitrary..."
+
+#: src/ui/app_window.cpp:687
+msgid "&Image/&Flip/&Horizontal"
+msgstr "画像(&I)/&Flip/&Horizontal"
+
+#: src/ui/app_window.cpp:688
+msgid "&Image/&Flip/&Vertical"
+msgstr "画像(&I)/&Flip/&Vertical"
+
+#: src/ui/app_window.cpp:689
+msgid "&Image/&Trim to Content"
+msgstr "画像(&I)/&Trim to Content"
+
+#: src/ui/app_window.cpp:693
+msgid "&Layer/Layer &Effects..."
+msgstr "レイヤー(&L)/レイヤー効果(&E)..."
+
+#: src/ui/app_window.cpp:694
+msgid "&Layer/Text&ure Generator..."
+msgstr "レイヤー(&L)/テクスチャジェネレーター(&U)..."
+
+#: src/ui/app_window.cpp:695
+msgid "&Layer/&New Layer"
+msgstr "レイヤー(&L)/新規レイヤー(&N)"
+
+#: src/ui/app_window.cpp:696
+msgid "&Layer/&Duplicate Layer"
+msgstr "レイヤー(&L)/レイヤーを複製(&D)"
+
+#: src/ui/app_window.cpp:697
+msgid "&Layer/&Delete Layer"
+msgstr "レイヤー(&L)/レイヤーを削除(&D)"
+
+#: src/ui/app_window.cpp:698
+msgid "&Layer/Rena&me Layer..."
+msgstr "レイヤー(&L)/Rena&me Layer..."
+
+#: src/ui/app_window.cpp:699
+msgid "&Layer/&Group Layers"
+msgstr "レイヤー(&L)/レイヤーをグループ化(&G)"
+
+#: src/ui/app_window.cpp:700
+msgid "&Layer/Merge &Down"
+msgstr "レイヤー(&L)/下のレイヤーと結合(&D)"
+
+#: src/ui/app_window.cpp:706
+msgid "&Layer/Co&mbine Paths/&Add"
+msgstr "レイヤー(&L)/Co&mbine Paths/&Add"
+
+#: src/ui/app_window.cpp:707
+msgid "&Layer/Co&mbine Paths/&Subtract"
+msgstr "レイヤー(&L)/Co&mbine Paths/&Subtract"
+
+#: src/ui/app_window.cpp:709
+msgid "&Layer/Co&mbine Paths/&Intersect"
+msgstr "レイヤー(&L)/Co&mbine Paths/&Intersect"
+
+#: src/ui/app_window.cpp:711
+msgid "&Layer/Co&mbine Paths/&Exclude"
+msgstr "レイヤー(&L)/Co&mbine Paths/&Exclude"
+
+#: src/ui/app_window.cpp:713
+msgid "&Layer/&Flatten to Path"
+msgstr "レイヤー(&L)/&Flatten to Path"
+
+#: src/ui/app_window.cpp:716
+msgid "&Layer/Bring &Forward"
+msgstr "レイヤー(&L)/Bring &Forward"
+
+#: src/ui/app_window.cpp:717
+msgid "&Layer/Send Back&ward"
+msgstr "レイヤー(&L)/Send Back&ward"
+
+#: src/ui/app_window.cpp:720
+msgid "&Layer/&Rasterize"
+msgstr "レイヤー(&L)/&Rasterize"
+
+#: src/ui/app_window.cpp:721
+msgid "&Layer/Con&vert to Path"
+msgstr "レイヤー(&L)/Con&vert to Path"
+
+#: src/ui/app_window.cpp:722
+msgid "&Layer/Add Mas&k"
+msgstr "レイヤー(&L)/Add Mas&k"
+
+#: src/ui/app_window.cpp:723
+msgid "&Layer/Delete Mas&k"
+msgstr "レイヤー(&L)/Delete Mas&k"
+
+#: src/ui/app_window.cpp:726
+msgid "&Layer/Disable Mask"
+msgstr "レイヤー(&L)/Disable Mask"
+
+#: src/ui/app_window.cpp:727
+msgid "&Layer/Unlink Mask"
+msgstr "レイヤー(&L)/Unlink Mask"
+
+#: src/ui/app_window.cpp:728
+msgid "&Layer/Hide Layer"
+msgstr "レイヤー(&L)/Hide Layer"
+
+#: src/ui/app_window.cpp:729
+msgid "&Layer/Lock Layer"
+msgstr "レイヤー(&L)/Lock Layer"
+
+#: src/ui/app_window.cpp:736
+msgid "&Type/&Rasterize Type"
+msgstr "文字(&T)/&Rasterize Type"
+
+#: src/ui/app_window.cpp:737
+msgid "&Type/Convert to &Shape"
+msgstr "文字(&T)/Convert to &Shape"
+
+#: src/ui/app_window.cpp:738
+msgid "&Type/&Character && Paragraph..."
+msgstr "文字(&T)/&Character && Paragraph..."
+
+#: src/ui/app_window.cpp:739
+msgid "&Type/&3D Type..."
+msgstr "文字(&T)/&3D Type..."
+
+#: src/ui/app_window.cpp:743
+msgid "&Type/&Orientation/&Horizontal"
+msgstr "文字(&T)/&Orientation/&Horizontal"
+
+#: src/ui/app_window.cpp:745
+msgid "&Type/&Orientation/Vertical (&right to left)"
+msgstr "文字(&T)/&Orientation/Vertical (&right to left)"
+
+#: src/ui/app_window.cpp:747
+msgid "&Type/&Orientation/Vertical (&left to right)"
+msgstr "文字(&T)/&Orientation/Vertical (&left to right)"
+
+#: src/ui/app_window.cpp:749
+msgid "&Type/&Anti-Alias/&None"
+msgstr "文字(&T)/&Anti-Alias/&None"
+
+#: src/ui/app_window.cpp:751
+msgid "&Type/&Anti-Alias/&Grayscale"
+msgstr "文字(&T)/&Anti-Alias/&Grayscale"
+
+#: src/ui/app_window.cpp:753
+msgid "&Type/&Kerning/&Metric"
+msgstr "文字(&T)/&Kerning/&Metric"
+
+#: src/ui/app_window.cpp:755
+msgid "&Type/&Kerning/&Optical"
+msgstr "文字(&T)/&Kerning/&Optical"
+
+#: src/ui/app_window.cpp:757
+msgid "&Type/&Kerning/N&one"
+msgstr "文字(&T)/&Kerning/N&one"
+
+#: src/ui/app_window.cpp:759
+msgid "&Type/&Direction/&Automatic"
+msgstr "文字(&T)/&Direction/&Automatic"
+
+#: src/ui/app_window.cpp:761
+msgid "&Type/&Direction/&Left to Right"
+msgstr "文字(&T)/&Direction/&Left to Right"
+
+#: src/ui/app_window.cpp:767
+msgid "&Type/&Direction/&Right to Left"
+msgstr "文字(&T)/&Direction/&Right to Left"
+
+#: src/ui/app_window.cpp:769
+msgid "&Type/Convert to &Point Text"
+msgstr "文字(&T)/Convert to &Point Text"
+
+#: src/ui/app_window.cpp:770
+msgid "&Type/Convert to Area Te&xt"
+msgstr "文字(&T)/Convert to Area Te&xt"
+
+#: src/ui/app_window.cpp:771
+msgid "&Type/Text on Selected Pat&h"
+msgstr "文字(&T)/Text on Selected Pat&h"
+
+#: src/ui/app_window.cpp:772
+msgid "&Type/Release from Path"
+msgstr "文字(&T)/Release from Path"
+
+#: src/ui/app_window.cpp:773
+msgid "&Type/Create &Work Path"
+msgstr "文字(&T)/Create &Work Path"
+
+#: src/ui/app_window.cpp:774
+msgid "&Type/&Update All Text Layers"
+msgstr "文字(&T)/&Update All Text Layers"
+
+#: src/ui/app_window.cpp:776
+msgid "&Select/Select &All"
+msgstr "選択(&S)/すべてを選択(&A)"
+
+#: src/ui/app_window.cpp:777
+msgid "&Select/&Deselect"
+msgstr "選択(&S)/選択を解除(&D)"
+
+#: src/ui/app_window.cpp:781
+msgid "&Select/&Reselect"
+msgstr "選択(&S)/&Reselect"
+
+#: src/ui/app_window.cpp:782
+msgid "&Select/&Inverse"
+msgstr "選択(&S)/選択範囲を反転(&I)"
+
+#: src/ui/app_window.cpp:786
+msgid "&Select/&Grow..."
+msgstr "選択(&S)/選択範囲を拡張(&G)..."
+
+#: src/ui/app_window.cpp:787
+msgid "&Select/S&hrink..."
+msgstr "選択(&S)/選択範囲を縮小(&H)..."
+
+#: src/ui/app_window.cpp:788
+msgid "&Select/&Feather..."
+msgstr "選択(&S)/選択範囲をぼかす(&F)..."
+
+#: src/ui/app_window.cpp:789
+msgid "&Select/S&mooth..."
+msgstr "選択(&S)/選択範囲を滑らかに(&M)..."
+
+#: src/ui/app_window.cpp:792
+msgid "&Select/&Mask from Selection"
+msgstr "選択(&S)/選択範囲からマスクを作成(&M)"
+
+#: src/ui/app_window.cpp:793
+msgid "&Select/Mask from I&nverse Selection"
+msgstr "選択(&S)/選択範囲を反転してマスクを作成(&N)"
+
+#: src/ui/app_window.cpp:797
+msgid "&Select/Add &to Mask"
+msgstr "選択(&S)/マスクに追加(&T)"
+
+#: src/ui/app_window.cpp:798
+msgid "&Select/&Subtract from Mask"
+msgstr "選択(&S)/マスクから削除(&S)"
+
+#: src/ui/app_window.cpp:802
+msgid "&Select/Select All &Layers"
+msgstr "選択(&S)/Select All &Layers"
+
+#: src/ui/app_window.cpp:812
+msgid "Filte&r/&Last Filter"
+msgstr "フィルター(&R)/&Last Filter"
+
+#: src/ui/app_window.cpp:814
+msgid "Filte&r/&Adjustments/&Brightness\\/Contrast..."
+msgstr "フィルター(&R)/色調補正(&A)/明るさ\\/コントラスト(&B)..."
+
+#: src/ui/app_window.cpp:816
+msgid "Filte&r/&Adjustments/&Levels..."
+msgstr "フィルター(&R)/色調補正(&A)/レベル補正(&L)..."
+
+#: src/ui/app_window.cpp:818
+msgid "Filte&r/&Adjustments/Cur&ves..."
+msgstr "フィルター(&R)/色調補正(&A)/Cur&ves..."
+
+#: src/ui/app_window.cpp:820
+msgid "Filte&r/&Adjustments/&Exposure..."
+msgstr "フィルター(&R)/色調補正(&A)/露光量(&E)..."
+
+#: src/ui/app_window.cpp:822
+msgid "Filte&r/&Adjustments/&Hue\\/Saturation..."
+msgstr "フィルター(&R)/色調補正(&A)/色相\\/彩度(&H)..."
+
+#: src/ui/app_window.cpp:826
+msgid "Filte&r/&Adjustments/Vibr&ance..."
+msgstr "フィルター(&R)/色調補正(&A)/Vibr&ance..."
+
+#: src/ui/app_window.cpp:828
+msgid "Filte&r/&Adjustments/&Color Balance..."
+msgstr "フィルター(&R)/色調補正(&A)/カラーバランス(&C)..."
+
+#: src/ui/app_window.cpp:830
+msgid "Filte&r/&Adjustments/Photo &Filter..."
+msgstr "フィルター(&R)/色調補正(&A)/Photo &Filter..."
+
+#: src/ui/app_window.cpp:832
+msgid "Filte&r/&Adjustments/&Posterize..."
+msgstr "フィルター(&R)/色調補正(&A)/ポスタリゼーション(&P)..."
+
+#: src/ui/app_window.cpp:834
+msgid "Filte&r/&Adjustments/&Threshold..."
+msgstr "フィルター(&R)/色調補正(&A)/2 階調化(&T)..."
+
+#: src/ui/app_window.cpp:836
+msgid "Filte&r/&Adjustments/&Grayscale..."
+msgstr "フィルター(&R)/色調補正(&A)/グレースケール(&G)..."
+
+#: src/ui/app_window.cpp:839
+msgid "Filte&r/&Adjustments/Gradie&nt Map..."
+msgstr "フィルター(&R)/色調補正(&A)/Gradie&nt Map..."
+
+#: src/ui/app_window.cpp:841
+msgid "Filte&r/&Adjustments/&Invert"
+msgstr "フィルター(&R)/色調補正(&A)/階調の反転(&I)"
+
+#: src/ui/app_window.cpp:846
+msgid "Filte&r/&Adjustments/Shado&ws\\/Highlights..."
+msgstr "フィルター(&R)/色調補正(&A)/Shado&ws\\/Highlights..."
+
+#: src/ui/app_window.cpp:848
+msgid "Filte&r/&Adjustments/Ha&ze Removal..."
+msgstr "フィルター(&R)/色調補正(&A)/Ha&ze Removal..."
+
+#: src/ui/app_window.cpp:850
+msgid "Filte&r/&Adjustments/&Defringe..."
+msgstr "フィルター(&R)/色調補正(&A)/&Defringe..."
+
+#: src/ui/app_window.cpp:852
+msgid "Filte&r/&Adjustments/&Matte Removal..."
+msgstr "フィルター(&R)/色調補正(&A)/&Matte Removal..."
+
+#: src/ui/app_window.cpp:857
+msgid "Filte&r/&Blur/&Gaussian Blur..."
+msgstr "フィルター(&R)/ぼかし(&B)/ガウスぼかし(&G)..."
+
+#: src/ui/app_window.cpp:859
+msgid "Filte&r/&Blur/Bo&x Blur..."
+msgstr "フィルター(&R)/ぼかし(&B)/ボックスぼかし(&X)..."
+
+#: src/ui/app_window.cpp:861
+msgid "Filte&r/&Blur/&Motion Blur..."
+msgstr "フィルター(&R)/ぼかし(&B)/移動ぼかし(&M)..."
+
+#: src/ui/app_window.cpp:863
+msgid "Filte&r/&Blur/&Radial Blur..."
+msgstr "フィルター(&R)/ぼかし(&B)/放射状ぼかし(&R)..."
+
+#: src/ui/app_window.cpp:865
+msgid "Filte&r/&Blur/&Surface Blur..."
+msgstr "フィルター(&R)/ぼかし(&B)/表面ぼかし(&S)..."
+
+#: src/ui/app_window.cpp:867
+msgid "Filte&r/&Blur/&Lens Blur..."
+msgstr "フィルター(&R)/ぼかし(&B)/レンズぼかし(&L)..."
+
+#: src/ui/app_window.cpp:869
+msgid "Filte&r/&Blur/&Depth of Field..."
+msgstr "フィルター(&R)/ぼかし(&B)/被写界深度(&D)..."
+
+#: src/ui/app_window.cpp:874
+msgid "Filte&r/&Stylize/&Sharpen..."
+msgstr "フィルター(&R)/&Stylize/&Sharpen..."
+
+#: src/ui/app_window.cpp:876
+msgid "Filte&r/&Stylize/&Unsharp Mask..."
+msgstr "フィルター(&R)/&Stylize/&Unsharp Mask..."
+
+#: src/ui/app_window.cpp:880
+msgid "Filte&r/&Stylize/&High Pass..."
+msgstr "フィルター(&R)/&Stylize/&High Pass..."
+
+#: src/ui/app_window.cpp:882
+msgid "Filte&r/&Stylize/&Add Noise..."
+msgstr "フィルター(&R)/&Stylize/&Add Noise..."
+
+#: src/ui/app_window.cpp:884
+msgid "Filte&r/&Stylize/&Denoise..."
+msgstr "フィルター(&R)/&Stylize/&Denoise..."
+
+#: src/ui/app_window.cpp:886
+msgid "Filte&r/&Stylize/&Pixelate..."
+msgstr "フィルター(&R)/&Stylize/&Pixelate..."
+
+#: src/ui/app_window.cpp:888
+msgid "Filte&r/&Stylize/&Emboss..."
+msgstr "フィルター(&R)/&Stylize/&Emboss..."
+
+#: src/ui/app_window.cpp:890
+msgid "Filte&r/&Stylize/&Oil Paint..."
+msgstr "フィルター(&R)/&Stylize/&Oil Paint..."
+
+#: src/ui/app_window.cpp:892
+msgid "Filte&r/&Stylize/&Wave..."
+msgstr "フィルター(&R)/&Stylize/&Wave..."
+
+#: src/ui/app_window.cpp:894
+msgid "Filte&r/&Stylize/&Vignette..."
+msgstr "フィルター(&R)/&Stylize/&Vignette..."
+
+#: src/ui/app_window.cpp:904
+msgid "&Arrange/Align &Left"
+msgstr "整列(&A)/左揃え(&L)"
+
+#: src/ui/app_window.cpp:905
+msgid "&Arrange/Align &Center"
+msgstr "整列(&A)/左右中央揃え(&C)"
+
+#: src/ui/app_window.cpp:906
+msgid "&Arrange/Align &Right"
+msgstr "整列(&A)/右揃え(&R)"
+
+#: src/ui/app_window.cpp:907
+msgid "&Arrange/Align &Top"
+msgstr "整列(&A)/上揃え(&T)"
+
+#: src/ui/app_window.cpp:908
+msgid "&Arrange/Align Mi&ddle"
+msgstr "整列(&A)/上下中央揃え(&D)"
+
+#: src/ui/app_window.cpp:909
+msgid "&Arrange/Align &Bottom"
+msgstr "整列(&A)/下揃え(&B)"
+
+#: src/ui/app_window.cpp:910
+msgid "&Arrange/Distribute &Horizontally"
+msgstr "整列(&A)/水平方向に均等配置(&H)"
+
+#: src/ui/app_window.cpp:912
+msgid "&Arrange/Distribute &Vertically"
+msgstr "整列(&A)/垂直方向に均等配置(&V)"
+
+#: src/ui/app_window.cpp:915
+msgid "&View/Zoom &In"
+msgstr "表示(&V)/ズームイン(&I)"
+
+#: src/ui/app_window.cpp:916
+msgid "&View/Zoom &Out"
+msgstr "表示(&V)/ズームアウト(&O)"
+
+#: src/ui/app_window.cpp:917
+msgid "&View/&Fit on Screen"
+msgstr "表示(&V)/画面に合わせる(&F)"
+
+#: src/ui/app_window.cpp:918
+msgid "&View/Actual Pi&xels"
+msgstr "表示(&V)/等倍表示(&X)"
+
+#: src/ui/app_window.cpp:922
+msgid "&View/Zoom &200%"
+msgstr "表示(&V)/Zoom &200%"
+
+#: src/ui/app_window.cpp:923
+msgid "&View/Zoom &50%"
+msgstr "表示(&V)/Zoom &50%"
+
+#: src/ui/app_window.cpp:924
+msgid "&View/Rotate View &Clockwise"
+msgstr "表示(&V)/Rotate View &Clockwise"
+
+#: src/ui/app_window.cpp:925
+msgid "&View/Rotate View Counter-Clock&wise"
+msgstr "表示(&V)/Rotate View Counter-Clock&wise"
+
+#: src/ui/app_window.cpp:926
+msgid "&View/Reset Rotatio&n"
+msgstr "表示(&V)/Reset Rotatio&n"
+
+#: src/ui/app_window.cpp:927
+msgid "&View/Reset Vie&w"
+msgstr "表示(&V)/Reset Vie&w"
+
+#: src/ui/app_window.cpp:930
+msgid "&View/Show Pi&xel Grid"
+msgstr "表示(&V)/ピクセルグリッドを表示(&X)"
+
+#: src/ui/app_window.cpp:934
+msgid "&View/&Rulers"
+msgstr "表示(&V)/定規(&R)"
+
+#: src/ui/app_window.cpp:938
+msgid "&View/Show &Guides"
+msgstr "表示(&V)/ガイドを表示(&G)"
+
+#: src/ui/app_window.cpp:940
+msgid "&View/C&lear Guides"
+msgstr "表示(&V)/ガイドを消去(&L)"
+
+#: src/ui/app_window.cpp:941
+msgid "&View/Loc&k Guides"
+msgstr "表示(&V)/ガイドをロック(&K)"
+
+#: src/ui/app_window.cpp:943
+msgid "&View/&Snap"
+msgstr "表示(&V)/スナップ(&S)"
+
+#: src/ui/app_window.cpp:944
+msgid "&View/Snap &To/&Guides"
+msgstr "表示(&V)/スナップ先(&T)/ガイド(&G)"
+
+#: src/ui/app_window.cpp:945
+msgid "&View/Snap &To/&Canvas"
+msgstr "表示(&V)/スナップ先(&T)/キャンバス(&C)"
+
+#: src/ui/app_window.cpp:946
+msgid "&View/Snap &To/&Layer Bounds"
+msgstr "表示(&V)/スナップ先(&T)/レイヤーの境界(&L)"
+
+#: src/ui/app_window.cpp:949
+msgid "&View/S&mart Guides"
+msgstr "表示(&V)/スマートガイド(&M)"
+
+#: src/ui/app_window.cpp:974 src/ui/app_window.cpp:990
+msgid "&Help/&About Mosaic"
+msgstr "ヘルプ(&H)/Mosaic について(&A)"
+
+#: src/ui/app_window.cpp:1311
+msgid ""
+"Ctrl-click to pick what the clone stamp copies, then paint over the target"
+msgstr ""
+
+#: src/ui/app_window.cpp:1375
+msgid "This layer is locked. Unlock it to move or transform it."
+msgstr ""
+"このレイヤーはロックされています。移動や変形を行うにはロックを解除してくださ"
+"い。"
+
+#: src/ui/app_window.cpp:1428
+msgid "The layer is locked — unlock it to paint"
+msgstr "レイヤーがロックされています — 描画するにはロックを解除してください"
+
+#: src/ui/app_window.cpp:1431
+msgid "Can’t brush a vector layer — rasterize it first to paint on it"
+msgstr ""
+"ベクターレイヤーには直接描画できません — 描画するにはまずラスタライズしてくだ"
+"さい"
+
+#: src/ui/app_window.cpp:1475 src/ui/app_window.cpp:1945
+msgid "Edit Shape"
+msgstr "シェイプを編集"
+
+#: src/ui/app_window.cpp:1505
+msgid "Edit Path"
+msgstr ""
+
+#: src/ui/app_window.cpp:1524 src/ui/app_window.cpp:9678
+#: src/ui/app_window.cpp:9686 src/ui/app_window.cpp:9750
+msgid "Edit Gradient"
+msgstr "グラデーションを編集"
+
+#: src/ui/app_window.cpp:1542
+msgid "Edit Text"
+msgstr "テキストを編集"
+
+#: src/ui/app_window.cpp:1882
+msgid "Settings…"
+msgstr ""
+
+#: src/ui/app_window.cpp:2717
+msgid "No Recent Files"
+msgstr "最近使用したファイルはありません"
+
+#: src/ui/app_window.cpp:2743
+msgid "Recent files cleared"
+msgstr "最近使用したファイルの履歴を消去しました"
+
+#: src/ui/app_window.cpp:2756
+msgid "Could not open the file"
+msgstr "ファイルを開けませんでした"
+
+#: src/ui/app_window.cpp:2757
+msgid "It may have been moved or deleted; it was removed from the recent list."
+msgstr ""
+"移動または削除された可能性があります。最近使用したファイルの一覧からは削除し"
+"ました。"
+
+#: src/ui/app_window.cpp:2962 src/ui/app_window.cpp:2969
+msgid "Could not open the template"
+msgstr "テンプレートを開けませんでした"
+
+#: src/ui/app_window.cpp:2962 src/ui/app_window.cpp:3411
+msgid "The file could not be read."
+msgstr "ファイルを読み込めませんでした。"
+
+#: src/ui/app_window.cpp:2983
+msgid "The clipboard no longer holds an image"
+msgstr "クリップボードに画像がありません"
+
+#: src/ui/app_window.cpp:3048 src/ui/app_window.cpp:3519
+#: src/ui/app_window.cpp:3532 src/ui/app_window.cpp:3605
+#: src/ui/app_window.cpp:3620 src/ui/new_document_dialog.cpp:1212
+#: src/ui/shape_designer.cpp:1158
+msgid "Open"
+msgstr "開く"
+
+#: src/ui/app_window.cpp:3059
+msgid "Images, Mosaic documents"
+msgstr "画像、Mosaic ドキュメント"
+
+#: src/ui/app_window.cpp:3060 src/ui/app_window.cpp:3174
+#: src/ui/app_window.cpp:3321 src/ui/app_window.cpp:4125
+#: src/ui/app_window.cpp:4812 src/ui/app_window.cpp:4913
+#: src/ui/app_window.cpp:4959 src/ui/brush_editor.cpp:1824
+#: src/ui/export_dialog.cpp:1204
+msgid "All files"
+msgstr "すべてのファイル"
+
+#: src/ui/app_window.cpp:3079 src/ui/app_window.cpp:3083
+#: src/ui/layer_effects_dialog.cpp:582 src/ui/new_document_dialog.cpp:1691
+#: src/ui/select_modify_dialog.cpp:113 src/ui/settings_dialog.cpp:2863
+msgid "OK"
+msgstr "OK"
+
+#: src/ui/app_window.cpp:3083
+msgid "Copy details"
+msgstr "詳細をコピー"
+
+#: src/ui/app_window.cpp:3127 src/ui/app_window.cpp:3232
+msgid "Could not open the image"
+msgstr "画像を開けませんでした"
+
+#: src/ui/app_window.cpp:3132
+msgid "Placed image"
+msgstr "画像を配置しました"
+
+#: src/ui/app_window.cpp:3168
+msgid "Open as Layer"
+msgstr "レイヤーとして開く"
+
+#: src/ui/app_window.cpp:3174
+msgid "Images"
+msgstr "画像"
+
+#: src/ui/app_window.cpp:3214
+msgid "Saving -- finishing the save first"
+msgstr "保存中 -- 先に保存を完了します"
+
+#: src/ui/app_window.cpp:3284
+msgid " and "
+msgstr " と "
+
+#: src/ui/app_window.cpp:3289
+#, c-format
+msgid " Affected: the %s layer."
+msgstr " 対象: %s レイヤー。"
+
+#: src/ui/app_window.cpp:3290
+#, c-format
+msgid " Affected: the %s layers."
+msgstr " 対象: %s レイヤー。"
+
+#: src/ui/app_window.cpp:3316
+msgid "Save other version as"
+msgstr "もう一方のバージョンに名前を付けて保存"
+
+#: src/ui/app_window.cpp:3317 src/ui/app_window.cpp:4121
+#: src/ui/app_window.cpp:11359 src/ui/brush_editor.cpp:996
+msgid "Save"
+msgstr "保存"
+
+#: src/ui/app_window.cpp:3321 src/ui/app_window.cpp:4125
+msgid "Mosaic document"
+msgstr "Mosaic ドキュメント"
+
+#: src/ui/app_window.cpp:3341
+msgid "Could not save the other version"
+msgstr "もう一方のバージョンを保存できませんでした"
+
+#: src/ui/app_window.cpp:3345
+#, c-format
+msgid "Saved the other version to %s"
+msgstr "もう一方のバージョンを %s に保存しました"
+
+#: src/ui/app_window.cpp:3362 src/ui/app_window.cpp:3393
+msgid "Saved change"
+msgstr "変更を保存しました"
+
+#: src/ui/app_window.cpp:3367
+#, c-format
+msgid "Edited %s"
+msgstr "%s を編集しました"
+
+#: src/ui/app_window.cpp:3411 src/ui/app_window.cpp:3421
+msgid "Could not open the document"
+msgstr "ドキュメントを開けませんでした"
+
+#: src/ui/app_window.cpp:3458
+#, c-format
+msgid ""
+"Another Mosaic window already has \"%s\" open. Opening it here too could let "
+"the two windows overwrite each other's work.\n"
+"\n"
+"You can open it read-only to look at it -- saving will ask for a new file."
+msgstr ""
+"別の Mosaic ウィンドウで \"%s\" がすでに開かれています。ここでも開くと、2 つ"
+"のウィンドウが互いの作業を上書きしてしまう可能性があります。\n"
+"\n"
+"読み取り専用で開いて内容を確認することもできます。その場合、保存時に新しい"
+"ファイル名を尋ねられます。"
+
+#: src/ui/app_window.cpp:3465
+msgid "This document is already open in another Mosaic window"
+msgstr "このドキュメントは別の Mosaic ウィンドウで開かれています"
+
+#: src/ui/app_window.cpp:3466
+msgid "Open read-only"
+msgstr "読み取り専用で開く"
+
+#: src/ui/app_window.cpp:3508
+#, c-format
+msgid ", and %zu area(s) could not be read"
+msgstr "、また %zu 個の領域を読み込めませんでした"
+
+#: src/ui/app_window.cpp:3511
+#, c-format
+msgid ""
+"The file's structure was destroyed. Mosaic rebuilt the document from the "
+"pieces it could find -- %zu layer(s) recovered%s. The file's index and its "
+"save history are gone, so what you see may be older than the last save.\n"
+"\n"
+"Nothing is written to your file until you save. Saving a copy now protects "
+"what was found."
+msgstr ""
+"ファイルの構造が壊れています。Mosaic は見つけられた断片からドキュメントを再構"
+"築しました -- %zu 個のレイヤーを復元しました%s。ファイルのインデックスと保存"
+"履歴は失われているため、表示されている内容は最後の保存より古い可能性がありま"
+"す。\n"
+"\n"
+"保存するまでファイルには何も書き込まれません。今コピーを保存すれば、見つかっ"
+"た内容を保護できます。"
+
+#: src/ui/app_window.cpp:3518
+msgid "This file is badly damaged"
+msgstr "このファイルはひどく破損しています"
+
+#: src/ui/app_window.cpp:3527
+msgid "Two programs saved into this file"
+msgstr "2 つのプログラムがこのファイルに保存しました"
+
+#: src/ui/app_window.cpp:3528
+msgid ""
+"This file holds two separate save histories -- it was open and saved in two "
+"places at once. Both survived intact.\n"
+"\n"
+"Mosaic will open the version that was saved first. To keep the second one "
+"too, save it as its own file now -- a later save may discard it."
+msgstr ""
+"このファイルには 2 つの別々の保存履歴が含まれています -- 2 か所で同時に開か"
+"れ、保存されました。どちらも無傷で残っています。\n"
+"\n"
+"Mosaic は先に保存されたバージョンを開きます。もう一方も残すには、今すぐ別の"
+"ファイルとして保存してください -- 後で保存すると失われる可能性があります。"
+
+#: src/ui/app_window.cpp:3532
+msgid "Save other version as..."
+msgstr "もう一方のバージョンに名前を付けて保存..."
+
+#: src/ui/app_window.cpp:3553
+msgid "Could not rebuild the other version"
+msgstr "もう一方のバージョンを再構築できませんでした"
+
+#: src/ui/app_window.cpp:3567
+msgid " Part of the record was destroyed, so this list may be incomplete."
+msgstr " 記録の一部が壊れているため、この一覧は不完全な可能性があります。"
+
+#: src/ui/app_window.cpp:3570
+#, c-format
+msgid ""
+"Part of \"%s\" can't be read.\n"
+"\n"
+"Mosaic can open it as it was at the last complete save, or open the "
+"recovered version: %llu newer save(s) came back, and %zu area(s) that "
+"couldn't be read show older content instead.%s%s\n"
+"\n"
+"Nothing is written to your file until you save."
+msgstr ""
+"\"%s\" の一部を読み込めません。\n"
+"\n"
+"最後に完全に保存された状態で開くか、復元されたバージョンを開くことができま"
+"す。復元されたバージョンでは、より新しい保存が %llu 件戻り、読み込めなかった "
+"%zu 個の領域には古い内容が表示されます。%s%s\n"
+"\n"
+"保存するまでファイルには何も書き込まれません。"
+
+#: src/ui/app_window.cpp:3578 src/ui/app_window.cpp:3619
+msgid "This file is damaged"
+msgstr "このファイルは破損しています"
+
+#: src/ui/app_window.cpp:3579
+msgid "Open last complete save"
+msgstr "最後の完全な保存を開く"
+
+#: src/ui/app_window.cpp:3579
+msgid "Open recovered version"
+msgstr "復元されたバージョンを開く"
+
+#: src/ui/app_window.cpp:3590
+msgid "Could not open the recovered version"
+msgstr "復元されたバージョンを開けませんでした"
+
+#: src/ui/app_window.cpp:3599
+#, c-format
+msgid ""
+"\"%s\" ends in an unfinished save -- whatever was writing it stopped "
+"partway. The unfinished part was set aside; this file opens at the last "
+"complete save."
+msgstr ""
+"\"%s\" は保存が完了しないまま終わっています -- 書き込んでいた処理が途中で停止"
+"しました。未完了の部分は取り除かれ、このファイルは最後に完全に保存された状態"
+"で開きます。"
+
+#: src/ui/app_window.cpp:3604
+msgid "The last save didn't finish"
+msgstr "最後の保存が完了していません"
+
+#: src/ui/app_window.cpp:3612
+#, c-format
+msgid ""
+"%zu areas of \"%s\" can't be read, even after repair. Where an earlier "
+"version survived in the file's history it is shown in its place; anything "
+"else is left blank.\n"
+"\n"
+"Nothing is written to your file until you save. Saving a copy now protects "
+"everything that remains."
+msgstr ""
+"修復後も \"%2$s\" の %1$zu 個の領域を読み込めません。ファイルの履歴に以前の"
+"バージョンが残っている場合はそれが代わりに表示され、それ以外は空白のままで"
+"す。\n"
+"\n"
+"保存するまでファイルには何も書き込まれません。今コピーを保存すれば、残ってい"
+"る内容をすべて保護できます。"
+
+#: src/ui/app_window.cpp:3657
+msgid "this file's save history could not be read"
+msgstr "このファイルの保存履歴を読み込めませんでした"
+
+#: src/ui/app_window.cpp:3660
+#, c-format
+msgid "%zu earlier undo state(s) could not be read"
+msgstr "以前の取り消し状態を %zu 件読み込めませんでした"
+
+#: src/ui/app_window.cpp:3663
+#, c-format
+msgid "Repaired %zu damaged block(s); %s"
+msgstr "破損したブロックを %zu 個修復しました。%s"
+
+#: src/ui/app_window.cpp:3666
+#, c-format
+msgid "Repaired %zu damaged block(s) while opening"
+msgstr "読み込み中に破損したブロックを %zu 個修復しました"
+
+#: src/ui/app_window.cpp:3677
+msgid "Opened read-only -- this document is open in another window"
+msgstr ""
+"読み取り専用で開きました -- このドキュメントは別のウィンドウで開かれています"
+
+#: src/ui/app_window.cpp:3954 src/ui/app_window.cpp:4174
+#: src/ui/app_window.cpp:4322 src/ui/app_window.cpp:4333
+msgid "Could not save the document"
+msgstr "ドキュメントを保存できませんでした"
+
+#: src/ui/app_window.cpp:3960
+#, c-format
+msgid ""
+"\"%s\" changed on disk since you opened it -- another program saved over it. "
+"Mosaic won't overwrite those changes.\n"
+"\n"
+"Save your version as a separate copy to keep it."
+msgstr ""
+"開いた後に \"%s\" がディスク上で変更されました -- 別のプログラムが上書き保存"
+"しています。Mosaic はその変更を上書きしません。\n"
+"\n"
+"自分のバージョンを残すには、別のコピーとして保存してください。"
+
+#: src/ui/app_window.cpp:3965
+msgid "This file changed on disk"
+msgstr "このファイルはディスク上で変更されました"
+
+#: src/ui/app_window.cpp:3966
+msgid "Save a copy..."
+msgstr "コピーを保存..."
+
+#: src/ui/app_window.cpp:4016
+#, c-format
+msgid "Saved %s"
+msgstr "%s を保存しました"
+
+#: src/ui/app_window.cpp:4045 src/ui/new_document_dialog.cpp:1820
+msgid "Name"
+msgstr "名前"
+
+#: src/ui/app_window.cpp:4045
+msgid "Rename"
+msgstr "名前を変更"
+
+#: src/ui/app_window.cpp:4067
+msgid ""
+"This discards the document's saved undo history -- every earlier state kept "
+"in the file -- and saves the current content without it. The image itself "
+"does not change.\n"
+"\n"
+"This cannot be undone."
+msgstr ""
+"ドキュメントに保存された取り消し履歴 -- ファイル内に残っているすべての以前の"
+"状態 -- を破棄し、現在の内容だけを保存します。画像そのものは変わりません。\n"
+"\n"
+"この操作は取り消せません。"
+
+#: src/ui/app_window.cpp:4070
+msgid ""
+"This discards this session's undo history. The image itself does not "
+"change.\n"
+"\n"
+"This cannot be undone."
+msgstr ""
+"このセッションの取り消し履歴を破棄します。画像そのものは変わりません。\n"
+"\n"
+"この操作は取り消せません。"
+
+#: src/ui/app_window.cpp:4072
+msgid "Flatten History?"
+msgstr "履歴を統合しますか?"
+
+#: src/ui/app_window.cpp:4073
+msgid "Flatten History"
+msgstr "履歴を統合"
+
+#: src/ui/app_window.cpp:4097
+msgid "History flattened"
+msgstr "履歴を統合しました"
+
+#: src/ui/app_window.cpp:4120
+msgid "Save As"
+msgstr "名前を付けて保存"
+
+#: src/ui/app_window.cpp:4260 src/ui/app_window.cpp:4281
+msgid "Saving"
+msgstr "保存中"
+
+#: src/ui/app_window.cpp:4281
+msgid "Writing"
+msgstr "書き込み中"
+
+#: src/ui/app_window.cpp:4530 src/ui/app_window.cpp:4542
+msgid "earlier"
+msgstr "以前"
+
+#: src/ui/app_window.cpp:4587
+msgid "Old unsaved changes no longer match this file"
+msgstr "古い未保存の変更はこのファイルと一致しません"
+
+#: src/ui/app_window.cpp:4588
+msgid ""
+"Mosaic kept unsaved changes for this document from an earlier session, but "
+"the file has since been changed or replaced outside Mosaic, so they can no "
+"longer be restored into it.\n"
+"\n"
+"Keep the recovery file if you want to inspect it later; otherwise it can be "
+"discarded."
+msgstr ""
+"Mosaic は以前のセッションでのこのドキュメントの未保存の変更を保持していました"
+"が、その後ファイルが Mosaic の外部で変更または置き換えられたため、元に戻せな"
+"くなりました。\n"
+"\n"
+"後で内容を確認したい場合は復元ファイルを残してください。不要であれば破棄でき"
+"ます。"
+
+#: src/ui/app_window.cpp:4592
+msgid "Discard"
+msgstr "破棄"
+
+#: src/ui/app_window.cpp:4592
+msgid "Keep the file"
+msgstr "ファイルを残す"
+
+#: src/ui/app_window.cpp:4607 src/ui/app_window.cpp:4721
+msgid " The very last change was cut off and couldn't be kept."
+msgstr " いちばん最後の変更は途中で切れており、保持できませんでした。"
+
+#: src/ui/app_window.cpp:4610
+#, c-format
+msgid ""
+"Mosaic didn't close cleanly the last time this document was open. Your "
+"unsaved work -- %zu change(s), the last from %s -- was kept safe.%s\n"
+"\n"
+"Restore picks up exactly where you left off. Nothing is written to your file "
+"until you save."
+msgstr ""
+"前回このドキュメントを開いていたとき、Mosaic は正常に終了しませんでした。未保"
+"存の作業 -- %zu 件の変更、最後は %s -- は安全に保持されています。%s\n"
+"\n"
+"復元すると、中断したところからそのまま再開できます。保存するまでファイルには"
+"何も書き込まれません。"
+
+#: src/ui/app_window.cpp:4617
+msgid "Unsaved changes found"
+msgstr "未保存の変更が見つかりました"
+
+#: src/ui/app_window.cpp:4618 src/ui/app_window.cpp:4731
+msgid "Discard changes"
+msgstr "変更を破棄"
+
+#: src/ui/app_window.cpp:4618 src/ui/app_window.cpp:4731
+msgid "Restore"
+msgstr "復元"
+
+#: src/ui/app_window.cpp:4630
+msgid "Could not restore the unsaved changes"
+msgstr "未保存の変更を復元できませんでした"
+
+#: src/ui/app_window.cpp:4641
+#, c-format
+msgid "Restored %zu of %zu unsaved changes -- the last was incomplete"
+msgstr ""
+"未保存の変更 %zu 件を復元しました (全 %zu 件) -- 最後の 1 件は不完全でした"
+
+#: src/ui/app_window.cpp:4644
+#, c-format
+msgid "Restored %zu unsaved change(s)"
+msgstr "未保存の変更を %zu 件復元しました"
+
+#: src/ui/app_window.cpp:4724
+#, c-format
+msgid ""
+"Mosaic didn't close cleanly with an untitled document open. Your unsaved "
+"work -- %zu change(s), the last from %s -- was kept safe.%s\n"
+"\n"
+"Restore opens it in a new window. Nothing is written to disk until you save."
+msgstr ""
+"名称未設定のドキュメントを開いたまま Mosaic が正常に終了しませんでした。未保"
+"存の作業 -- %zu 件の変更、最後は %s -- は安全に保持されています。%s\n"
+"\n"
+"復元すると新しいウィンドウで開きます。保存するまでディスクには何も書き込まれ"
+"ません。"
+
+#: src/ui/app_window.cpp:4730
+msgid "Unsaved untitled document found"
+msgstr "未保存の名称未設定ドキュメントが見つかりました"
+
+#: src/ui/app_window.cpp:4743
+msgid "Could not restore the untitled document"
+msgstr "名称未設定のドキュメントを復元できませんでした"
+
+#: src/ui/app_window.cpp:4750
+msgid "Restored unsaved untitled document"
+msgstr "未保存の名称未設定ドキュメントを復元しました"
+
+#: src/ui/app_window.cpp:4807 src/ui/app_window.cpp:4808
+#: src/ui/app_window.cpp:4907 src/ui/app_window.cpp:4908
+#: src/ui/app_window.cpp:4954 src/ui/app_window.cpp:4955
+#: src/ui/brush_editor.cpp:1854 src/ui/export_dialog.cpp:907
+#: src/ui/export_dialog.cpp:1132 src/ui/export_dialog.cpp:1867
+#: src/ui/export_dialog.cpp:1868
+msgid "Export"
+msgstr "書き出し"
+
+#: src/ui/app_window.cpp:4812
+msgid "PNG image"
+msgstr "PNG 画像"
+
+#: src/ui/app_window.cpp:4837 src/ui/app_window.cpp:4844
+#: src/ui/app_window.cpp:4931 src/ui/app_window.cpp:4936
+#: src/ui/app_window.cpp:4949 src/ui/app_window.cpp:4977
+#: src/ui/app_window.cpp:4982 src/ui/app_window.cpp:5018
+#: src/ui/app_window.cpp:5052 src/ui/app_window.cpp:5065
+msgid "Could not export the image"
+msgstr "画像を書き出せませんでした"
+
+#: src/ui/app_window.cpp:4912
+msgid "JPEG image"
+msgstr "JPEG 画像"
+
+#: src/ui/app_window.cpp:4950
+msgid "JPEG XL support was not compiled into this build."
+msgstr "このビルドには JPEG XL のサポートが組み込まれていません。"
+
+#: src/ui/app_window.cpp:4959
+msgid "JPEG XL image"
+msgstr "JPEG XL 画像"
+
+#: src/ui/app_window.cpp:5003
+#, c-format
+msgid "Exported %s"
+msgstr "%s を書き出しました"
+
+#. TRANSLATORS: File menu item, greyed until the document has been exported once.
+#: src/ui/app_window.cpp:5085
+msgid "Export to Last File"
+msgstr ""
+
+#. TRANSLATORS: File menu item; %s is a file name. One-click re-export of the last
+#. export target (GIMP's "Overwrite <file>").
+#: src/ui/app_window.cpp:5097
+#, c-format
+msgid "Export to %s"
+msgstr ""
+
+#: src/ui/app_window.cpp:5295 src/ui/layer_panel.cpp:2067
+msgid "Disable Mask"
+msgstr "マスクを無効化"
+
+#: src/ui/app_window.cpp:5295 src/ui/layer_panel.cpp:2067
+msgid "Enable Mask"
+msgstr "マスクを有効化"
+
+#: src/ui/app_window.cpp:5296 src/ui/layer_panel.cpp:2069
+msgid "Link Mask"
+msgstr "マスクをリンク"
+
+#: src/ui/app_window.cpp:5296 src/ui/layer_panel.cpp:2069
+msgid "Unlink Mask"
+msgstr "マスクのリンクを解除"
+
+#: src/ui/app_window.cpp:5297 src/ui/layer_panel.cpp:2033
+msgid "Hide Layer"
+msgstr "レイヤーを非表示"
+
+#: src/ui/app_window.cpp:5297 src/ui/layer_panel.cpp:2033
+msgid "Show Layer"
+msgstr "レイヤーを表示"
+
+#: src/ui/app_window.cpp:5298 src/ui/layer_panel.cpp:2035
+msgid "Lock Layer"
+msgstr "レイヤーをロック"
+
+#: src/ui/app_window.cpp:5298 src/ui/layer_panel.cpp:2035
+msgid "Unlock Layer"
+msgstr "レイヤーのロックを解除"
+
+#: src/ui/app_window.cpp:5317
+msgid "No filter has been applied yet"
+msgstr ""
+
+#: src/ui/app_window.cpp:5395 src/ui/app_window.cpp:5429
+#: src/ui/app_window.cpp:5642 src/ui/app_window.cpp:5764
+#: src/ui/app_window.cpp:7135 src/ui/app_window.cpp:8075
+msgid "Analyzing"
+msgstr "解析中"
+
+#: src/ui/app_window.cpp:5431
+msgid "Solving"
+msgstr "計算中"
+
+#: src/ui/app_window.cpp:5433 src/ui/fill_dialog.cpp:158
+msgid "Blending"
+msgstr "合成中"
+
+#: src/ui/app_window.cpp:5564 src/ui/app_window.cpp:5724
+#: src/ui/app_window.cpp:8150
+msgid "Inpaint failed"
+msgstr "修復に失敗しました"
+
+#: src/ui/app_window.cpp:5565 src/ui/app_window.cpp:5725
+#: src/ui/app_window.cpp:8151
+msgid "Inpaint failed: "
+msgstr "修復に失敗しました: "
+
+#: src/ui/app_window.cpp:5567 src/ui/app_window.cpp:5721
+#: src/ui/app_window.cpp:8147
+msgid "Inpaint cancelled"
+msgstr "修復をキャンセルしました"
+
+#: src/ui/app_window.cpp:5610 src/ui/app_window.cpp:8030
+msgid "Try again in a moment (the canvas is refreshing)"
+msgstr "少し待ってからもう一度お試しください (キャンバスを更新中です)"
+
+#: src/ui/app_window.cpp:5705 src/ui/app_window.cpp:7966
+#: src/ui/app_window.cpp:8138 src/ui/app_window.cpp:10869
+#: src/ui/app_window.cpp:10872 src/ui/app_window.cpp:10875
+#: src/ui/app_window.cpp:10878 src/ui/image_ops_panel.cpp:480
+msgid "Canvas fill"
+msgstr "キャンバスの塗りつぶし"
+
+#: src/ui/app_window.cpp:5711 src/ui/app_window.cpp:8144
+#: src/ui/app_window.cpp:10888
+#, c-format
+msgid "Resized canvas to %u × %u px"
+msgstr "キャンバスサイズを %u × %u px に変更しました"
+
+#: src/ui/app_window.cpp:5827
+msgid "Recompose cancelled"
+msgstr "再構成をキャンセルしました"
+
+#: src/ui/app_window.cpp:5832
+msgid "Recompose failed — try a different ratio or fewer regions"
+msgstr "再構成に失敗しました — 別の比率を試すか、領域を減らしてください"
+
+#: src/ui/app_window.cpp:5843
+msgid "Reviewing: drag a region to adjust — Enter applies, Esc cancels"
+msgstr "確認中: 領域をドラッグして調整 — Enter で適用、Esc でキャンセル"
+
+#: src/ui/app_window.cpp:5877
+msgid "Recomposed"
+msgstr "再構成しました"
+
+#: src/ui/app_window.cpp:5892
+#, c-format
+msgid "Recomposed to %u × %u px"
+msgstr "%u × %u px に再構成しました"
+
+#: src/ui/app_window.cpp:5904
+msgid "Recompose discarded"
+msgstr "再構成を破棄しました"
+
+#: src/ui/app_window.cpp:6031
+msgid "Select three or more layers to distribute (Move tool + Shift)."
+msgstr ""
+"均等配置するには 3 つ以上のレイヤーを選択してください (移動ツール + Shift)。"
+
+#: src/ui/app_window.cpp:6032
+msgid "Select a layer to align (Move tool)."
+msgstr "整列するにはレイヤーを選択してください (移動ツール)。"
+
+#: src/ui/app_window.cpp:6508 src/ui/app_window.cpp:9620
+msgid "Masked to the selection"
+msgstr ""
+
+#: src/ui/app_window.cpp:6907
+#, c-format
+msgid "Sky from \"%s\""
+msgstr "\"%s\" の空"
+
+#: src/ui/app_window.cpp:7329
+msgid "Rasterize: this layer has no pixels to bake"
+msgstr "ラスタライズ: このレイヤーには変換できるピクセルがありません"
+
+#: src/ui/app_window.cpp:7366
+msgid "Convert to Path: this text has no outlines to convert"
+msgstr "パスに変換: このテキストには変換できるアウトラインがありません"
+
+#: src/ui/app_window.cpp:7374
+#, c-format
+msgid "Convert to Path: %zu colour glyph(s) have no outline and were left out"
+msgstr "パスに変換: %zu 個のカラーグリフにはアウトラインがないため除外しました"
+
+#: src/ui/app_window.cpp:7391
+msgid "Convert to Path: the text has several colours; the path takes the first"
+msgstr "パスに変換: テキストに複数の色があります。パスには最初の色を使用します"
+
+#: src/ui/app_window.cpp:7398
+msgid "Convert to Path: 3D depth is not a path; the flat outlines were taken"
+msgstr ""
+"パスに変換: 3D の奥行きはパスにできないため、平面のアウトラインを使用しました"
+
+#: src/ui/app_window.cpp:7467
+msgid "Merge Down: no layer below to merge into"
+msgstr "下のレイヤーと結合: 結合先のレイヤーがありません"
+
+#: src/ui/app_window.cpp:7472
+msgid "Merge Down needs both layers visible"
+msgstr "下のレイヤーと結合するには両方のレイヤーが表示されている必要があります"
+
+#: src/ui/app_window.cpp:7476
+msgid "Merge Down: a locked layer cannot be merged"
+msgstr "下のレイヤーと結合: ロックされたレイヤーは結合できません"
+
+#: src/ui/app_window.cpp:7480
+msgid "Merge Down: an adjustment layer below has no pixels to merge into"
+msgstr ""
+
+#: src/ui/app_window.cpp:7509
+msgid "Merge Down: the two shapes are one editable path now"
+msgstr ""
+
+#: src/ui/app_window.cpp:7530
+msgid "Merge Down: the layer below has no pixels to grade"
+msgstr ""
+
+#: src/ui/app_window.cpp:7544
+msgid ""
+"Merge Down: the adjustment now applies to that one layer, not to everything "
+"below it"
+msgstr ""
+
+#: src/ui/app_window.cpp:7554
+msgid ""
+"Merge Down: the layer below is clipped to the layer under it; merge that "
+"pair first"
+msgstr ""
+
+#: src/ui/app_window.cpp:7559
+msgid ""
+"Merge Down: the blend mode of the layer below cannot be baked; it would re-"
+"blend the merged pixels against what is under it"
+msgstr ""
+
+#: src/ui/app_window.cpp:7578
+msgid "Merge Down: the active layer has no pixels to merge"
+msgstr ""
+"下のレイヤーと結合: アクティブなレイヤーには結合できるピクセルがありません"
+
+#: src/ui/app_window.cpp:7587
+msgid ""
+"Merge Down: this layer's blend mode cannot be baked; the layer below is not "
+"opaque everywhere this layer paints"
+msgstr ""
+
+#: src/ui/app_window.cpp:7592
+msgid "Merge Down: there are no pixels to merge"
+msgstr ""
+
+#: src/ui/app_window.cpp:7606
+msgid "Merge Down: the group was flattened into the merged layer"
+msgstr ""
+
+#: src/ui/app_window.cpp:7630
+msgid "This layer is locked. Unlock it to delete it."
+msgstr ""
+"このレイヤーはロックされています。削除するにはロックを解除してください。"
+
+#: src/ui/app_window.cpp:7639
+msgid "This layer is locked. Unlock it to group it."
+msgstr ""
+"このレイヤーはロックされています。グループ化するにはロックを解除してくださ"
+"い。"
+
+#: src/ui/app_window.cpp:7692
+msgid "Grow Selection"
+msgstr "選択範囲を拡張"
+
+#: src/ui/app_window.cpp:7693
+msgid "Shrink Selection"
+msgstr "選択範囲を縮小"
+
+#: src/ui/app_window.cpp:7694
+msgid "Feather Selection"
+msgstr "選択範囲をぼかす"
+
+#: src/ui/app_window.cpp:7695
+msgid "Smooth Selection"
+msgstr "選択範囲を滑らかに"
+
+#: src/ui/app_window.cpp:7697 src/ui/select_morph_panel.cpp:103
+msgid "Modify Selection"
+msgstr "選択範囲を変更"
+
+#. TRANSLATORS: the canvas HUD's size readout during an Image-menu preview, e.g.
+#. "2048 × 1536 px". Both numbers are pixel counts; the separator is U+00D7, matching the
+#. Crop tool's own size HUD (vulkan_canvas.cpp) so the two read identically.
+#: src/ui/app_window.cpp:7917
+#, c-format
+msgid "%u × %u px"
+msgstr ""
+
+#: src/ui/app_window.cpp:7987 src/ui/app_window.cpp:8025
+#: src/ui/app_window.cpp:8056 src/ui/app_window.cpp:8142
+msgid "Canvas Size: the canvas is already that size"
+msgstr ""
+
+#: src/ui/app_window.cpp:7992
+msgid "Image Size: the image is already that size"
+msgstr ""
+
+#: src/ui/app_window.cpp:7998
+msgid "Rotate: that angle is a whole number of turns"
+msgstr ""
+
+#: src/ui/app_window.cpp:8218
+msgid "Rotate: there is nothing to turn"
+msgstr ""
+
+#: src/ui/app_window.cpp:8224
+msgid "Trim to Content: the canvas already hugs the visible content"
+msgstr ""
+
+#: src/ui/app_window.cpp:8246
+msgid "Select a text layer first"
+msgstr ""
+
+#: src/ui/app_window.cpp:8269
+msgid "Text Orientation"
+msgstr ""
+
+#: src/ui/app_window.cpp:8277
+msgid "Text Anti-Aliasing"
+msgstr ""
+
+#: src/ui/app_window.cpp:8282
+msgid "Kerning"
+msgstr ""
+
+#: src/ui/app_window.cpp:8289
+msgid "Text Direction"
+msgstr ""
+
+#: src/ui/app_window.cpp:8305
+msgid "Convert to Area Text"
+msgstr ""
+
+#: src/ui/app_window.cpp:8306
+msgid "Convert to Point Text"
+msgstr ""
+
+#: src/ui/app_window.cpp:8351
+msgid ""
+"Text on Path: select the text layer and exactly one shape layer together"
+msgstr ""
+
+#: src/ui/app_window.cpp:8363
+msgid "Text on Path: that shape has no outline to flow along"
+msgstr ""
+
+#: src/ui/app_window.cpp:8371
+msgid "Text on Path"
+msgstr ""
+
+#: src/ui/app_window.cpp:8380
+msgid "Release from Path: this text is not on a path"
+msgstr ""
+
+#: src/ui/app_window.cpp:8385
+msgid "Release from Path"
+msgstr ""
+
+#: src/ui/app_window.cpp:8399
+msgid "Create Work Path: this text has no outlines to convert"
+msgstr ""
+
+#: src/ui/app_window.cpp:8405
+#, c-format
+msgid "Create Work Path: %zu colour glyph(s) have no outline and were left out"
+msgstr ""
+
+#: src/ui/app_window.cpp:8413
+msgid "Work Path"
+msgstr ""
+
+#: src/ui/app_window.cpp:8453
+msgid "Update All Text Layers: this document has no text"
+msgstr ""
+
+#: src/ui/app_window.cpp:8461
+#, c-format
+msgid "Re-shaped %zu text layer(s)"
+msgstr ""
+
+#: src/ui/app_window.cpp:8541
+msgid "This layer is already at the top of its group"
+msgstr ""
+
+#: src/ui/app_window.cpp:8545
+msgid "This layer is already at the bottom of its group"
+msgstr ""
+
+#: src/ui/app_window.cpp:8564
+msgid "Flatten to Path needs a shape layer"
+msgstr ""
+
+#: src/ui/app_window.cpp:8568
+msgid "Flatten to Path: this layer is locked"
+msgstr ""
+
+#: src/ui/app_window.cpp:8574
+msgid "Flatten to Path: this shape is already a plain path"
+msgstr ""
+
+#: src/ui/app_window.cpp:8578
+msgid "Flatten to Path"
+msgstr ""
+
+#: src/ui/app_window.cpp:8603
+msgid "Add Paths"
+msgstr ""
+
+#: src/ui/app_window.cpp:8604
+msgid "Subtract Paths"
+msgstr ""
+
+#: src/ui/app_window.cpp:8605
+msgid "Intersect Paths"
+msgstr ""
+
+#: src/ui/app_window.cpp:8606
+msgid "Exclude Paths"
+msgstr ""
+
+#: src/ui/app_window.cpp:8608
+msgid "Combine Paths"
+msgstr ""
+
+#: src/ui/app_window.cpp:8617
+msgid "Combine Paths needs two or more shape layers selected"
+msgstr ""
+
+#: src/ui/app_window.cpp:8622
+msgid "Combine Paths: a locked layer cannot be combined"
+msgstr ""
+
+#: src/ui/app_window.cpp:8639
+msgid "Combine Paths: these shapes cannot be combined"
+msgstr ""
+
+#: src/ui/app_window.cpp:8672
+msgid "Reselect: there is no previous selection to restore"
+msgstr ""
+
+#: src/ui/app_window.cpp:8680
+msgid "Reselect: that selection belongs to a differently-sized canvas"
+msgstr ""
+
+#: src/ui/app_window.cpp:8702
+msgid "Select All Layers: nothing visible to select"
+msgstr ""
+
+#: src/ui/app_window.cpp:8724
+msgid "Nothing to clear: the selection covers no editable pixels"
+msgstr ""
+
+#: src/ui/app_window.cpp:8740
+msgid "Paste in Place: nothing was copied inside Mosaic"
+msgstr ""
+
+#: src/ui/app_window.cpp:8761 src/ui/app_window.cpp:8766
+msgid "Mask from Selection"
+msgstr "選択範囲からマスクを作成"
+
+#: src/ui/app_window.cpp:8762
+msgid "Mask from Inverse Selection"
+msgstr "選択範囲を反転してマスクを作成"
+
+#: src/ui/app_window.cpp:8763
+msgid "Add to Mask"
+msgstr "マスクに追加"
+
+#: src/ui/app_window.cpp:8764
+msgid "Subtract from Mask"
+msgstr "マスクから削除"
+
+#: src/ui/app_window.cpp:8787
+msgid ": make a selection first"
+msgstr ": 先に選択範囲を作成してください"
+
+#: src/ui/app_window.cpp:8793
+msgid ": no active layer"
+msgstr ": アクティブなレイヤーがありません"
+
+#: src/ui/app_window.cpp:8797
+msgid "This layer is locked. Unlock it to add a mask."
+msgstr ""
+"このレイヤーはロックされています。マスクを追加するにはロックを解除してくださ"
+"い。"
+
+#: src/ui/app_window.cpp:8803
+msgid ": not available on text layers yet"
+msgstr ": テキストレイヤーではまだ使用できません"
+
+#: src/ui/app_window.cpp:8810
+msgid ": this layer has no mask"
+msgstr ": このレイヤーにはマスクがありません"
+
+#: src/ui/app_window.cpp:8849
+msgid "Mask replaced from the selection"
+msgstr "選択範囲でマスクを置き換えました"
+
+#: src/ui/app_window.cpp:8850 src/ui/app_window.cpp:8858
+msgid "Mask added from the selection"
+msgstr "選択範囲からマスクを追加しました"
+
+#: src/ui/app_window.cpp:8853
+msgid "Mask replaced from the inverse selection"
+msgstr "反転した選択範囲でマスクを置き換えました"
+
+#: src/ui/app_window.cpp:8854
+msgid "Mask added from the inverse selection"
+msgstr "反転した選択範囲からマスクを追加しました"
+
+#: src/ui/app_window.cpp:8857
+msgid "Selection added to the mask"
+msgstr "選択範囲をマスクに追加しました"
+
+#: src/ui/app_window.cpp:8861
+msgid "Selection subtracted from the mask"
+msgstr "選択範囲をマスクから削除しました"
+
+#: src/ui/app_window.cpp:8885
+msgid "merged"
+msgstr "結合"
+
+#: src/ui/app_window.cpp:8896
+msgid "Nothing to copy: the selection covers no pixels"
+msgstr "コピーするものがありません: 選択範囲にピクセルが含まれていません"
+
+#: src/ui/app_window.cpp:8904
+#, c-format
+msgid "Copied layer '%s'"
+msgstr "レイヤー '%s' をコピーしました"
+
+#: src/ui/app_window.cpp:8906
+#, c-format
+msgid "Copied selection from %s"
+msgstr "%s から選択範囲をコピーしました"
+
+#: src/ui/app_window.cpp:8921
+msgid "Nothing to cut: the selection covers no pixels"
+msgstr "切り取るものがありません: 選択範囲にピクセルが含まれていません"
+
+#: src/ui/app_window.cpp:8929
+#, c-format
+msgid "Cut layer '%s'"
+msgstr "レイヤー '%s' を切り取りました"
+
+#: src/ui/app_window.cpp:8931
+#, c-format
+msgid "Cut selection from %s"
+msgstr "%s から選択範囲を切り取りました"
+
+#: src/ui/app_window.cpp:8995
+msgid "Pasted image"
+msgstr "画像を貼り付けました"
+
+#: src/ui/app_window.cpp:8998
+#, c-format
+msgid "Selection from %s"
+msgstr "%s からの選択範囲"
+
+#: src/ui/app_window.cpp:9066 src/ui/shape_designer.cpp:1189
+msgid "Shape"
+msgstr "シェイプ"
+
+#: src/ui/app_window.cpp:9102
+msgid "Add "
+msgstr "追加: "
+
+#: src/ui/app_window.cpp:9469 src/ui/settings_dialog.cpp:1340
+#: src/ui/settings_dialog.cpp:2060
+msgid "Text"
+msgstr "テキスト"
+
+#: src/ui/app_window.cpp:9606
+msgid "Add Gradient"
+msgstr "グラデーションを追加"
+
+#: src/ui/app_window.cpp:10368 src/ui/fill_dialog.cpp:100
+#: src/ui/image_ops_panel.cpp:773 src/ui/tool.cpp:309
+msgid "Inpaint"
+msgstr "修復"
+
+#: src/ui/app_window.cpp:10476
+msgid ""
+"The active layer has no pixels to sample. Rasterize it, or set the Magic "
+"Wand's Source to All Layers."
+msgstr ""
+"アクティブなレイヤーにはサンプリングできるピクセルがありません。ラスタライズ"
+"するか、自動選択ツールのソースを「すべてのレイヤー」に設定してください。"
+
+#: src/ui/app_window.cpp:10487
+msgid "Magic Wand"
+msgstr "自動選択ツール"
+
+#: src/ui/app_window.cpp:10514
+msgid ""
+"The active layer has no pixels to read edges from. Rasterize it, or set the "
+"Edge Select Brush's Source to All Layers."
+msgstr ""
+"アクティブなレイヤーにはエッジを読み取れるピクセルがありません。ラスタライズ"
+"するか、エッジ選択ブラシのソースを「すべてのレイヤー」に設定してください。"
+
+#: src/ui/app_window.cpp:10533
+msgid "The layer is locked — unlock it to retouch it"
+msgstr ""
+
+#: src/ui/app_window.cpp:10537
+msgid "Can’t retouch a vector layer — rasterize it first"
+msgstr ""
+
+#: src/ui/app_window.cpp:10554
+msgid "No red-eye glow found inside the ring"
+msgstr ""
+
+#: src/ui/app_window.cpp:10555
+msgid "Nothing red enough to correct where you painted"
+msgstr ""
+
+#: src/ui/app_window.cpp:10642
+msgid "The active layer has no pixels to fill. Rasterize it first."
+msgstr ""
+"アクティブなレイヤーには塗りつぶせるピクセルがありません。先にラスタライズし"
+"てください。"
+
+#: src/ui/app_window.cpp:10646
+msgid "This layer is locked. Unlock it to fill."
+msgstr ""
+"このレイヤーはロックされています。塗りつぶすにはロックを解除してください。"
+
+#: src/ui/app_window.cpp:10856
+msgid "Inpaint fill is not available on a rotated crop"
+msgstr "回転した切り抜きでは修復による塗りつぶしは使用できません"
+
+#: src/ui/app_window.cpp:10888
+#, c-format
+msgid "Cropped to %u × %u px"
+msgstr "%u × %u px に切り抜きました"
+
+#: src/ui/app_window.cpp:11352
+#, c-format
+msgid "\"%s\" has unsaved changes. If you don't save them, they are lost."
+msgstr "\"%s\" には未保存の変更があります。保存しないと失われます。"
+
+#: src/ui/app_window.cpp:11357
+msgid "Save your changes?"
+msgstr "変更を保存しますか?"
+
+#: src/ui/app_window.cpp:11359
+msgid "Don't save"
+msgstr "保存しない"
+
+#. TRANSLATORS: window title, whole phrase: "<document> • unsaved for 5 min — Mosaic".
+#. This is the mark that a document has changes that are not written to disk.
+#: src/ui/app_window.cpp:11492
+msgid "unsaved"
+msgstr ""
+
+#. TRANSLATORS: window title connective, between "unsaved" and a duration:
+#. "unsaved FOR 5 min".
+#: src/ui/app_window.cpp:11495
+msgid "for"
+msgstr ""
+
+#. TRANSLATORS: abbreviation for MINUTES in the window title's unsaved duration ("5 min").
+#: src/ui/app_window.cpp:11497
+msgid "min"
+msgstr ""
+
+#. TRANSLATORS: abbreviation for SECONDS in the window title's unsaved duration ("12 sec").
+#: src/ui/app_window.cpp:11499
+msgid "sec"
+msgstr ""
+
+#: src/ui/app_window.cpp:11504 src/ui/new_document_dialog.cpp:331
+#: src/ui/new_document_dialog.cpp:338
+msgid "Untitled"
+msgstr ""
+
+#: src/ui/app_window.cpp:12578
+msgid "Hardware acceleration unavailable"
+msgstr "ハードウェアアクセラレーションを利用できません"
+
+#: src/ui/app_window.cpp:12579
+msgid ""
+"Mosaic could not initialize its Vulkan canvas, so the image area will not "
+"display. Check that your GPU drivers and the Vulkan loader are installed and "
+"up to date."
+msgstr ""
+"Mosaic は Vulkan キャンバスを初期化できなかったため、画像領域は表示されませ"
+"ん。GPU ドライバーと Vulkan ローダーがインストールされ、最新であることを確認"
+"してください。"
+
+#: src/ui/app_window.cpp:13557
+msgid "Services"
+msgstr ""
+
+#: src/ui/app_window.cpp:13558
+msgid "Hide Mosaic"
+msgstr ""
+
+#: src/ui/app_window.cpp:13559
+msgid "Hide Others"
+msgstr ""
+
+#: src/ui/app_window.cpp:13560
+msgid "Show All"
+msgstr ""
+
+#: src/ui/app_window.cpp:13561
+msgid "Quit Mosaic"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:404 src/ui/brush_editor.cpp:1404
+msgid "Tip & spacing"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:717 src/ui/settings_dialog.cpp:1339
+#: src/ui/settings_dialog.cpp:1356 src/ui/settings_dialog.cpp:1380
+msgid "General"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:718
+msgid "Colour"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:719 src/ui/brush_preset_panel.cpp:493
+#: src/ui/new_document_dialog.cpp:789
+msgid "Texture"
+msgstr "テクスチャ"
+
+#: src/ui/brush_editor.cpp:720 src/ui/brush_editor.cpp:722
+msgid "Tip"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:729 src/ui/layer_effects_dialog.cpp:763
+#: src/ui/layer_effects_dialog.cpp:787 src/ui/layer_effects_dialog.cpp:1171
+#: src/ui/layer_effects_dialog.cpp:1267 src/ui/settings_dialog.cpp:1710
+#: src/ui/tool.cpp:228 src/ui/tool.cpp:249 src/ui/tool.cpp:331
+#: src/ui/tool.cpp:342 src/ui/tool.cpp:353 src/ui/tool.cpp:368
+#: src/ui/tool.cpp:402 src/ui/tool.cpp:417 src/ui/tool.cpp:523
+msgid "Size"
+msgstr "サイズ"
+
+#: src/ui/brush_editor.cpp:730 src/ui/fill_dialog.cpp:165
+#: src/ui/layer_effects_dialog.cpp:751 src/ui/layer_effects_dialog.cpp:780
+#: src/ui/layer_effects_dialog.cpp:912 src/ui/layer_effects_dialog.cpp:948
+#: src/ui/layer_effects_dialog.cpp:1063 src/ui/layer_effects_dialog.cpp:1106
+#: src/ui/layer_effects_dialog.cpp:1257 src/ui/layer_panel.cpp:2889
+#: src/ui/tool.cpp:233 src/ui/tool.cpp:336 src/ui/tool.cpp:345
+#: src/ui/tool.cpp:373 src/ui/tool.cpp:437 src/ui/tool.cpp:459
+msgid "Opacity"
+msgstr "不透明度"
+
+#: src/ui/brush_editor.cpp:731 src/ui/tool.cpp:231 src/ui/tool.cpp:334
+#: src/ui/tool.cpp:371
+msgid "Flow"
+msgstr "流量"
+
+#: src/ui/brush_editor.cpp:732 src/ui/tool.cpp:277
+msgid "Ratio"
+msgstr "比率"
+
+#: src/ui/brush_editor.cpp:733 src/ui/settings_dialog.cpp:1312
+msgid "Rotation"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:734
+msgid "Softness"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:735
+msgid "Scatter"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:736
+msgid "Mirror"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:737 src/ui/brush_editor.cpp:1446
+#: src/ui/shape_designer.cpp:1289 src/ui/tool.cpp:389
+msgid "Spacing"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:738
+msgid "Sharpness"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:739
+msgid "Airbrush rate"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:740
+msgid "Smudge length"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:741
+msgid "Colour rate"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:742
+msgid "Smudge radius"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:743
+msgid "Hue"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:744
+msgid "Saturation"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:745
+msgid "Value"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:746 src/ui/texture_generator_dialog.cpp:1856
+msgid "Density"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:747
+msgid "Line width"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:748
+msgid "Offset scale"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:749
+msgid "Curve opacity"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:750
+msgid "Hatch angle"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:751
+msgid "Crosshatching"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:752
+msgid "Separation"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:753
+msgid "Thickness"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:754
+msgid "Texture strength"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:760 src/ui/brush_editor.cpp:779
+#: src/ui/settings_dialog.cpp:1279
+msgid "Pressure"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:761
+msgid "Pressure (on tap)"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:762
+msgid "Tangential pressure"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:763
+msgid "Drawing angle"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:764
+msgid "X tilt"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:765
+msgid "Y tilt"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:768
+msgid "Tilt direction"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:769
+msgid "Tilt elevation"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:770
+msgid "Barrel rotation"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:771
+msgid "Random (per dab)"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:772
+msgid "Random (per stroke)"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:773 src/ui/settings_dialog.cpp:1918
+msgid "Speed"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:774
+msgid "Fade"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:775 src/ui/layer_effects_dialog.cpp:757
+#: src/ui/layer_effects_dialog.cpp:1263
+msgid "Distance"
+msgstr "距離"
+
+#: src/ui/brush_editor.cpp:776
+msgid "Time"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:777
+msgid "Perspective"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:900
+msgid "Brush Editor"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:959
+msgid "The name this brush is saved and found under"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:999
+msgid "Save As…"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1002
+msgid "Export…"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1004
+msgid "Write this brush to a .mbp file you can keep or share"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1006
+msgid "Import…"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1009 src/ui/brush_editor.cpp:1911
+#: src/ui/scrub_slider.cpp:498 src/ui/widgets.cpp:1032
+msgid "Delete"
+msgstr "削除"
+
+#: src/ui/brush_editor.cpp:1012
+msgid "Remove this brush from your brushes folder. Only your own."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1042
+msgid "Presets"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1061
+msgid "Options"
+msgstr "オプション"
+
+#: src/ui/brush_editor.cpp:1104
+msgid "Preview & scratchpad"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1111
+msgid ""
+"Draw here to try the brush -- with your tablet's pressure and tilt. Nothing "
+"here ever reaches your artwork."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1123
+msgid "Wipe the scratchpad and lay the sample stroke again"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1131 src/ui/settings_dialog.cpp:1713
+msgid "Eraser size follows the brush"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1140 src/ui/settings_dialog.cpp:1730
+msgid "Eraser preset follows the brush"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1405
+msgid ""
+"The nib itself: how wide it is, which way it is turned, and how densely it "
+"lays dabs along the stroke. A preset's dynamic options scale these; this is "
+"what they scale."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1409
+msgid "Diameter"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1423 src/ui/image_ops_panel.cpp:668
+#: src/ui/layer_effects_dialog.cpp:678
+msgid "Angle"
+msgstr "角度"
+
+#: src/ui/brush_editor.cpp:1448
+msgid "Automatic spacing"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1450
+msgid "Auto coefficient"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1452
+msgid "Same spacing in every direction"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1454
+msgid ""
+"Spacing is an ellipse, not a number: the interval follows both of the dab's "
+"extents, so a long thin nib steps further along its blade than across it. "
+"\"Same in every direction\" opts out of that."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1461
+msgid ""
+"Always on. This option's enable bit is written to preset files and ignored "
+"by every reader, so there is nothing here to switch off."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1465 src/ui/tool.cpp:403
+msgid "Strength"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1469
+msgid "Let the sensors drive it"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1470
+msgid ""
+"Off collapses the option to its constant strength -- the sensors are not "
+"consulted at all, which is what the preset format means by this bit even "
+"though its name says otherwise."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1478
+msgid "Sensor"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1501
+msgid "Active"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1512
+msgid "An option keeps at least one sensor -- switch the sensors off instead."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1525
+msgid "Combine"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1527 src/ui/tool.cpp:201
+msgid "Add"
+msgstr "追加"
+
+#: src/ui/brush_editor.cpp:1527
+msgid "Largest"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1527
+msgid "Multiply"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1527
+msgid "Smallest"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1528
+msgid "Difference"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1539
+msgid ""
+"How several active sensors fold together. It touches the scaling sensors "
+"only -- a tilt offset always adds and an absolute angle always overwrites."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1542
+msgid "One curve for every sensor"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1553 src/ui/shape_designer.cpp:1210
+msgid "Curve"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1553
+msgid "Curve (shared)"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1599 src/ui/shape_designer.cpp:1203
+msgid "Length"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1604 src/ui/gradient_flyout.cpp:183
+msgid "Repeat"
+msgstr "繰り返し"
+
+#: src/ui/brush_editor.cpp:1608
+msgid ""
+"Fade counts dabs, Distance counts pixels and Time counts milliseconds -- "
+"three sensors, three units. \"Repeat\" saws back to zero instead of holding "
+"at one."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1614
+msgid "Offset"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1631
+msgid "Lock the angle at the stroke's start"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1638
+msgid "Nothing to edit"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1639
+msgid "This preset carries no options in that group."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1662
+msgid "Approximated"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1662
+msgid "Exact"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1662
+msgid "Substituted"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1664
+msgid "colour accumulation"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1665
+msgid "alpha accumulation"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1667
+msgid "pixel brush"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1673
+msgid "edited"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1783
+msgid "The preset could not be saved."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1791
+msgid "Saved."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1820
+msgid "Import a brush preset"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1823
+msgid "Brush presets"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1832
+msgid "That file is not a brush preset."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1840
+msgid "Imported."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1853
+msgid "Export brush preset"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1858
+msgid "Mosaic brush preset"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1866
+msgid "Exported."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1880
+msgid "The preset could not be exported."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1890
+msgid "That preset cannot be deleted."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1902
+msgid "Delete this brush?"
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1908
+#, c-format
+msgid "\"%s\" will be removed from your brushes folder. This cannot be undone."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1920
+msgid "The preset could not be deleted."
+msgstr ""
+
+#: src/ui/brush_editor.cpp:1948
+msgid "Deleted."
+msgstr ""
+
+#: src/ui/brush_preset_panel.cpp:104
+msgid ""
+"No spray engine yet: this stamps its tip. It does not scatter particles."
+msgstr ""
+"スプレーエンジンはまだありません。これはブラシ先端をスタンプするだけで、粒子"
+"は散布しません。"
+
+#: src/ui/brush_preset_panel.cpp:106
+msgid "No filter-brush engine yet: this paints colour. It does not filter."
+msgstr ""
+"フィルターブラシエンジンはまだありません。これは色を描画するだけで、フィル"
+"ター処理は行いません。"
+
+#: src/ui/brush_preset_panel.cpp:483
+msgid "All"
+msgstr "すべて"
+
+#: src/ui/brush_preset_panel.cpp:485
+msgid "Basics"
+msgstr "基本"
+
+#: src/ui/brush_preset_panel.cpp:487
+msgid "Draw"
+msgstr "ドロー"
+
+#: src/ui/brush_preset_panel.cpp:489 src/ui/layer_effects_dialog.cpp:854
+msgid "Paint"
+msgstr "ペイント"
+
+#: src/ui/brush_preset_panel.cpp:491 src/ui/layer_effects_dialog.cpp:661
+#: src/ui/layer_panel.cpp:2887
+msgid "Blend"
+msgstr "ブレンド"
+
+#: src/ui/brush_preset_panel.cpp:495 src/ui/layer_effects_dialog.cpp:343
+msgid "Effects"
+msgstr "効果"
+
+#: src/ui/brush_preset_panel.cpp:497
+msgid "Special"
+msgstr "特殊"
+
+#: src/ui/brush_preset_panel.cpp:499
+msgid "User"
+msgstr "ユーザー"
+
+#: src/ui/brush_preset_panel.cpp:652
+msgid "Search presets"
+msgstr "プリセットを検索"
+
+#: src/ui/brush_preset_panel.cpp:1361
+msgid "Filter the presets by name"
+msgstr "プリセットを名前で絞り込みます"
+
+#: src/ui/brush_preset_panel.cpp:1365
+msgid "Clear the filter"
+msgstr "絞り込みを解除"
+
+#: src/ui/brush_preset_panel.cpp:1371 src/ui/paint_chip.cpp:214
+#: src/ui/widgets.cpp:284
+msgid "Edit…"
+msgstr "編集…"
+
+#: src/ui/brush_preset_panel.cpp:1374
+msgid "Edit the selected brush preset"
+msgstr ""
+
+#: src/ui/brush_preset_panel.cpp:1378
+msgid "Filter by kind. Drag or scroll the strip to see them all."
+msgstr ""
+"種類で絞り込みます。ストリップをドラッグまたはスクロールするとすべて表示でき"
+"ます。"
+
+#: src/ui/brush_preset_panel.cpp:1479 src/ui/brush_preset_panel.cpp:1492
+#: src/ui/brush_preset_panel.cpp:1667
+msgid "Default round"
+msgstr "標準の円ブラシ"
+
+#: src/ui/brush_preset_panel.cpp:1493
+msgid "No preset: the engine's own plain round tip."
+msgstr "プリセットなし: エンジン標準の円形ブラシ先端です。"
+
+#: src/ui/brush_preset_panel.cpp:1503
+msgid "Your own preset (in your brushes folder)."
+msgstr ""
+
+#: src/ui/brush_preset_panel.cpp:1520
+msgid "Approximated: some of this preset's options have no engine here yet."
+msgstr ""
+"近似: このプリセットの一部のオプションに対応するエンジンがまだありません。"
+
+#: src/ui/brush_preset_panel.cpp:1524
+msgid "Substituted: imported as its nearest pixel-brush kin."
+msgstr "代替: 最も近いピクセルブラシとして読み込まれました。"
+
+#: src/ui/brush_preset_panel.cpp:1531
+msgid "Dropped:"
+msgstr "除外:"
+
+#: src/ui/brush_preset_panel.cpp:1952
+msgid "Brush Presets"
+msgstr "ブラシプリセット"
+
+#: src/ui/brush_preset_panel.cpp:1952
+msgid "Eraser Presets"
+msgstr "消しゴムプリセット"
+
+#: src/ui/brush_preset_panel.cpp:1970
+#, c-format
+msgid "%d of %d"
+msgstr "%d / %d"
+
+#: src/ui/brush_preset_panel.cpp:1978
+msgid "No presets installed"
+msgstr "プリセットがインストールされていません"
+
+#: src/ui/brush_preset_panel.cpp:1979
+msgid "No preset matches"
+msgstr "一致するプリセットがありません"
+
+#: src/ui/channels_panel.cpp:368
+msgid "No image data"
+msgstr "画像データがありません"
+
+#: src/ui/channels_panel.cpp:542 src/ui/gradient_flyout.cpp:204
+msgid "Alpha"
+msgstr "アルファ"
+
+#: src/ui/channels_panel.cpp:542
+msgid "Blue"
+msgstr "ブルー"
+
+#: src/ui/channels_panel.cpp:542
+msgid "Green"
+msgstr "グリーン"
+
+#: src/ui/channels_panel.cpp:542
+msgid "RGB"
+msgstr "RGB"
+
+#: src/ui/channels_panel.cpp:542
+msgid "Red"
+msgstr "レッド"
+
+#: src/ui/color_flyout.cpp:90
+msgid "Field"
+msgstr "フィールド"
+
+#: src/ui/color_flyout.cpp:91
+msgid "HSL Wheel"
+msgstr "HSL ホイール"
+
+#: src/ui/color_flyout.cpp:92
+msgid "SV Wheel"
+msgstr "SV ホイール"
+
+#: src/ui/color_flyout.cpp:140
+msgid "Use the foreground colour"
+msgstr "描画色を使う"
+
+#: src/ui/color_picker.cpp:199
+msgid "Outside the working-space gamut — click to snap to the nearest color"
+msgstr "作業スペースの色域外です — クリックすると最も近い色に合わせます"
+
+#: src/ui/export_dialog.cpp:435
+msgid "Auto  (recommended)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:436
+msgid "Nearest  (hard pixels)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:437 src/ui/image_ops_panel.cpp:735
+#: src/ui/tool.cpp:195
+msgid "Bilinear"
+msgstr "バイリニア"
+
+#: src/ui/export_dialog.cpp:438 src/ui/image_ops_panel.cpp:735
+#: src/ui/tool.cpp:195
+msgid "Bicubic"
+msgstr "バイキュービック"
+
+#: src/ui/export_dialog.cpp:439 src/ui/image_ops_panel.cpp:736
+#: src/ui/tool.cpp:195
+msgid "Mitchell"
+msgstr "ミッチェル"
+
+#: src/ui/export_dialog.cpp:440 src/ui/image_ops_panel.cpp:736
+#: src/ui/tool.cpp:196
+msgid "Lanczos 2"
+msgstr "Lanczos 2"
+
+#: src/ui/export_dialog.cpp:441 src/ui/image_ops_panel.cpp:736
+#: src/ui/tool.cpp:196
+msgid "Lanczos 3"
+msgstr "Lanczos 3"
+
+#: src/ui/export_dialog.cpp:442
+msgid "Area  (shrinking)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:443 src/ui/image_ops_panel.cpp:737
+#: src/ui/tool.cpp:196
+msgid "Gaussian"
+msgstr "ガウス"
+
+#: src/ui/export_dialog.cpp:444 src/ui/image_ops_panel.cpp:737
+#: src/ui/tool.cpp:197
+msgid "Supersample"
+msgstr "スーパーサンプリング"
+
+#: src/ui/export_dialog.cpp:449
+msgid "100%"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:449
+msgid "200%"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:449
+msgid "25%"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:449
+msgid "50%"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:460
+msgid ""
+"Transparency is lost -- transparent areas are filled with the matte colour."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:462
+msgid ""
+"Soft transparency is lost -- each pixel ends up either fully opaque or fully "
+"transparent."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:465
+msgid "Layers are flattened into one picture."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:467
+msgid "Vector shapes are rasterised -- they stop being editable geometry."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:469
+msgid "Text is rasterised -- it stops being editable type."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:471
+msgid "Layer effects are baked into the pixels."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:473
+msgid "3D text is baked into the pixels."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:475
+msgid "Adjustment layers are baked into the pixels."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:477
+msgid "Colour precision is reduced to what this format stores."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:479
+msgid "High dynamic range is clipped to the format's range."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:481
+msgid "Colours are quantised down to this format's palette."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:483
+msgid "The picture is re-compressed lossily -- fine detail changes."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:485
+msgid ""
+"Colour resolution is halved (chroma subsampling) -- edges and text soften."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:487
+msgid "The colour profile is not written -- the file is read as plain sRGB."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:489
+msgid "The working colour space is converted on the way out."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:491
+msgid "Camera metadata (EXIF) is not written."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:493
+msgid "XMP metadata is not written."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:495
+msgid "The resolution (DPI) is not recorded in the file."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:497
+msgid "Conic gradients have no equivalent here and are rasterised."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:499
+msgid ""
+"Inside/outside strokes are converted to outlines -- they look identical but "
+"stop being strokes."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:502
+msgid "Blend modes are flattened into the artwork."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:599
+msgid "lossless or lossy"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:601
+msgid "lossless"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:603
+msgid "lossy"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:605
+msgid "no transparency"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:606
+msgid "on/off transparency"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:607
+msgid "full transparency"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:611
+#, c-format
+msgid "up to %d colours"
+msgstr ""
+
+#. TRANSLATORS: bit depth per colour channel of the exported file.
+#: src/ui/export_dialog.cpp:614
+#, c-format
+msgid "%d-bit colour"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:617
+msgid "ICC profile"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:619
+msgid "animation"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:894
+msgid "Web PNG"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:895
+msgid "Web JPEG"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:900
+msgid "Photo JPEG (high quality)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:903
+msgid "Lossless archive"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:926 src/ui/layer_effects_dialog.cpp:1399
+msgid "Nothing to preview"
+msgstr "プレビューするものがありません"
+
+#: src/ui/export_dialog.cpp:952 src/ui/settings_dialog.cpp:1727
+#: src/ui/texture_generator_dialog.cpp:888
+msgid "Preset"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:954 src/ui/settings_dialog.cpp:2600
+#: src/ui/settings_dialog.cpp:2616 src/ui/texture_generator_dialog.cpp:1097
+#: src/ui/tool.cpp:278
+msgid "Custom"
+msgstr "カスタム"
+
+#: src/ui/export_dialog.cpp:961
+msgid "Format"
+msgstr "形式"
+
+#: src/ui/export_dialog.cpp:991
+msgid "Output size"
+msgstr "出力サイズ"
+
+#: src/ui/export_dialog.cpp:992
+msgid "Scale (%)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1021
+msgid "Width (px)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1027
+msgid "Height (px)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1033
+msgid "Lock aspect ratio"
+msgstr "縦横比を固定"
+
+#: src/ui/export_dialog.cpp:1037
+msgid "Resolution (ppi)"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1051
+msgid "Resize quality"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1067
+msgid "Format settings"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1069
+msgid "This format has no settings to choose."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1080
+msgid "Transparency"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1081
+msgid "Matte colour"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1086
+msgid "Colour that fills transparency in a format without an alpha channel"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1142
+msgid "Save to"
+msgstr "保存先"
+
+#: src/ui/export_dialog.cpp:1146
+msgid "Where the file is written. Leave it empty and Export will ask."
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1148
+msgid "Choose a file…"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1652
+msgid "Nothing is lost -- this format carries everything the document uses."
+msgstr ""
+
+#. TRANSLATORS: tail of the export loss banner when more warnings than fit are listed.
+#: src/ui/export_dialog.cpp:1665
+#, c-format
+msgid "+ %zu more"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1770
+msgid "File size: rendering…"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1835 src/ui/export_dialog.cpp:1837
+msgid "File size: "
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1838
+msgid "unavailable"
+msgstr ""
+
+#: src/ui/export_dialog.cpp:1922
+msgid "Export failed: could not resize the image"
+msgstr "書き出しに失敗しました: 画像をリサイズできませんでした"
+
+#: src/ui/export_dialog.cpp:1935
+msgid "Export failed: "
+msgstr "書き出しに失敗しました: "
+
+#: src/ui/export_dialog.cpp:1936
+msgid "unknown error"
+msgstr ""
+
+#: src/ui/export_preview.cpp:203
+msgid "Actual pixels (100%)"
+msgstr ""
+
+#: src/ui/export_preview.cpp:208
+msgid "Reset zoom (fit to window)"
+msgstr ""
+
+#: src/ui/export_preview.cpp:452 src/ui/texture_generator_dialog.cpp:3148
+msgid "Rendering…"
+msgstr ""
+
+#: src/ui/fill_dialog.cpp:88
+msgid "Contents"
+msgstr "内容"
+
+#: src/ui/fill_dialog.cpp:90 src/ui/image_ops_panel.cpp:760
+msgid "Foreground Color"
+msgstr "描画色"
+
+#: src/ui/fill_dialog.cpp:91 src/ui/image_ops_panel.cpp:761
+msgid "Background Color"
+msgstr "背景色"
+
+#: src/ui/fill_dialog.cpp:92 src/ui/image_ops_panel.cpp:762 src/ui/tool.cpp:308
+msgid "White"
+msgstr "ホワイト"
+
+#: src/ui/fill_dialog.cpp:93 src/ui/image_ops_panel.cpp:763 src/ui/tool.cpp:308
+msgid "Black"
+msgstr "ブラック"
+
+#: src/ui/fill_dialog.cpp:94 src/ui/image_ops_panel.cpp:764
+msgid "50% Gray"
+msgstr ""
+
+#: src/ui/fill_dialog.cpp:95 src/ui/image_ops_panel.cpp:765
+msgid "Color…"
+msgstr "カラー…"
+
+#: src/ui/fill_dialog.cpp:97 src/ui/image_ops_panel.cpp:766
+msgid "Gradient…"
+msgstr "グラデーション…"
+
+#: src/ui/fill_dialog.cpp:98 src/ui/image_ops_panel.cpp:767
+msgid "Pattern…"
+msgstr "パターン…"
+
+#: src/ui/fill_dialog.cpp:143 src/ui/image_ops_panel.cpp:837
+msgid "Gradient direction"
+msgstr "グラデーションの方向"
+
+#: src/ui/fill_dialog.cpp:159 src/ui/select_morph_panel.cpp:113
+#: src/ui/tool.cpp:201 src/ui/tool.cpp:538
+msgid "Mode"
+msgstr "モード"
+
+#: src/ui/fill_dialog.cpp:192
+msgid "Protect alpha"
+msgstr "透明部分を保護"
+
+#: src/ui/fill_dialog.cpp:194
+msgid ""
+"Only recolors pixels the layer already has (opacity above zero); fully "
+"transparent pixels are left untouched. With a transparent selection this "
+"leaves the preview unchanged."
+msgstr ""
+"レイヤーにすでにあるピクセル (不透明度が 0 より大きいピクセル) だけを塗り替え"
+"ます。完全に透明なピクセルはそのままです。選択範囲が透明な場合、プレビューは"
+"変化しません。"
+
+#: src/ui/fill_dialog.cpp:200 src/ui/fill_dialog.cpp:203
+msgid "Preview"
+msgstr "プレビュー"
+
+#: src/ui/fill_dialog.cpp:310 src/ui/fill_dialog.cpp:564
+msgid "No raster layer is active."
+msgstr "ラスターレイヤーが選択されていません。"
+
+#: src/ui/fill_dialog.cpp:312
+msgid "active layer"
+msgstr "アクティブなレイヤー"
+
+#: src/ui/fill_dialog.cpp:312
+msgid "selection"
+msgstr "選択範囲"
+
+#: src/ui/fill_dialog.cpp:314
+msgid "Filling"
+msgstr "塗りつぶし中"
+
+#: src/ui/fill_dialog.cpp:410
+msgid ""
+"Reconstructs the selection from the surrounding image. Click Preview to see "
+"the result; Fill commits it."
+msgstr ""
+"選択範囲を周囲の画像から再構成します。「プレビュー」で結果を確認し、「塗りつ"
+"ぶし」で確定します。"
+
+#: src/ui/fill_dialog.cpp:449 src/ui/image_ops_panel.cpp:961
+msgid "Click to choose a color"
+msgstr "クリックして色を選択"
+
+#: src/ui/fill_dialog.cpp:563
+msgid "Nothing to fill."
+msgstr "塗りつぶす対象がありません。"
+
+#: src/ui/fill_dialog.cpp:597
+msgid "Reconstructing… 0%"
+msgstr "再構成中… 0%"
+
+#: src/ui/gradient_flyout.cpp:156
+msgid "Add a gradient stop"
+msgstr "グラデーションの分岐点を追加"
+
+#: src/ui/gradient_flyout.cpp:160
+msgid "Remove the selected gradient stop"
+msgstr "選択した分岐点を削除"
+
+#: src/ui/gradient_flyout.cpp:178
+msgid "Set the selected stop to the foreground colour"
+msgstr "選択した分岐点を描画色に設定"
+
+#: src/ui/gradient_flyout.cpp:182
+msgid "Pad"
+msgstr "パッド"
+
+#: src/ui/gradient_flyout.cpp:184
+msgid "Reflect"
+msgstr "反転"
+
+#: src/ui/history_panel.cpp:66
+msgid "just now"
+msgstr "たった今"
+
+#: src/ui/history_panel.cpp:356 src/ui/tool.cpp:278
+msgid "Original"
+msgstr "オリジナル"
+
+#: src/ui/history_panel.cpp:437 src/ui/layer_panel.cpp:2921
+msgid "No document"
+msgstr "ドキュメントがありません"
+
+#: src/ui/idle_invitation.cpp:25
+msgid "Open an image"
+msgstr "画像を開く"
+
+#: src/ui/idle_invitation.cpp:26
+msgid "Drop it anywhere"
+msgstr "どこにでもドロップ"
+
+#: src/ui/idle_invitation.cpp:27
+msgid "click anywhere, or drop a file into this window"
+msgstr "どこでもクリック、またはこのウィンドウにファイルをドロップ"
+
+#. TRANSLATORS: "File > New" names the menu path -- use the same wording as the File and New menu
+#. entries in this catalog so the hint points at something the user can actually see.
+#: src/ui/idle_invitation.cpp:30
+msgid "File > New starts a blank canvas"
+msgstr "ファイル > 新規 で空のキャンバスを作成"
+
+#: src/ui/image_ops_panel.cpp:540
+msgid "Canvas Size"
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:542
+msgid "Image Size"
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:544
+msgid "Rotate Canvas"
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:559 src/ui/layer_effects_dialog.cpp:830
+#: src/ui/new_document_dialog.cpp:1830 src/ui/shape_designer.cpp:1205
+msgid "Width"
+msgstr "幅"
+
+#: src/ui/image_ops_panel.cpp:597 src/ui/new_document_dialog.cpp:1844
+msgid "Height"
+msgstr "高さ"
+
+#: src/ui/image_ops_panel.cpp:636 src/ui/new_document_dialog.cpp:1865
+#: src/ui/settings_dialog.cpp:1357
+msgid "Units"
+msgstr "単位"
+
+#: src/ui/image_ops_panel.cpp:654
+msgid "Constrain Proportions"
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:676
+msgid "Drag to turn the canvas; hold Shift to snap"
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:715
+msgid "Anchor"
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:730
+msgid "Resample"
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:735 src/ui/tool.cpp:195
+msgid "Auto"
+msgstr "自動"
+
+#: src/ui/image_ops_panel.cpp:735 src/ui/tool.cpp:195
+msgid "Nearest"
+msgstr "ニアレストネイバー"
+
+#: src/ui/image_ops_panel.cpp:736 src/ui/tool.cpp:196
+msgid "Area (box)"
+msgstr "面積平均 (ボックス)"
+
+#: src/ui/image_ops_panel.cpp:759 src/ui/tool.cpp:308
+msgid "Transparent"
+msgstr "透明"
+
+#: src/ui/image_ops_panel.cpp:870 src/ui/select_morph_panel.cpp:160
+#: src/ui/texture_generator_dialog.cpp:1084 src/ui/tool.cpp:316
+msgid "Apply"
+msgstr "適用"
+
+#: src/ui/image_ops_panel.cpp:949
+msgid ""
+"Rebuilds the new margin from the picture beside it. Runs in the background "
+"when you Apply."
+msgstr ""
+
+#: src/ui/image_ops_panel.cpp:951
+msgid "The area the canvas gains is left empty."
+msgstr ""
+
+#: src/ui/layer_effects_dialog.cpp:365
+msgid "Coming in a later update"
+msgstr "今後のアップデートで対応予定"
+
+#: src/ui/layer_effects_dialog.cpp:547
+msgid "Dims the layer's own pixels while its effects stay at full strength"
+msgstr "効果はそのままに、レイヤー自身のピクセルだけを薄くします"
+
+#: src/ui/layer_effects_dialog.cpp:747 src/ui/layer_effects_dialog.cpp:776
+#: src/ui/layer_effects_dialog.cpp:928 src/ui/layer_effects_dialog.cpp:1239
+#: src/ui/new_document_dialog.cpp:1881
+msgid "Color"
+msgstr "カラー"
+
+#: src/ui/layer_effects_dialog.cpp:760 src/ui/tool.cpp:428
+msgid "Spread"
+msgstr "スプレッド"
+
+#: src/ui/layer_effects_dialog.cpp:784
+msgid "Choke"
+msgstr "チョーク"
+
+#: src/ui/layer_effects_dialog.cpp:791 src/ui/tool.cpp:220 src/ui/tool.cpp:254
+#: src/ui/tool.cpp:463
+msgid "Source"
+msgstr "ソース"
+
+#: src/ui/layer_effects_dialog.cpp:793
+msgid "Edge"
+msgstr "エッジ"
+
+#: src/ui/layer_effects_dialog.cpp:794
+msgid "Center"
+msgstr "中央"
+
+#: src/ui/layer_effects_dialog.cpp:813 src/ui/tool.cpp:505
+msgid "Stroke"
+msgstr "境界線"
+
+#: src/ui/layer_effects_dialog.cpp:835
+msgid "Position"
+msgstr "位置"
+
+#: src/ui/layer_effects_dialog.cpp:921
+msgid "Color Overlay"
+msgstr "カラーオーバーレイ"
+
+#: src/ui/layer_effects_dialog.cpp:958
+msgid "Gradient Overlay"
+msgstr "グラデーションオーバーレイ"
+
+#: src/ui/layer_effects_dialog.cpp:965 src/ui/tool.cpp:450
+msgid "Type"
+msgstr "種類"
+
+#: src/ui/layer_effects_dialog.cpp:1022 src/ui/shape_designer.cpp:1201
+msgid "Direction"
+msgstr "方向"
+
+#: src/ui/layer_effects_dialog.cpp:1073
+msgid "Pattern Overlay"
+msgstr "パターンオーバーレイ"
+
+#: src/ui/layer_effects_dialog.cpp:1080
+msgid "Pattern"
+msgstr "パターン"
+
+#: src/ui/layer_effects_dialog.cpp:1116
+msgid "Drop Shadow"
+msgstr "ドロップシャドウ"
+
+#: src/ui/layer_effects_dialog.cpp:1118
+msgid "Inner Shadow"
+msgstr "シャドウ (内側)"
+
+#: src/ui/layer_effects_dialog.cpp:1121
+msgid "Outer Glow"
+msgstr "光彩 (外側)"
+
+#: src/ui/layer_effects_dialog.cpp:1131
+msgid "Inner Glow"
+msgstr "光彩 (内側)"
+
+#: src/ui/layer_effects_dialog.cpp:1145
+msgid "Bevel & Emboss"
+msgstr "ベベル & エンボス"
+
+#: src/ui/layer_effects_dialog.cpp:1152 src/ui/shape_designer.cpp:1165
+#: src/ui/shape_designer.cpp:1243 src/ui/shape_designer.cpp:1282
+msgid "Style"
+msgstr "スタイル"
+
+#: src/ui/layer_effects_dialog.cpp:1167 src/ui/new_document_dialog.cpp:1892
+#: src/ui/shape_designer.cpp:1256 src/ui/texture_generator_dialog.cpp:1795
+msgid "Depth"
+msgstr "深さ"
+
+#: src/ui/layer_effects_dialog.cpp:1175
+msgid "Soften"
+msgstr "滑らかさ"
+
+#: src/ui/layer_effects_dialog.cpp:1181
+msgid "Altitude"
+msgstr "高度"
+
+#: src/ui/layer_effects_dialog.cpp:1185
+msgid "Highlight"
+msgstr "ハイライト"
+
+#: src/ui/layer_effects_dialog.cpp:1201
+msgid "Hl. Opacity"
+msgstr "ハイライト不透明度"
+
+#: src/ui/layer_effects_dialog.cpp:1205
+msgid "Shadow"
+msgstr "シャドウ"
+
+#: src/ui/layer_effects_dialog.cpp:1221
+msgid "Sh. Opacity"
+msgstr "シャドウ不透明度"
+
+#: src/ui/layer_effects_dialog.cpp:1232
+msgid "Satin"
+msgstr "サテン"
+
+#: src/ui/layer_effects_dialog.cpp:1271
+msgid "Invert"
+msgstr "反転"
+
+#: src/ui/layer_effects_dialog.cpp:1294
+msgid "Enable an effect from the list to edit it here."
+msgstr "一覧で効果を有効にすると、ここで編集できます。"
+
+#: src/ui/layer_panel.cpp:1138
+msgid "Blend mode of the active layer"
+msgstr "アクティブなレイヤーの描画モード"
+
+#: src/ui/layer_panel.cpp:1146
+msgid "Opacity of the active layer"
+msgstr "アクティブなレイヤーの不透明度"
+
+#: src/ui/layer_panel.cpp:1159
+msgid "Add a new raster layer"
+msgstr "新規ラスターレイヤーを追加"
+
+#: src/ui/layer_panel.cpp:1162
+msgid "Group the active layer"
+msgstr "アクティブなレイヤーをグループ化"
+
+#: src/ui/layer_panel.cpp:1165
+msgid "Delete the active layer"
+msgstr "アクティブなレイヤーを削除"
+
+#: src/ui/layer_panel.cpp:1291 src/ui/layer_panel.cpp:2864
+msgid "Channels"
+msgstr "チャンネル"
+
+#: src/ui/layer_panel.cpp:1291 src/ui/layer_panel.cpp:2864
+msgid "History"
+msgstr "ヒストリー"
+
+#: src/ui/layer_panel.cpp:1291 src/ui/layer_panel.cpp:2864
+msgid "Layers"
+msgstr "レイヤー"
+
+#: src/ui/layer_panel.cpp:2021
+msgid "Rename..."
+msgstr "名前を変更..."
+
+#: src/ui/layer_panel.cpp:2022
+msgid "Duplicate Layer"
+msgstr "レイヤーを複製"
+
+#: src/ui/layer_panel.cpp:2026
+msgid "Group Layers"
+msgstr "レイヤーをグループ化"
+
+#: src/ui/layer_panel.cpp:2032
+msgid "Merge Down"
+msgstr "下のレイヤーと結合"
+
+#: src/ui/layer_panel.cpp:2046
+msgid "Rasterize"
+msgstr "ラスタライズ"
+
+#: src/ui/layer_panel.cpp:2051
+msgid "Convert to Path"
+msgstr "パスに変換"
+
+#: src/ui/layer_panel.cpp:2063
+msgid "Add Mask"
+msgstr "マスクを追加"
+
+#: src/ui/layer_panel.cpp:2066
+msgid "Delete Mask"
+msgstr "マスクを削除"
+
+#: src/ui/layer_panel.cpp:2072
+msgid "Layer Effects..."
+msgstr "レイヤー効果..."
+
+#: src/ui/layer_panel.cpp:2238
+msgid "This layer has no pixels to select"
+msgstr ""
+
+#: src/ui/layer_panel.cpp:2354
+msgid "This layer has no mask to select"
+msgstr ""
+
+#: src/ui/layer_panel.cpp:2359
+msgid "This mask hides everything — there is no coverage to select"
+msgstr ""
+
+#: src/ui/layer_panel.cpp:2424
+msgid "Group"
+msgstr "グループ"
+
+#: src/ui/layer_panel.cpp:2921
+msgid "No layers"
+msgstr "レイヤーがありません"
+
+#: src/ui/new_document_dialog.cpp:611
+msgid "Link width and height (keep the ratio)"
+msgstr "幅と高さをリンク (比率を保持)"
+
+#: src/ui/new_document_dialog.cpp:737
+msgid "Landscape"
+msgstr "横"
+
+#: src/ui/new_document_dialog.cpp:737
+msgid "Portrait"
+msgstr "縦"
+
+#: src/ui/new_document_dialog.cpp:786
+msgid "Recent"
+msgstr "最近使用したもの"
+
+#: src/ui/new_document_dialog.cpp:787
+msgid "Print"
+msgstr "印刷"
+
+#: src/ui/new_document_dialog.cpp:788
+msgid "Screen"
+msgstr "画面"
+
+#: src/ui/new_document_dialog.cpp:790
+msgid "Templates"
+msgstr "テンプレート"
+
+#: src/ui/new_document_dialog.cpp:813
+msgid "Adventure"
+msgstr "冒険"
+
+#: src/ui/new_document_dialog.cpp:813
+msgid "Artwork"
+msgstr "作品"
+
+#: src/ui/new_document_dialog.cpp:813
+msgid "Creation"
+msgstr "創作"
+
+#: src/ui/new_document_dialog.cpp:813
+msgid "Document"
+msgstr "ドキュメント"
+
+#: src/ui/new_document_dialog.cpp:814
+msgid "Masterpiece"
+msgstr "傑作"
+
+#: src/ui/new_document_dialog.cpp:814
+msgid "Story"
+msgstr "物語"
+
+#: src/ui/new_document_dialog.cpp:814
+msgid "Vision"
+msgstr "ビジョン"
+
+#: src/ui/new_document_dialog.cpp:814
+msgid "Wonder"
+msgstr "ワンダー"
+
+#: src/ui/new_document_dialog.cpp:827 src/ui/tool.cpp:201
+msgid "New"
+msgstr "新規"
+
+#: src/ui/new_document_dialog.cpp:1070
+msgid "from the clipboard"
+msgstr "クリップボードから"
+
+#: src/ui/new_document_dialog.cpp:1087
+msgid "per layer"
+msgstr "レイヤーあたり"
+
+#: src/ui/new_document_dialog.cpp:1183 src/ui/new_document_dialog.cpp:1202
+#: src/ui/new_document_dialog.cpp:1215 src/ui/new_document_dialog.cpp:1559
+#: src/ui/new_document_dialog.cpp:1598 src/ui/new_document_dialog.cpp:1930
+#: src/ui/texture_generator_dialog.cpp:1014
+#: src/ui/texture_generator_dialog.cpp:1084
+msgid "Create"
+msgstr "作成"
+
+#: src/ui/new_document_dialog.cpp:1430 src/ui/new_document_dialog.cpp:1503
+msgid "Clipboard"
+msgstr "クリップボード"
+
+#: src/ui/new_document_dialog.cpp:1432
+msgid "Sizes"
+msgstr "サイズ"
+
+#: src/ui/new_document_dialog.cpp:1436
+msgid "Files"
+msgstr "ファイル"
+
+#: src/ui/new_document_dialog.cpp:1490
+msgid ""
+"No templates installed yet.\n"
+"Template .mosaic files appear here from the app's data/presets folder."
+msgstr ""
+"テンプレートはまだインストールされていません。\n"
+"アプリの data/presets フォルダーにある .mosaic テンプレートファイルがここに表"
+"示されます。"
+
+#: src/ui/new_document_dialog.cpp:1530
+msgid ""
+"No recent files yet.\n"
+"Documents you open or save appear here."
+msgstr ""
+"最近使用したファイルはまだありません。\n"
+"開いたり保存したりしたドキュメントがここに表示されます。"
+
+#: src/ui/new_document_dialog.cpp:1576
+msgid "Forget This Size"
+msgstr "このサイズを削除"
+
+#: src/ui/new_document_dialog.cpp:1576
+msgid "Remove from Recents"
+msgstr "最近使用したものから削除"
+
+#: src/ui/new_document_dialog.cpp:1677
+msgid "Choose an RGB ICC profile"
+msgstr "RGB ICC プロファイルを選択"
+
+#: src/ui/new_document_dialog.cpp:1679 src/ui/settings_dialog.cpp:2849
+msgid "ICC profiles\t*.{icc,icm}"
+msgstr "ICC プロファイル\t*.{icc,icm}"
+
+#: src/ui/new_document_dialog.cpp:1689
+msgid "Not an RGB profile"
+msgstr ""
+
+#: src/ui/new_document_dialog.cpp:1690
+msgid "That file is not an RGB ICC profile, so it was not applied."
+msgstr ""
+"そのファイルは RGB ICC プロファイルではないため、適用されませんでした。"
+
+#: src/ui/new_document_dialog.cpp:1774
+msgid "New Document"
+msgstr "新規ドキュメント"
+
+#: src/ui/new_document_dialog.cpp:1852
+msgid "Orientation"
+msgstr "方向"
+
+#: src/ui/new_document_dialog.cpp:1871
+msgid "Resolution"
+msgstr "解像度"
+
+#: src/ui/new_document_dialog.cpp:1887
+msgid "Custom…"
+msgstr "カスタム…"
+
+#: src/ui/new_document_dialog.cpp:1899
+msgid "Background"
+msgstr "背景"
+
+#: src/ui/pattern_flyout.cpp:332
+msgid "Anchor to canvas"
+msgstr "キャンバスに固定"
+
+#: src/ui/pattern_flyout.cpp:335
+msgid ""
+"Keep the pattern fixed to the canvas: moving or rotating the layer slides "
+"its shape over the pattern instead of dragging the pattern along"
+msgstr ""
+"パターンをキャンバスに固定します。レイヤーを移動または回転すると、パターンは"
+"動かず、レイヤーの形だけがパターンの上を滑ります"
+
+#: src/ui/pattern_flyout.cpp:354
+msgid ""
+"Image tiles\n"
+"(coming soon)"
+msgstr ""
+"画像タイル\n"
+"(近日対応)"
+
+#: src/ui/pattern_flyout.cpp:370
+msgid "Foreground colour (click to edit)"
+msgstr "描画色 (クリックで編集)"
+
+#: src/ui/pattern_flyout.cpp:375
+msgid "Background colour (click to edit)"
+msgstr "背景色 (クリックで編集)"
+
+#: src/ui/pattern_flyout.cpp:390
+msgid "Set the active colour to the app foreground"
+msgstr "アクティブな色をアプリの描画色に設定"
+
+#: src/ui/pattern_flyout.cpp:399
+msgid "A"
+msgstr "A"
+
+#: src/ui/scrub_slider.cpp:495 src/ui/vulkan_canvas.cpp:7089
+#: src/ui/widgets.cpp:1029
+msgid "Cut"
+msgstr "切り取り"
+
+#: src/ui/scrub_slider.cpp:496 src/ui/vulkan_canvas.cpp:7096
+#: src/ui/widgets.cpp:1030 src/ui/widgets.cpp:1034
+msgid "Copy"
+msgstr "コピー"
+
+#: src/ui/scrub_slider.cpp:497 src/ui/vulkan_canvas.cpp:7097
+#: src/ui/widgets.cpp:1031
+msgid "Paste"
+msgstr "貼り付け"
+
+#: src/ui/scrub_slider.cpp:499 src/ui/vulkan_canvas.cpp:7098
+#: src/ui/widgets.cpp:1036
+msgid "Select All"
+msgstr "すべてを選択"
+
+#: src/ui/select_modify_dialog.cpp:101 src/ui/select_morph_panel.cpp:135
+#: src/ui/shape_designer.cpp:1143 src/ui/shape_designer.cpp:1163
+#: src/ui/shape_designer.cpp:1174 src/ui/shape_designer.cpp:1176
+#: src/ui/shape_designer.cpp:1181 src/ui/shape_designer.cpp:1194
+#: src/ui/shape_designer.cpp:1203 src/ui/shape_designer.cpp:1205
+#: src/ui/shape_designer.cpp:1241 src/ui/shape_designer.cpp:1260
+#: src/ui/tool.cpp:116 src/ui/tool.cpp:203 src/ui/tool.cpp:207
+#: src/ui/tool.cpp:243 src/ui/tool.cpp:472 src/ui/tool.cpp:491
+#: src/ui/tool.cpp:506
+msgid "px"
+msgstr "px"
+
+#: src/ui/select_morph_panel.cpp:115
+msgid "Grow"
+msgstr "拡張"
+
+#: src/ui/select_morph_panel.cpp:116
+msgid "Shrink"
+msgstr "縮小"
+
+#: src/ui/select_morph_panel.cpp:117 src/ui/tool.cpp:203 src/ui/tool.cpp:207
+msgid "Feather"
+msgstr "ぼかし"
+
+#: src/ui/select_morph_panel.cpp:118
+msgid "Smooth"
+msgstr "滑らかに"
+
+#: src/ui/select_morph_panel.cpp:131 src/ui/texture_generator_dialog.cpp:1475
+#: src/ui/tool.cpp:418
+msgid "Amount"
+msgstr "量"
+
+#: src/ui/settings_dialog.cpp:459
+msgid "Open in browser"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1105
+msgid "Differs from the paper"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1107
+msgid "Mosaic adds"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1109
+msgid "Paper: "
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1267
+msgid "Touch your pen to the tablet — pressure, tilt and rate appear here."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1310
+msgid "Tilt"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1316
+msgid "Sample rate"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1325
+msgid "Settings"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1339 src/ui/settings_dialog.cpp:1379
+msgid "Appearance"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1339 src/ui/settings_dialog.cpp:1760
+msgid "Tablet"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1339 src/ui/settings_dialog.cpp:1532
+msgid "Tools"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1340 src/ui/settings_dialog.cpp:2113
+msgid "Annoyances"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1340 src/ui/settings_dialog.cpp:1958
+msgid "Color Management"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1340 src/ui/settings_dialog.cpp:2001
+msgid "Inpainting"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1359
+msgid "Automatic (system)"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1360
+msgid "Metric"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1361
+msgid "Imperial"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1365
+msgid ""
+"Measurement system for rulers and size readouts. Automatic follows your "
+"system locale."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1380
+msgid "Icons"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1391
+msgid ""
+"Choose how Mosaic looks. \"System\" follows your desktop's light / dark "
+"preference and changes are applied immediately."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1397
+msgid "System"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1398
+msgid "Dark"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1399 src/ui/texture_generator_dialog.cpp:1912
+msgid "Light"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1423
+msgid "Selection & reticle line"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1425
+msgid ""
+"How the lasso, brush reticle and text-frame line keeps itself readable over "
+"the image. The image drifts beneath each line."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1427
+msgid "Adaptive"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1427
+msgid "Classic"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1427
+msgid "Shadowed"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1449
+msgid "Feathered selection indicator"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1455
+msgid ""
+"How a soft-edged (feathered) selection shows its softness, which a single "
+"marching ant cannot. \"Bracketing ant pair\" fences the feather between two "
+"ants; \"True edge + soft band\" keeps the crisp edge and adds a faint band."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1459
+msgid "Bracketing ant pair"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1459
+msgid "True edge + soft band"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1534
+msgid "Brush"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1534
+msgid "Crop"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1534
+msgid "Eraser"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1534
+msgid "Lasso"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1534
+msgid "Move"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1546
+msgid "Crop framing"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1548
+msgid "Draw to begin"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1548
+msgid "Inset"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1548
+msgid "Whole canvas"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1566
+msgid ""
+"What the Crop tool frames when you pick it. \"Whole canvas\" (the default) "
+"selects the entire image; \"Inset\" leaves a 15% margin; \"Draw to begin\" "
+"stages nothing until you drag out a rectangle."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1572
+msgid "Switch to the previous tool after applying a crop"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1578
+msgid ""
+"Off (the default, like most editors) keeps the Crop tool active after you "
+"apply; on returns you to the tool you were using before."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1583
+msgid "Clear the crop selection when leaving the Crop tool"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1593
+msgid "About Smart Resize"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1609
+msgid "Multi-selection edits"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1611
+msgid "Active layer only"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1611
+msgid "All selected layers"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1611
+msgid "Disabled"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1629
+msgid ""
+"What a blend or opacity change does while several layers are selected (shift-"
+"click them with the Move tool). \"Disabled\" edits one layer at a time; "
+"\"All selected layers\" applies to every selected layer in one step; "
+"\"Active layer only\" applies just to the active layer."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1646
+msgid "Freehand lasso"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1649
+msgid "Smooth the freehand lasso"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1655
+msgid ""
+"On (the default) smooths the freehand lasso into a clean curve -- for both "
+"the live preview and the committed selection -- which actually follows your "
+"stroke more faithfully than the raw path, whose decimated samples read as a "
+"jagged staircase. Off uses that raw path. The polygonal lasso is never "
+"smoothed."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1672
+msgid "Preset dock"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1674
+msgid "Cards"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1674 src/ui/tool.cpp:192
+msgid "Grid"
+msgstr "グリッド"
+
+#: src/ui/settings_dialog.cpp:1692
+msgid ""
+"How the brush-preset dock lists the library. \"Cards\" (the default) gives "
+"each preset a row carrying its tip and a stroke of that very brush, painted "
+"by the real engine -- so you can see the mark it makes before you make it. "
+"\"Grid\" packs the tips into a denser grid of tiles, for reaching a brush "
+"you already know by sight."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1719
+msgid ""
+"On (the default) keeps one shared tip size: resizing the brush resizes the "
+"eraser and the other way round, so switching tools never changes the mark "
+"you make. Off gives the eraser its own independent size."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1737
+msgid ""
+"Off (the default) gives the eraser its own preset, kept apart from the "
+"brush's, so reaching for one never re-points the other. Note that the two "
+"preset lists do not overlap -- a preset belongs to the eraser because it "
+"erases, and each tool is shown only its own -- so \"follow the brush\" can "
+"at most follow it to a nib the eraser is never offered."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1785
+msgid ""
+"No tablet backend is running — pressure is unavailable, and strokes paint at "
+"full pressure."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1788
+msgid "Backend: "
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1791
+msgid "No tablet devices detected. Plug one in and reopen Settings."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1799
+msgid "no valuators reported"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1819
+msgid "Devices"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1830
+msgid "Test area"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1834
+msgid ""
+"Live, and already through the settings below — what you see here is what the "
+"brush will get. Hover the pen; you do not have to press."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1842
+msgid "Pressure curve"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1859
+msgid ""
+"How hard you press (left to right) maps to how much paint comes out (bottom "
+"to top). Drag a point to bend it; click to add one, right-click to remove "
+"it, double-click to make it a sharp corner. A line from corner to corner is "
+"no change at all."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1868
+msgid "Pressure range"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1871
+msgid "Lightest"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1872
+msgid "Heaviest"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1890
+msgid ""
+"Stretch the part of the range your pen actually reaches out to the full "
+"stroke. A worn nib that never bottoms out is what this is for."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1897
+msgid "Tilt offset"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1911
+msgid ""
+"For a pen you hold turned. Shifts which way the tablet thinks you are "
+"leaning, without changing how far."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1920
+msgid "Counts as full"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1921
+msgid "Averaged over"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1941
+msgid ""
+"Calibrates brushes that respond to how fast you draw: the speed that counts "
+"as \"full\", and how long a window it is averaged over."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1964
+msgid ""
+"Mosaic includes a default CMYK profile, though some distributions may omit "
+"it. Choose a CMYK .icc here to use your own instead; \"Use default\" "
+"restores it."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1967
+msgid "Mosaic's built-in CMYK profile is "
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1968
+msgid ""
+" (a FOGRA39 press profile); some distributions may omit it. Choose a "
+"CMYK .icc here to use your own instead; \"Use default\" restores the built-"
+"in."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1971
+msgid "CMYK profile"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1982
+msgid "Browse..."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:1985
+msgid "Use default"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2002
+msgid "Backend settings"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2002
+msgid "Engine"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2011
+msgid "Backend"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2061
+msgid "Check spelling"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2066
+msgid ""
+"Underline misspelled words with a red wavy line while you edit text. The "
+"underline is only drawn on-canvas -- never part of the image or an export."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2069
+msgid "Check ALL-CAPS words"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2074
+msgid "Off by default, so acronyms like NASA or HTTP are not flagged."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2075
+msgid "Language"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2083
+msgid ""
+"The default language for spell-check and hyphenation, used where a paragraph "
+"has no language of its own. \"Follow system\" uses your OS locale."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2089
+msgid "Emoji font"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2091
+msgid "Automatic"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2098
+msgid ""
+"The color font used when text needs an emoji glyph. An emoji the chosen "
+"family lacks still falls back automatically, so nothing turns into boxes."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2121
+msgid "Cheesy motivational one-liners"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2126
+msgid ""
+"Mosaic believes in you. With this on, a line of all-caps encouragement "
+"slides down into the empty right end of the menu bar every few minutes, "
+"holds there for a breath, then slips back out of sight. Off by default, "
+"because some hearts are busy."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2137
+msgid "Show how long the document has been unsaved in the title"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2142
+msgid ""
+"After a few unsaved minutes the title starts counting -- a quiet nudge "
+"toward Ctrl+S. The bare \"unsaved\" mark shows either way; this just adds "
+"the tally."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2146
+msgid "Include the seconds"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2151
+msgid ""
+"Tick the tally every second instead of every minute. Off by default: a title "
+"that re-renders each second is motion in the corner of the eye, and some "
+"screen readers read it aloud each time."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2165
+msgid "Done"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2448
+msgid ""
+"This backend has no adjustable settings — it is configured elsewhere (a "
+"script provides it)."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2459 src/ui/texture_generator_dialog.cpp:1428
+msgid "Quality"
+msgstr "品質"
+
+#: src/ui/settings_dialog.cpp:2483 src/ui/texture_generator_dialog.cpp:1697
+msgid "Advanced"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2494
+msgid "Reset to defaults"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2847
+msgid "Choose a CMYK ICC profile"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2861
+msgid "Not a CMYK profile"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2862
+msgid "That file is not a CMYK ICC profile, so it was not applied."
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2885
+msgid "Default (built-in)"
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2888
+msgid "Default: "
+msgstr ""
+
+#: src/ui/settings_dialog.cpp:2890
+msgid "Mosaic's vendored default CMYK press profile."
+msgstr ""
+
+#: src/ui/shape_designer.cpp:418
+msgid "Drag the round handles to shape it"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:895
+msgid "This shape has no editable parameters."
+msgstr ""
+
+#: src/ui/shape_designer.cpp:896
+msgid "Select a shape with the Shape tool to edit it."
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1123 src/ui/shape_designer.cpp:1161
+msgid "Corners"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1129
+msgid "Link all four corners"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1130
+msgid "Edit every corner together"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1136
+msgid "Bot-right"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1136
+msgid "Top-left"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1136
+msgid "Top-right"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1137
+msgid "Bot-left"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1145 src/ui/shape_designer.cpp:1165
+#: src/ui/shape_designer.cpp:1243 src/ui/tool.cpp:509
+msgid "Bevel"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1145 src/ui/shape_designer.cpp:1165
+#: src/ui/shape_designer.cpp:1243 src/ui/shape_designer.cpp:1300
+#: src/ui/tool.cpp:492 src/ui/tool.cpp:507 src/ui/tool.cpp:509
+msgid "Round"
+msgstr "丸"
+
+#: src/ui/shape_designer.cpp:1145 src/ui/shape_designer.cpp:1243
+msgid "Scoop"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1153
+msgid "Arc"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1154 src/ui/shape_designer.cpp:1230
+msgid "Start"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1155
+msgid "Where the arc begins (drag the handle on the diagram)"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1156 src/ui/shape_designer.cpp:1232
+#: src/ui/shape_designer.cpp:1253
+msgid "End"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1157
+msgid "Where the arc ends (drag the handle on the diagram)"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1158
+msgid "Chord"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1158
+msgid "Closure"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1158
+msgid "Pie"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1159
+msgid "How a partial sweep closes"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1163
+msgid "Rounding"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1168 src/ui/tool.cpp:480
+msgid "Points"
+msgstr "頂点の数"
+
+#: src/ui/shape_designer.cpp:1174
+msgid "Tip round"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1175
+msgid "Rounding at the outer tips"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1176
+msgid "Valley round"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1177
+msgid "Rounding at the inner valleys"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1179 src/ui/shape_gesture.cpp:197
+msgid "Line"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1181
+msgid "Border"
+msgstr "縁取り"
+
+#: src/ui/shape_designer.cpp:1182
+msgid "The contrasting edge of a Hollow / Outlined line"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1188
+msgid "Body"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1189 src/ui/shape_gesture.cpp:194
+msgid "Ellipse"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1189
+msgid "Rounded box"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1190
+msgid "The balloon's body"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1193 src/ui/shape_designer.cpp:1240
+#: src/ui/shape_designer.cpp:1259 src/ui/tool.cpp:472
+msgid "Corner"
+msgstr "角"
+
+#: src/ui/shape_designer.cpp:1197
+msgid "Tail"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1198 src/ui/texture_generator_dialog.cpp:1750
+msgid "Kind"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1198
+msgid "Pointer"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1198
+msgid "Thought puffs"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1200
+msgid "A speech balloon's pointer, or a thought balloon's trail"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1202
+msgid "Which way the tail leaves the body (drag the tip on the diagram)"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1204
+msgid "How far the tail reaches past the body"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1206
+msgid "The pointer's base width -- or the size of the leading puff"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1210 src/ui/shape_designer.cpp:1218
+#: src/ui/shape_designer.cpp:1220 src/ui/shape_designer.cpp:1222
+#: src/ui/shape_designer.cpp:1227 src/ui/shape_designer.cpp:1236
+#: src/ui/shape_designer.cpp:1247 src/ui/shape_designer.cpp:1249
+#: src/ui/shape_designer.cpp:1256 src/ui/shape_designer.cpp:1294
+#: src/ui/tool.cpp:229 src/ui/tool.cpp:231 src/ui/tool.cpp:233
+#: src/ui/tool.cpp:332 src/ui/tool.cpp:334 src/ui/tool.cpp:336
+#: src/ui/tool.cpp:343 src/ui/tool.cpp:345 src/ui/tool.cpp:354
+#: src/ui/tool.cpp:369 src/ui/tool.cpp:371 src/ui/tool.cpp:373
+#: src/ui/tool.cpp:389 src/ui/tool.cpp:403 src/ui/tool.cpp:405
+#: src/ui/tool.cpp:418 src/ui/tool.cpp:420 src/ui/tool.cpp:428
+#: src/ui/tool.cpp:437 src/ui/tool.cpp:459 src/ui/tool.cpp:481
+msgid "%"
+msgstr "%"
+
+#: src/ui/shape_designer.cpp:1211
+msgid "Hook the tip sideways without moving where the tail joins"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1213
+msgid "Puffs"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1214
+msgid "How many shrinking puffs trail a thought balloon"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1217 src/ui/shape_gesture.cpp:199
+msgid "Arrow"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1218
+msgid "Shaft"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1219
+msgid "Shaft thickness, as a share of the head's width"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1220
+msgid "Head"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1221
+msgid "Head length, as a share of the total length"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1222
+msgid "Barb"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1223
+msgid "Sweep the head's back edge into a barb"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1224
+msgid "Head at both ends"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1226
+msgid "Ring"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1227
+msgid "Hole"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1228
+msgid "Inner radius as a share of the outer (0 = a solid pie)"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1229
+msgid "Sweep"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1231
+msgid "Where the sweep begins (drag the handle on the diagram)"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1233
+msgid "Where the sweep ends (drag the handle on the diagram)"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1235 src/ui/shape_gesture.cpp:201
+msgid "Cross"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1236
+msgid "Arms"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1237
+msgid "Arm thickness, as a share of the shorter side"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1246 src/ui/shape_gesture.cpp:202
+msgid "Heart"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1247
+msgid "Shoulders"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1248
+msgid "How low and full the two lobes sit"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1249
+msgid "Cleft"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1250
+msgid "Depth of the notch between the lobes"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1252
+msgid "Banner"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1253 src/ui/tool.cpp:461
+msgid "Point"
+msgstr "ポイント"
+
+#: src/ui/shape_designer.cpp:1253
+msgid "Swallow-tail"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1255
+msgid "Push the right edge out into a point, or cut it in as a ribbon"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1257
+msgid "Notch the tail"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1258
+msgid "Cut the matching notch into the left edge"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1268
+msgid "Outline & dashes"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1271
+msgid "Dash pattern for a line, or for an outline this shape already carries"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1284 src/ui/tool.cpp:511
+msgid "Dash-dot"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1284 src/ui/tool.cpp:511
+msgid "Dashed"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1284 src/ui/tool.cpp:511
+msgid "Dotted"
+msgstr ""
+
+#: src/ui/shape_designer.cpp:1284 src/ui/tool.cpp:511
+msgid "Solid"
+msgstr "実線"
+
+#: src/ui/shape_gesture.cpp:193
+msgid "Rectangle"
+msgstr ""
+
+#: src/ui/shape_gesture.cpp:195
+msgid "Polygon"
+msgstr ""
+
+#: src/ui/shape_gesture.cpp:196
+msgid "Star"
+msgstr ""
+
+#: src/ui/shape_gesture.cpp:198
+msgid "Speech bubble"
+msgstr ""
+
+#: src/ui/shape_gesture.cpp:200
+msgid "Ring / pie"
+msgstr ""
+
+#: src/ui/shape_gesture.cpp:203
+msgid "Chevron / banner"
+msgstr ""
+
+#: src/ui/status_bar.cpp:195
+msgid "Document color space"
+msgstr "ドキュメントの色空間"
+
+#: src/ui/status_bar.cpp:420
+msgid "Sel"
+msgstr "選択"
+
+#: src/ui/texture_generator_dialog.cpp:262
+#, c-format
+msgid "%02d:%02d solar"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:408
+#: src/ui/texture_generator_dialog.cpp:2400
+msgid "Sky"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:409
+msgid "Paper"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:410
+msgid "Grass"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:411
+msgid "Wood"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:412
+msgid "Marble"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:413
+#: src/ui/texture_generator_dialog.cpp:2008
+#: src/ui/texture_generator_dialog.cpp:2066
+msgid "Stone"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:414
+msgid "Canvas"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:415
+msgid "Metal"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:544
+msgid "Analyzes this layer; sets horizon, camera, sun & sky to match."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:653
+msgid "Drag to pan; scroll to zoom"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:654
+msgid "Horizon: drag up or down"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:655
+msgid "Roll: drag to tilt the horizon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:656
+msgid "Sun: drag to place it in the sky"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:657
+msgid "Moon: drag to place it in the sky"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:658
+msgid "Sun position: angle = direction, centre = overhead"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:659
+msgid "Wind: direction and strength"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:661
+msgid "View width: drag outward to zoom in"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:662
+msgid "Grain direction"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:663
+msgid "Raking light: angle = direction, centre = overhead"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:774
+msgid "Texture Generator"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:870
+msgid "Generator"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:903
+msgid ""
+"A complete look for this generator; the sliders fine-tune from there (the "
+"readout says Custom once they diverge)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:908
+msgid "Seed"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:926
+msgid "Every render is reproducible from seed + settings"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:931
+msgid "Roll a fresh seed (same settings, new variation)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:963
+msgid "Reset view"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:971
+msgid "Fit the whole document (or double-click the preview)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:978
+msgid "Scroll to zoom, drag to pan"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1007
+msgid "Also mask the photo's sky and match it to this sky."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1011
+msgid ""
+"On Create: after the full-resolution render, the photo's sky is masked out "
+"and a Photometric Match layer grades the foreground toward the new sky -- "
+"one undo step"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1105
+#, c-format
+msgid "Applies to \"%s\"."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1107
+#, c-format
+msgid "Creates a new \"%s\" layer."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1341
+msgid "Estimate from layer…"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1345
+msgid "Analyzes this layer; sets horizon, camera, sun & sky to match"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1349
+msgid ""
+"The active layer has no pixels to analyze. Rasterize it, or select a pixel "
+"layer."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1355
+msgid "Revert"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1357
+msgid "Restore the settings from before the estimate"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1378
+#, c-format
+msgid "Use %s UTC instead"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1384
+msgid "The sun crosses this height twice a day; switch to the other crossing"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1392
+msgid "Sky dome"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1394
+msgid "Off = a transparent layer carrying only sun/clouds (§3.4)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1394
+#: src/ui/texture_generator_dialog.cpp:2407
+msgid "Sun"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1397
+msgid "The disc + aureole element (clouds stay sun-lit either way)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1398
+#: src/ui/texture_generator_dialog.cpp:1423
+msgid "Clouds"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1400
+msgid "Haze"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1402
+msgid "Aerial-perspective boost toward the horizon tint"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1406
+#: src/ui/texture_generator_dialog.cpp:1917
+msgid "Sun height"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1409
+msgid "0 = on the horizon; low = golden light; below 0 = twilight into night"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1410
+#: src/ui/texture_generator_dialog.cpp:1913
+msgid "Sun direction"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1413
+msgid "Compass direction; 180 faces the frame centre (drag the sun too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1414
+msgid "Cloud cover"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1417
+msgid "The master dial; each deck multiplies it"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1418
+msgid "Turbidity"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1421
+msgid "Atmosphere thickness: 1 crystalline, 10 murky"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1424
+msgid "Cloud scale"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1427
+msgid "Cloud feature size (the dome and camera stay physical, §8.3)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1428
+msgid "Fast 2D"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1428
+msgid "Volumetric (best)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1431
+msgid "Cumulus / storm towers ray-march a real 3D field (slower, rounder)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1436
+msgid "Deck on/off"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1464
+msgid "Remove this deck"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1483
+msgid "This deck's multiplier on Cloud cover"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1497
+msgid "Add deck"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1511
+msgid "Night & moon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1512
+#: src/ui/texture_generator_dialog.cpp:2414
+msgid "Moon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1515
+msgid "A real near-side Moon; its phase comes from the source below"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1520
+msgid "Moon phase"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1522
+msgid "From date & place"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1523
+msgid "Manual"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1525
+msgid ""
+"\"From date & place\" uses the real ephemeris; \"Manual\" sets the phase by "
+"hand. Whichever you touch first is remembered."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1532
+msgid "Illumination"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1532
+msgid "New at 0%, full at 100%"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1539
+msgid "Manual moon phase: 0 = new, 0.5 = half, 1 = full"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1575
+msgid "Moon direction"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1578
+msgid "Compass, like the sun (drag the moon in the preview too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1579
+msgid "Moon height"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1582
+msgid "Moon size"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1585
+msgid "1 = the honest 0.26° disc; postcards lie larger"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1586
+msgid "Stars"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1589
+msgid "Fade in once the sun is well below the horizon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1592
+#: src/ui/texture_generator_dialog.cpp:1883
+msgid "Camera"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1593
+#: src/ui/texture_generator_dialog.cpp:1884
+msgid "View width"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1596
+#: src/ui/texture_generator_dialog.cpp:1887
+msgid "Horizontal field of view (the bracket handles drag it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1597
+#: src/ui/texture_generator_dialog.cpp:1888
+msgid "Horizon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1600
+msgid "Camera pitch above the horizon (drag the horizon line too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1601
+msgid "Roll"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1604
+msgid "Horizon tilt, for matching a hand-held shot"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1605
+msgid "Tilt-shift"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1608
+msgid "Slides the horizon without pitching the rays (architectural look)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1611
+msgid "Sky by date & place"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1615
+msgid "Date (UTC)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1620
+msgid "Pick a date; the sun, moon and stars follow it"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1628
+msgid "Time (UTC)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1630
+msgid "Drag or scroll a drum to spin it"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1644
+msgid "Place"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1648
+msgid "Place the observer on a world map; the pin snaps to nearby cities"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1654
+msgid "Latitude"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1671
+msgid "Longitude"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1698
+msgid "Exposure"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1701
+msgid "Ground albedo"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1704
+msgid "Light bounced back into the dome from the ground"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1705
+msgid "Sun disc size"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1708
+msgid "1 = the physical 0.255° half-angle"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1710
+msgid "Lens flare"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1713
+msgid "Photographic ghosts, halo and starburst cast by the sun"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1715
+msgid "Flare strength"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1718
+msgid "Ghost and starburst energy; the flare fades as the sun leaves the frame"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1719
+#: src/ui/texture_generator_dialog.cpp:1870
+msgid "Wind direction"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1722
+msgid "Where the wind blows toward (the arrow drags it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1723
+#: src/ui/texture_generator_dialog.cpp:1874
+msgid "Wind strength"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1726
+msgid "Shear: streaks and wisp elongation along the wind"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1750
+msgid "Felt"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1750
+msgid "Laid"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1750
+msgid "Wove"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1755
+msgid ""
+"Wove = machine paper; Laid carries laid + chain lines; Felt = coarse relief"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1756
+msgid "Deckle edge"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1759
+msgid "A torn transparent fringe at the sheet border (§3.4)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1759
+msgid "Print tooth"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1762
+msgid "Toner speckle caught in the tooth valleys"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1763
+#: src/ui/texture_generator_dialog.cpp:2120
+#: src/ui/texture_generator_dialog.cpp:2176
+msgid "Tint"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1765
+#: src/ui/texture_generator_dialog.cpp:1973
+#: src/ui/texture_generator_dialog.cpp:2034
+#: src/ui/texture_generator_dialog.cpp:2183
+msgid "Roughness"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1768
+msgid "Tooth relief height"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1769
+#: src/ui/texture_generator_dialog.cpp:1960
+msgid "Fibre"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1772
+msgid "Spectral fibre streaks along the grain"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1773
+#: src/ui/texture_generator_dialog.cpp:1964
+msgid "Grain angle"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1776
+msgid "The fibre axis (the ring handle drags it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1777
+msgid "Grain strength"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1780
+msgid "0 isotropic, 1 strongly directional"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1781
+#: src/ui/texture_generator_dialog.cpp:1968
+msgid "Grain scale"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1784
+msgid "Feature size per document pixel -- match your print DPI (§8.3)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1786
+msgid "Ruling (laid)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1787
+msgid "Laid pitch"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1790
+msgid "Fine parallel line spacing at Scale 1 (Laid kind)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1791
+msgid "Chain pitch"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1794
+msgid "Sparse perpendicular chain-line spacing (Laid kind)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1798
+msgid "Prominence of the ruling"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1800
+#: src/ui/texture_generator_dialog.cpp:1972
+#: src/ui/texture_generator_dialog.cpp:2033
+#: src/ui/texture_generator_dialog.cpp:2088
+#: src/ui/texture_generator_dialog.cpp:2146
+#: src/ui/texture_generator_dialog.cpp:2199
+msgid "Surface & light"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1801
+#: src/ui/texture_generator_dialog.cpp:1977
+#: src/ui/texture_generator_dialog.cpp:2038
+#: src/ui/texture_generator_dialog.cpp:2089
+#: src/ui/texture_generator_dialog.cpp:2147
+#: src/ui/texture_generator_dialog.cpp:2200
+msgid "Matte"
+msgstr "マット"
+
+#: src/ui/texture_generator_dialog.cpp:1804
+msgid "Oren-Nayar roughness: 0 smooth diffuse, 1 very matte"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1805
+#: src/ui/texture_generator_dialog.cpp:1980
+#: src/ui/texture_generator_dialog.cpp:2092
+#: src/ui/texture_generator_dialog.cpp:2150
+#: src/ui/texture_generator_dialog.cpp:2187
+msgid "Sheen"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1808
+msgid "Coated-stock highlight (0 = uncoated)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1809
+#: src/ui/texture_generator_dialog.cpp:1984
+#: src/ui/texture_generator_dialog.cpp:2045
+#: src/ui/texture_generator_dialog.cpp:2096
+#: src/ui/texture_generator_dialog.cpp:2154
+#: src/ui/texture_generator_dialog.cpp:2203
+msgid "Light direction"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1812
+msgid "Raking light compass; 0 = from the top of the frame"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1813
+#: src/ui/texture_generator_dialog.cpp:1988
+#: src/ui/texture_generator_dialog.cpp:2049
+#: src/ui/texture_generator_dialog.cpp:2100
+#: src/ui/texture_generator_dialog.cpp:2158
+#: src/ui/texture_generator_dialog.cpp:2207
+msgid "Light height"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1816
+#: src/ui/texture_generator_dialog.cpp:1991
+msgid "Low = grazing light throws long micro-shadow"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1818
+msgid "Edges & print"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1819
+msgid "Deckle amount"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1822
+msgid "Deckle inset"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1825
+msgid "Fringe band width as a fraction of the sheet"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1826
+msgid "Print amount"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1846
+msgid "Turf base"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1848
+msgid "Blades"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1848
+msgid "Off = transparent ground, blade silhouettes only (§3.4)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1851
+msgid "Off = the flat turf field alone"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1852
+msgid "Blade root"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1854
+msgid "Blade tip"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1859
+msgid "Blade coverage: 0 bald, 1 dense sward"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1860
+msgid "Blade height"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1863
+msgid "Blade width"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1866
+msgid "Droop"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1869
+msgid "Blade arc: 0 stiff upright, 1 drooping"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1873
+msgid "Where blades lean toward (the arrow drags it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1877
+msgid "0 upright, 1 flattened"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1878
+msgid "Growth scale"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1881
+msgid "Blade and clump world size (§8.3)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1891
+msgid "Camera down-tilt: higher looks down at a fuller lawn"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1893
+msgid "Ground & variety"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1894
+msgid "Soil"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1896
+msgid "Earth showing between and under blades"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1897
+msgid "Straw"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1899
+msgid "The dead-blade tint Dry blades mixes in"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1900
+msgid "Dry blades"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1903
+msgid "Fraction of straw blades"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1904
+msgid "Patchiness"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1907
+msgid "0 uniform lawn, 1 worn and patchy"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1908
+msgid "Clump size"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1916
+#: src/ui/texture_generator_dialog.cpp:1987
+#: src/ui/texture_generator_dialog.cpp:2048
+#: src/ui/texture_generator_dialog.cpp:2099
+#: src/ui/texture_generator_dialog.cpp:2157
+#: src/ui/texture_generator_dialog.cpp:2206
+msgid "The dome handle drags it too"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1920
+msgid "Low = raking sheen and backlight"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1939
+msgid "Earlywood"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1941
+msgid "The pale band of each growth ring"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1942
+msgid "Latewood"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1944
+msgid "The dark dense band"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1945
+msgid "Ring spacing"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1948
+msgid "Growth-ring pitch at Scale 1"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1949
+msgid "Ring contrast"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1952
+msgid "Waviness"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1955
+msgid "How far the rings meander"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1956
+msgid "Knots"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1959
+msgid "0 = clear lumber"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1963
+msgid "Streaks running along the grain"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1967
+msgid "The grain axis (the ring handle drags it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1971
+#: src/ui/texture_generator_dialog.cpp:2032
+#: src/ui/texture_generator_dialog.cpp:2087
+#: src/ui/texture_generator_dialog.cpp:2145
+#: src/ui/texture_generator_dialog.cpp:2198
+msgid "Feature size per document pixel (§8.3)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1976
+msgid "Open-grain relief height"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:1983
+msgid "Satin finish (0 = raw wood)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2010
+msgid "The polished ground"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2011
+msgid "Veins"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2013
+msgid "Vein spacing"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2016
+msgid "Primary vein pitch at Scale 1"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2017
+msgid "Turbulence"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2020
+msgid "How wildly the veins meander"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2021
+msgid "Contrast"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2024
+msgid "Vein strength against the ground"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2025
+msgid "Vein angle"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2028
+msgid "The primary fracture direction (the ring handle drags it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2029
+msgid "Vein scale"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2037
+msgid "Polished marble carries only a hair of relief"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2041
+msgid "Polish"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2044
+msgid "The tight specular sheen of a honed surface"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2068
+msgid "Cell size"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2071
+msgid "Aggregate grain at Scale 1: small = granite, large = cobbles"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2072
+msgid "Crack depth"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2075
+msgid "The joint network between cells"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2076
+msgid "Relief"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2079
+msgid "Per-cell surface bumpiness"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2080
+msgid "Variation"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2083
+msgid "Per-cell tone differences"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2084
+msgid "Stone scale"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2095
+msgid "Wet or sealed stone (0 = dry)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2103
+msgid "Low = grazing light digs out the joints"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2122
+msgid "Thread pitch"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2125
+msgid "Thread spacing at Scale 1"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2126
+msgid "Irregularity"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2129
+msgid "Thread wobble and thickness jitter"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2130
+msgid "Weave depth"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2133
+msgid "Over/under relief prominence"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2134
+msgid "Weave angle"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2137
+msgid "Warp direction (the ring handle drags it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2138
+msgid "Fuzz"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2141
+msgid "Stray-fibre micro relief"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2142
+msgid "Weave scale"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2153
+msgid "A primed/sized surface (0 = raw cloth)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2161
+msgid "Low = grazing light raises the weave"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2178
+msgid "The alloy: steel grey, brass yellow..."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2179
+msgid "Brush angle"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2182
+msgid "Streaks run along it (the ring handle drags it too)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2186
+msgid "Brushed streak depth"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2190
+msgid "The specular band across the brushing"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2191
+msgid "Reflection"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2194
+msgid "A vertical sky-to-ground tone ramp"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2195
+msgid "Brush scale"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2339
+msgid "New moon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2340
+msgid "Crescent"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2341
+msgid "Half moon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2342
+msgid "Gibbous"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2343
+msgid "Full moon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2344
+#: src/ui/texture_generator_dialog.cpp:2348
+#, c-format
+msgid "Phase: %s (%.0f%% lit)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2404
+#, c-format
+msgid "up  (%.0f° above)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2406
+#, c-format
+msgid "down  (%.0f° below)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2411
+#, c-format
+msgid "%s · %.0f%% lit · %s"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2413
+msgid "down"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2413
+msgid "up"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2421
+msgid "Nearest city"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2423
+msgid "Sky at this date & place"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2429
+#, c-format
+msgid "Night there: sun %.1f° below the horizon"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2432
+#, c-format
+msgid "Sun: azimuth %.1f°, elevation %.1f°"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2492
+#, c-format
+msgid "Zoom %d%%  (scroll / drag)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2624
+msgid "Rendering at full resolution…"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2758
+msgid "Analyzing the layer…"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2790
+#: src/ui/texture_generator_dialog.cpp:2890
+msgid "No sky or horizon found -- settings unchanged."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2791
+msgid "Estimate applied -- the summary sits above the controls."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2824
+msgid "Estimate reverted."
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2895
+msgid " (low confidence)"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2898
+#, c-format
+msgid "Horizon: pitch %.1f deg, roll %.1f deg%s"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2903
+#, c-format
+msgid "Time: %s UTC -- %s"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2908
+#, c-format
+msgid "Sun: elevation %.1f deg, azimuth %.0f deg%s"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2915
+#, c-format
+msgid "Atmosphere: turbidity %.1f, exposure %+.1f EV"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:2919
+#, c-format
+msgid ", clouds %.0f%%"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:3007
+msgid "Isolating the sky…"
+msgstr ""
+
+#: src/ui/texture_generator_dialog.cpp:3055
+msgid "Cancelling…"
+msgstr ""
+
+#: src/ui/tool.cpp:144
+msgid "Scale stroke"
+msgstr "線幅を連動"
+
+#: src/ui/tool.cpp:145
+msgid ""
+"Scale the stroke with the shape when dragging handles; off keeps the stroke "
+"width fixed and resizes the shape"
+msgstr ""
+"ハンドルをドラッグしたときに線幅もシェイプに合わせて拡大縮小します。オフにす"
+"ると線幅は固定のまま、シェイプだけがサイズ変更されます"
+
+#: src/ui/tool.cpp:152
+msgid "Edit shape…"
+msgstr "シェイプを編集…"
+
+#: src/ui/tool.cpp:153
+msgid "Open the shape designer for the selected shape's full parameters"
+msgstr ""
+"選択したシェイプのすべてのパラメーターを扱うシェイプデザイナーを開きます"
+
+#: src/ui/tool.cpp:159
+msgid "Style…"
+msgstr "スタイル…"
+
+#: src/ui/tool.cpp:160
+msgid "Open the Type panel: Character + Paragraph controls"
+msgstr "文字パネルを開きます: 文字と段落の設定"
+
+#: src/ui/tool.cpp:167
+msgid "Stops…"
+msgstr "分岐点…"
+
+#: src/ui/tool.cpp:168
+msgid "Edit the gradient's colour stops, blend curves, and spread"
+msgstr "グラデーションの分岐点、ブレンドカーブ、スプレッドを編集します"
+
+#: src/ui/tool.cpp:175
+msgid "3D extrusion (depth, bevel, lighting)"
+msgstr "3D 押し出し (深さ、ベベル、ライティング)"
+
+#: src/ui/tool.cpp:175
+msgid "3D…"
+msgstr "3D…"
+
+#: src/ui/tool.cpp:190
+msgid "Auto-Select"
+msgstr "自動選択"
+
+#: src/ui/tool.cpp:191
+msgid "Click selects the topmost layer under the cursor"
+msgstr "クリックでカーソルの下にある最前面のレイヤーを選択します"
+
+#: src/ui/tool.cpp:192
+msgid "Edges"
+msgstr "エッジ"
+
+#: src/ui/tool.cpp:192 src/ui/tool.cpp:455
+msgid "None"
+msgstr "なし"
+
+#: src/ui/tool.cpp:192
+msgid "Snap"
+msgstr "スナップ"
+
+#: src/ui/tool.cpp:193
+msgid "Snap moved layers to edges or the grid"
+msgstr "移動したレイヤーをエッジまたはグリッドにスナップします"
+
+#: src/ui/tool.cpp:194
+msgid "Anti-aliasing"
+msgstr "アンチエイリアス"
+
+#: src/ui/tool.cpp:198
+msgid "How rotated / scaled layers are resampled (Auto picks per transform)"
+msgstr ""
+"回転・拡大縮小したレイヤーの再サンプリング方法 (自動は変形ごとに選びます)"
+
+#: src/ui/tool.cpp:201
+msgid "Intersect"
+msgstr "交差"
+
+#: src/ui/tool.cpp:201
+msgid "Subtract"
+msgstr "削除"
+
+#: src/ui/tool.cpp:202
+msgid "How a new selection combines with the current one"
+msgstr "新しい選択範囲を現在の選択範囲とどう組み合わせるか"
+
+#: src/ui/tool.cpp:204 src/ui/tool.cpp:208
+msgid "Soften the selection edge by this radius"
+msgstr "この半径で選択範囲の境界をぼかします"
+
+#: src/ui/tool.cpp:209 src/ui/tool.cpp:219 src/ui/tool.cpp:435
+msgid "Anti-alias"
+msgstr "アンチエイリアス"
+
+#: src/ui/tool.cpp:209 src/ui/tool.cpp:219
+msgid "Smooth the selection edge"
+msgstr "選択範囲の境界を滑らかにします"
+
+#: src/ui/tool.cpp:215 src/ui/tool.cpp:431
+msgid "Tolerance"
+msgstr "許容値"
+
+#: src/ui/tool.cpp:216
+msgid "How close in color a pixel must be to the clicked one to be selected"
+msgstr "クリックしたピクセルとどれだけ色が近ければ選択するか"
+
+#: src/ui/tool.cpp:217 src/ui/tool.cpp:433
+msgid "Contiguous"
+msgstr "隣接"
+
+#: src/ui/tool.cpp:218
+msgid "Select only the connected region, not every matching pixel"
+msgstr "一致するすべてのピクセルではなく、つながった領域だけを選択します"
+
+#: src/ui/tool.cpp:220 src/ui/tool.cpp:254 src/ui/tool.cpp:463
+msgid "Active Layer"
+msgstr "アクティブなレイヤー"
+
+#: src/ui/tool.cpp:220 src/ui/tool.cpp:254 src/ui/tool.cpp:386
+#: src/ui/tool.cpp:463
+msgid "All Layers"
+msgstr "すべてのレイヤー"
+
+#: src/ui/tool.cpp:221
+msgid "Sample from the active layer or the merged composite"
+msgstr "アクティブなレイヤーと合成結果のどちらからサンプリングするか"
+
+#: src/ui/tool.cpp:228
+msgid "Select brush tip diameter"
+msgstr "選択ブラシ先端の直径"
+
+#: src/ui/tool.cpp:229 src/ui/tool.cpp:332 src/ui/tool.cpp:343
+#: src/ui/tool.cpp:354 src/ui/tool.cpp:369
+msgid "Hardness"
+msgstr "硬さ"
+
+#: src/ui/tool.cpp:230
+msgid "Edge softness of the selection tip"
+msgstr "選択ブラシ先端の境界のやわらかさ"
+
+#: src/ui/tool.cpp:232
+msgid "Selection coverage added per stroke pass"
+msgstr "ストローク 1 回のパスで追加される選択範囲の濃度"
+
+#: src/ui/tool.cpp:234
+msgid "Maximum coverage the stroke adds to the selection"
+msgstr "ストロークが選択範囲に追加する濃度の上限"
+
+#: src/ui/tool.cpp:243
+msgid "Reach"
+msgstr "到達範囲"
+
+#: src/ui/tool.cpp:244
+msgid "How far the selection grows out from the stroke before stopping"
+msgstr "選択範囲がストロークからどこまで広がって止まるか"
+
+#: src/ui/tool.cpp:249
+msgid "Seed stroke tip diameter"
+msgstr "シードストローク先端の直径"
+
+#: src/ui/tool.cpp:251
+msgid "Edge Stop"
+msgstr "エッジ停止"
+
+#: src/ui/tool.cpp:252
+msgid ""
+"How strongly image edges stop the growing selection (0 grows a plain disc)"
+msgstr ""
+"画像のエッジが選択範囲の広がりをどれだけ強く止めるか (0 では単純な円になりま"
+"す)"
+
+#: src/ui/tool.cpp:255
+msgid "Read edges from the active layer or the merged composite"
+msgstr "アクティブなレイヤーと合成結果のどちらからエッジを読み取るか"
+
+#: src/ui/tool.cpp:271
+msgid "Recompose"
+msgstr "再構成"
+
+#: src/ui/tool.cpp:272
+msgid ""
+"Rebuild the picture instead of cropping: the marked regions move closer "
+"together, the background is retargeted and the gaps are healed. Available "
+"when the marked regions cannot all fit a crop at this ratio"
+msgstr ""
+"切り抜く代わりに画像を組み直します。マークした領域が近づき、背景は再配置さ"
+"れ、隙間は修復されます。マークしたすべての領域がこの比率の切り抜きに収まらな"
+"い場合に使用できます"
+
+#: src/ui/tool.cpp:278
+msgid "Free"
+msgstr "自由"
+
+#: src/ui/tool.cpp:279
+msgid "Constrain the crop to an aspect ratio"
+msgstr "切り抜きを縦横比で固定します"
+
+#: src/ui/tool.cpp:281
+msgid "Custom aspect ratio width (W:H)"
+msgstr "カスタム縦横比の幅 (W:H)"
+
+#: src/ui/tool.cpp:283
+msgid "Custom aspect ratio height (W:H)"
+msgstr "カスタム縦横比の高さ (W:H)"
+
+#: src/ui/tool.cpp:284
+msgid "Swap orientation"
+msgstr "縦横を入れ替え"
+
+#: src/ui/tool.cpp:285
+msgid "Swap the crop's width and height (portrait / landscape)"
+msgstr "切り抜きの幅と高さを入れ替えます (縦 / 横)"
+
+#: src/ui/tool.cpp:289
+msgid "Smart Resize"
+msgstr "スマートリサイズ"
+
+#: src/ui/tool.cpp:290
+msgid ""
+"Place the crop automatically to keep the most important parts of the "
+"picture: with an aspect ratio it repositions the frame, with Free it trims "
+"away the boring edges. Click a detected region to protect or ignore it, Ctrl-"
+"drag to mark one yourself — then adjust the crop as you like"
+msgstr ""
+"画像の重要な部分が残るように切り抜きを自動配置します。縦横比を指定した場合は"
+"枠の位置を調整し、「自由」の場合は不要な端を切り落とします。検出された領域を"
+"クリックすると保護または無視でき、Ctrl キーを押しながらドラッグすると自分で領"
+"域を指定できます。その後は切り抜きを自由に調整できます"
+
+#: src/ui/tool.cpp:295
+msgid "Guides"
+msgstr "ガイド"
+
+#: src/ui/tool.cpp:296
+msgid "Show rule-of-thirds guides over the crop"
+msgstr "切り抜きに三分割のガイドを表示します"
+
+#: src/ui/tool.cpp:297
+msgid "Delete Pixels"
+msgstr "ピクセルを削除"
+
+#: src/ui/tool.cpp:298
+msgid ""
+"On: discard the pixels outside the crop. Off: keep them (resize the canvas "
+"only)"
+msgstr ""
+"オン: 切り抜きの外側のピクセルを破棄します。オフ: 残します (キャンバスサイズ"
+"のみ変更)"
+
+#: src/ui/tool.cpp:308
+msgid "Active color"
+msgstr "アクティブな色"
+
+#: src/ui/tool.cpp:309
+msgid "Background color"
+msgstr "背景色"
+
+#: src/ui/tool.cpp:311
+msgid ""
+"What fills the new area when the crop box reaches outside the canvas (drag a "
+"handle past the edge to expand). Transparent adds nothing; Inpaint continues "
+"the picture into the new area"
+msgstr ""
+"切り抜き枠がキャンバスの外に出たとき、新しい領域を何で埋めるか (ハンドルを端"
+"の外までドラッグすると拡張できます)。「透明」は何も追加しません。「修復」は画"
+"像を新しい領域へ延長します"
+
+#: src/ui/tool.cpp:316
+msgid "Apply the crop (Enter)"
+msgstr "切り抜きを適用 (Enter)"
+
+#: src/ui/tool.cpp:320
+msgid "Reset the crop to the full canvas (Esc)"
+msgstr "切り抜きをキャンバス全体に戻す (Esc)"
+
+#: src/ui/tool.cpp:331
+msgid "Brush tip diameter"
+msgstr "ブラシ先端の直径"
+
+#: src/ui/tool.cpp:333
+msgid "Edge softness of the brush tip"
+msgstr "ブラシ先端の境界のやわらかさ"
+
+#: src/ui/tool.cpp:335
+msgid "Paint build-up rate per stroke pass"
+msgstr "ストローク 1 回のパスで塗りが重なる度合い"
+
+#: src/ui/tool.cpp:337
+msgid "Maximum stroke opacity"
+msgstr "ストロークの最大不透明度"
+
+#: src/ui/tool.cpp:338 src/ui/tool.cpp:347 src/ui/tool.cpp:356
+#: src/ui/tool.cpp:391
+msgid "Smoothing"
+msgstr "手ブレ補正"
+
+#: src/ui/tool.cpp:339 src/ui/tool.cpp:348 src/ui/tool.cpp:357
+#: src/ui/tool.cpp:392
+msgid ""
+"Steadies the stroke by averaging recent pointer positions. A mouse reports "
+"whole pixels, so it rattles without this. Off paints your input raw."
+msgstr ""
+"直近のポインター位置を平均してストロークを安定させます。マウスはピクセル単位"
+"でしか位置を報告しないため、補正なしでは線が震えます。オフにすると入力をその"
+"まま描画します。"
+
+#: src/ui/tool.cpp:342
+msgid "Eraser tip diameter"
+msgstr "消しゴム先端の直径"
+
+#: src/ui/tool.cpp:344
+msgid "Edge softness of the eraser tip"
+msgstr "消しゴム先端の境界のやわらかさ"
+
+#: src/ui/tool.cpp:346
+msgid "How much each pass erases"
+msgstr "1 回のパスで消える量"
+
+#: src/ui/tool.cpp:353
+msgid "Inpaint tip diameter"
+msgstr "修復ブラシ先端の直径"
+
+#: src/ui/tool.cpp:355
+msgid "Edge softness of the inpaint tip"
+msgstr "修復ブラシ先端の境界のやわらかさ"
+
+#: src/ui/tool.cpp:368
+msgid "Clone stamp tip diameter"
+msgstr ""
+
+#: src/ui/tool.cpp:370
+msgid "Edge softness of the clone tip"
+msgstr ""
+
+#: src/ui/tool.cpp:372
+msgid "How much of the source each pass lays down"
+msgstr ""
+
+#: src/ui/tool.cpp:374
+msgid "Maximum strength of the stamped source"
+msgstr ""
+
+#: src/ui/tool.cpp:375
+msgid "Aligned"
+msgstr ""
+
+#: src/ui/tool.cpp:376
+msgid ""
+"Keep the distance between the source and where you paint, so every stroke "
+"carries on from the last. Off restarts each stroke at the same source point"
+msgstr ""
+
+#: src/ui/tool.cpp:385 src/ui/tool.cpp:461
+msgid "Sample"
+msgstr "サンプル"
+
+#: src/ui/tool.cpp:386
+msgid "Current Layer"
+msgstr ""
+
+#: src/ui/tool.cpp:386
+msgid "Current and Below"
+msgstr ""
+
+#: src/ui/tool.cpp:387
+msgid ""
+"Which pixels get copied: the active layer alone, everything from the active "
+"layer down, or the whole picture as you see it"
+msgstr ""
+
+#: src/ui/tool.cpp:390
+msgid "Distance between stamped dabs, as a percentage of the tip"
+msgstr ""
+
+#: src/ui/tool.cpp:402
+msgid "Diameter of the region a click corrects"
+msgstr ""
+
+#: src/ui/tool.cpp:404
+msgid "How strongly the red glow is removed"
+msgstr ""
+
+#: src/ui/tool.cpp:405
+msgid "Darken"
+msgstr ""
+
+#: src/ui/tool.cpp:406
+msgid "How far the corrected pupil goes toward a dark pupil"
+msgstr ""
+
+#: src/ui/tool.cpp:407
+msgid "Keep catchlight"
+msgstr ""
+
+#: src/ui/tool.cpp:408
+msgid ""
+"Leave the bright reflection in the eye alone, so the eye keeps its spark"
+msgstr ""
+
+#: src/ui/tool.cpp:417
+msgid "Eye retouch tip diameter"
+msgstr ""
+
+#: src/ui/tool.cpp:419
+msgid "How far the redness is pulled toward the surrounding white"
+msgstr ""
+
+#: src/ui/tool.cpp:420
+msgid "Keep veins"
+msgstr ""
+
+#: src/ui/tool.cpp:421
+msgid ""
+"The share of the eye's own colour and vein detail that always survives. The "
+"default under-corrects on purpose — a fully whitened eye looks fake"
+msgstr ""
+
+#: src/ui/tool.cpp:424
+msgid "Harmonize"
+msgstr ""
+
+#: src/ui/tool.cpp:424
+msgid "Harmonize + veins"
+msgstr ""
+
+#: src/ui/tool.cpp:424
+msgid "Method"
+msgstr ""
+
+#: src/ui/tool.cpp:425
+msgid "Harmonize evens out the redness; + veins also softens the vessels"
+msgstr ""
+
+#: src/ui/tool.cpp:426
+msgid "Corner warmth"
+msgstr ""
+
+#: src/ui/tool.cpp:427
+msgid "Leave the warm tint in the corners of the eye alone"
+msgstr ""
+
+#: src/ui/tool.cpp:429
+msgid "Softness of the painted region's edge"
+msgstr ""
+
+#: src/ui/tool.cpp:432
+msgid "How close in color a pixel must be to get filled"
+msgstr "塗りつぶす対象とする色の近さ"
+
+#: src/ui/tool.cpp:434
+msgid "Fill only the connected region, not all matching pixels"
+msgstr "一致するすべてのピクセルではなく、つながった領域だけを塗りつぶします"
+
+#: src/ui/tool.cpp:436
+msgid "Soften the filled region's edge with a one-pixel feather"
+msgstr "塗りつぶした領域の境界を 1 ピクセルのぼかしでなじませます"
+
+#: src/ui/tool.cpp:438
+msgid "Fill opacity"
+msgstr "塗りつぶしの不透明度"
+
+#: src/ui/tool.cpp:451
+msgid "Conic"
+msgstr "円錐形"
+
+#: src/ui/tool.cpp:451
+msgid "Elliptical"
+msgstr "楕円形"
+
+#: src/ui/tool.cpp:451
+msgid "Linear"
+msgstr "線形"
+
+#: src/ui/tool.cpp:451
+msgid "Radial"
+msgstr "円形"
+
+#: src/ui/tool.cpp:452
+msgid "Gradient shape"
+msgstr "グラデーションの形状"
+
+#: src/ui/tool.cpp:454
+msgid "Dithering"
+msgstr ""
+
+#: src/ui/tool.cpp:455
+msgid "Blue noise"
+msgstr ""
+
+#: src/ui/tool.cpp:455
+msgid "Noise"
+msgstr ""
+
+#: src/ui/tool.cpp:455
+msgid "Ordered"
+msgstr ""
+
+#: src/ui/tool.cpp:456
+msgid ""
+"Break up 8-bit banding in a smooth ramp: Ordered is a fine repeating matrix, "
+"Blue noise a pattern-free high-frequency tile, Noise plain film grain"
+msgstr ""
+
+#: src/ui/tool.cpp:459
+msgid "Gradient layer opacity"
+msgstr "グラデーションレイヤーの不透明度"
+
+#: src/ui/tool.cpp:462
+msgid "Average the picked color over this neighborhood"
+msgstr "取得した色をこの範囲で平均します"
+
+#: src/ui/tool.cpp:464
+msgid "Sample from the active layer or the composite"
+msgstr "アクティブなレイヤーと合成結果のどちらからサンプリングするか"
+
+#: src/ui/tool.cpp:472
+msgid "Corner radius"
+msgstr "角の半径"
+
+#: src/ui/tool.cpp:477
+msgid "Number of polygon sides"
+msgstr "多角形の辺の数"
+
+#: src/ui/tool.cpp:477
+msgid "Sides"
+msgstr "辺の数"
+
+#: src/ui/tool.cpp:480
+msgid "Number of star points"
+msgstr "星の頂点の数"
+
+#: src/ui/tool.cpp:481
+msgid "Inner"
+msgstr "内側"
+
+#: src/ui/tool.cpp:482
+msgid "Inner radius as a percentage of the outer"
+msgstr "外側の半径に対する内側の半径の割合"
+
+#: src/ui/tool.cpp:491
+msgid "Line thickness"
+msgstr "線の太さ"
+
+#: src/ui/tool.cpp:491 src/ui/tool.cpp:506
+msgid "Weight"
+msgstr "太さ"
+
+#: src/ui/tool.cpp:492 src/ui/tool.cpp:507
+msgid "Butt"
+msgstr "バット"
+
+#: src/ui/tool.cpp:492 src/ui/tool.cpp:507
+msgid "Cap"
+msgstr "線端"
+
+#: src/ui/tool.cpp:492 src/ui/tool.cpp:507
+msgid "Square"
+msgstr "四角"
+
+#: src/ui/tool.cpp:493
+msgid "How the line ends are drawn"
+msgstr "線の端の描き方"
+
+#: src/ui/tool.cpp:504
+msgid "Fill the finished path with the foreground color"
+msgstr ""
+
+#: src/ui/tool.cpp:505
+msgid "Draw the path's outline"
+msgstr ""
+
+#: src/ui/tool.cpp:506
+msgid "Stroke width"
+msgstr ""
+
+#: src/ui/tool.cpp:508
+msgid "How open ends are drawn"
+msgstr ""
+
+#: src/ui/tool.cpp:509
+msgid "Join"
+msgstr ""
+
+#: src/ui/tool.cpp:509
+msgid "Miter"
+msgstr ""
+
+#: src/ui/tool.cpp:510
+msgid "How corners are drawn"
+msgstr ""
+
+#: src/ui/tool.cpp:511
+msgid "Dash"
+msgstr ""
+
+#: src/ui/tool.cpp:512
+msgid "Stroke dash pattern"
+msgstr ""
+
+#: src/ui/tool.cpp:520
+msgid "Font"
+msgstr "フォント"
+
+#: src/ui/tool.cpp:520
+msgid "Font family"
+msgstr "フォントファミリー"
+
+#: src/ui/tool.cpp:520
+msgid "Sans"
+msgstr "サンセリフ"
+
+#: src/ui/tool.cpp:523
+msgid "pt"
+msgstr "pt"
+
+#: src/ui/tool.cpp:524
+msgid "Font size"
+msgstr "フォントサイズ"
+
+#: src/ui/tool.cpp:527
+msgid "Bold weight"
+msgstr "太字"
+
+#: src/ui/tool.cpp:528
+msgid "Italic / oblique"
+msgstr "イタリック / 斜体"
+
+#: src/ui/tool.cpp:529
+msgid "Underline"
+msgstr "下線"
+
+#: src/ui/tool.cpp:530
+msgid "Strikethrough"
+msgstr "取り消し線"
+
+#: src/ui/tool.cpp:538
+msgid "In"
+msgstr "拡大"
+
+#: src/ui/tool.cpp:538
+msgid "Out"
+msgstr "縮小"
+
+#: src/ui/tool.cpp:539
+msgid "Click to zoom in or out"
+msgstr "クリックでズームイン / ズームアウト"
+
+#: src/ui/vulkan_canvas.cpp:5338
+msgid "Path"
+msgstr ""
+
+#: src/ui/vulkan_canvas.cpp:7076
+msgid "Add to Dictionary"
+msgstr "辞書に追加"
+
+#: src/ui/vulkan_canvas.cpp:7080
+msgid "Ignore All"
+msgstr "すべて無視"
+
+#~ msgid "&Image/&Rotate 90° CW"
+#~ msgstr "画像(&I)/90° 右回転(&R)"
+
+#~ msgid "&Image/&Flip Horizontal"
+#~ msgstr "画像(&I)/左右反転(&F)"
+
+#~ msgid "&Type/&Add Text"
+#~ msgstr "文字(&T)/テキストを追加(&A)"
+
+#~ msgid "Merge Down: the layer below cannot receive pixels"
+#~ msgstr "下のレイヤーと結合: 下のレイヤーはピクセルを受け取れません"
+
+#~ msgid "PNG  (lossless)"
+#~ msgstr "PNG  (可逆)"
+
+#~ msgid "JPEG  (lossy photo)"
+#~ msgstr "JPEG  (非可逆・写真向け)"
+
+#~ msgid "JPEG XL  (modern, both)"
+#~ msgstr "JPEG XL  (新世代・両対応)"
+
+#~ msgid "Scale"
+#~ msgstr "倍率"
+
+#~ msgid "W"
+#~ msgstr "W"
+
+#~ msgid "H"
+#~ msgstr "H"
+
+#~ msgid "Compression"
+#~ msgstr "圧縮"
+
+#~ msgid "Interlaced (Adam7)"
+#~ msgstr "インターレース (Adam7)"
+
+#~ msgid "Subsampling"
+#~ msgstr "サブサンプリング"
+
+#~ msgid "4:2:0  (smallest)"
+#~ msgstr "4:2:0  (最小)"
+
+#~ msgid "4:2:2"
+#~ msgstr "4:2:2"
+
+#~ msgid "4:4:4  (full chroma)"
+#~ msgstr "4:4:4  (フルクロマ)"
+
+#~ msgid "Progressive"
+#~ msgstr "プログレッシブ"
+
+#~ msgid "Colour that fills transparency (JPEG has no alpha)"
+#~ msgstr "透明部分を埋める色 (JPEG にはアルファがありません)"
+
+#~ msgid "Lossless (bit-exact)"
+#~ msgstr "可逆 (ビット単位で一致)"
+
+#~ msgid "Effort"
+#~ msgstr "エフォート"
+
+#~ msgid "Output:"
+#~ msgstr "出力:"
+
+#~ msgid "Estimated size: computing..."
+#~ msgstr "推定サイズ: 計算中..."
+
+#~ msgid "Estimated size: (skipped for a large image)"
+#~ msgstr "推定サイズ: (大きな画像のためスキップしました)"
+
+#~ msgid "Estimated size: "
+#~ msgstr "推定サイズ: "
+
+#~ msgid "Fill + Outline"
+#~ msgstr "塗り + 線"
+
+#~ msgid "Outline"
+#~ msgstr "線"
+
+#~ msgid "Paint the fill, the outline, or both"
+#~ msgstr "塗り、線、またはその両方を描画します"
+
+#~ msgid "Outline width"
+#~ msgstr "線の幅"
+
+#~ msgid "Hollow"
+#~ msgstr "中抜き"
+
+#~ msgid "Outlined"
+#~ msgstr "縁取り"
+
+#~ msgid "A solid line, just its outline, or a line with a contrasting border"
+#~ msgstr "実線、輪郭だけ、または対比する縁取りのある線"
+
+#~ msgid "Hollow / Outlined border thickness"
+#~ msgstr "中抜き / 縁取りの太さ"

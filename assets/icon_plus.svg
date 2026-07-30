@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Panel-chrome icon: a single WHITE ink on transparent. ui::drawIcon replaces the RGB with a
+       palette colour and keeps the coverage in the alpha, so one raster serves every theme and
+       the enabled/disabled/hover states. Never add colour here.
+
+       AUTHORED AT 16x16 AND DRAWN AT 16px -- scale 1.0. Rasterizing a 24-unit viewBox down to 16
+       put every stroke on a fractional boundary and the whole set read as blurry mush (user,
+       2026-07-09). Keep straight edges on the pixel grid: a stroke of width 2 is centred on an
+       INTEGER coordinate, a stroke of width 1 on a HALF-integer. -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="2">
+    <path d="M8 3 V13"/>
+    <path d="M3 8 H13"/>
+  </g>
+</svg>

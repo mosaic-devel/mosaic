@@ -1,0 +1,102 @@
+#version 450
+
+// The Channels-tab histogram's binning pass (S60-e; docs/s60-readback-consumers.md A5, "can be
+// computed GPU-side instead"): one 5 x 256 bin set over a straight-alpha RGBA8 image, built as a
+// per-workgroup SUB-HISTOGRAM in shared memory and reduced into the global bins with atomicAdd.
+// GPU mirror of src/ui/channels_panel.cpp's computeHistogram, which stays the permanent
+// reference -- tests/test_histogram_gpu.cpp holds this shader to it BYTE-IDENTICALLY, because
+// bins are integer counts and a tolerance there would hide a real defect rather than absorb
+// rounding (the blur lane's tolerance exists because both its lanes run float; this one does not).
+//
+// ⚠ ALPHA WEIGHTING IS LOAD-BEARING AND CAME FROM A USER-REPORTED BUG (2026-07-23). A histogram
+// describes what you can SEE. The composite carries uncovered canvas as transparent BLACK, so
+// binning a transparent pixel's stored RGB invents a black pixel that is not on screen -- and an
+// uncovered canvas is the common case, so it planted a 1793x phantom spike at bin 0 in R, G and B.
+// Hence, exactly as on the CPU:
+//   * the COLOUR bins (r, g, b, luma) are weighted by coverage -- a pixel is worth `a`, a 10%
+//     visible one 10% of a count, a fully transparent one NOTHING (its RGB is never even read);
+//   * the ALPHA bins count EVERY pixel, transparent ones included -- how much canvas is empty is
+//     precisely what that channel's distribution describes.
+// Neither half may be "simplified"; they are different rules on purpose.
+//
+// The plot's 99th-percentile normaliser (channels_panel.hpp histogramNormalizer) is a DISPLAY
+// concern and is deliberately NOT here: this kernel produces counts and nothing else.
+//
+// DETERMINISM despite atomics: every accumulator is an INTEGER, integer addition is associative
+// and commutative, and src/render/histogram_gpu.cpp's chunk bound (255 * 2^24 < 2^32) forbids
+// wraparound -- so the bins are identical at any workgroup count, dispatch split or scheduling
+// order. That is what lets the parity test compare bytes rather than a tolerance.
+//
+// Vulkan 1.0 core throughout: 2 storage buffers (guaranteed floor 4), 8 bytes of push constants
+// (floor 128), 5120 bytes of shared memory (floor 16384), 64 invocations per workgroup (floor 128,
+// house convention 64), no subgroup ops and no `#extension` directive. The subgroup-reduced
+// variant the plan mentions (§2.2) is a TIER shader for later; this is the floor one.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+// This CHUNK's pixels, one RGBA8 texel per word. The descriptor is bound at the chunk's offset, so
+// pix[0] is the chunk's first pixel and the whole array fits Vulkan 1.0's 128 MiB
+// maxStorageBufferRange whatever the document size. Byte order is the host's: common::Image stores
+// r,g,b,a and every target Mosaic builds for is little-endian, so r is the low byte.
+layout(std430, binding = 0) readonly buffer Src { uint pix[]; };
+// The global bins: kMaxChunks * 5 * 256 uints, this chunk's set starting at pc.binBase. uint and
+// not uint64 on purpose -- 64-bit atomics are not Vulkan 1.0 core. The host sums the chunks in
+// uint64, which is where the width the full document needs comes from.
+layout(std430, binding = 1) buffer Bins { uint bins[]; };
+
+layout(push_constant) uniform Push {
+    int pixels;  // pixels in THIS chunk (<= kChunkPixels)
+    int binBase; // this chunk's first uint in bins[]
+} pc;
+
+const uint kBands = 5u;    // r, g, b, a, luma -- the ChannelHistogram field order
+const uint kBins = 256u;
+const uint kWords = kBands * kBins;
+
+// The per-workgroup sub-histogram. 5 KB of the 16 KB a Vulkan 1.0 device must offer, and the whole
+// reason this kernel is not a global-atomic contention disaster: a flat region hammers ONE bin, and
+// hammering it in shared memory costs a fraction of hammering it in device memory.
+shared uint sub[kWords];
+
+void main() {
+    const uint lane = gl_LocalInvocationID.x;
+    for (uint i = lane; i < kWords; i += gl_WorkGroupSize.x) sub[i] = 0u;
+    // glslang lowers barrier() in a compute shader to OpControlBarrier with WorkgroupMemory
+    // semantics, so it is the shared-memory memory barrier as well as the execution one. Both
+    // barriers here sit in uniform control flow (outside every loop), which is what the spec
+    // requires of them.
+    barrier();
+
+    // GRID-STRIDE, deliberately: correctness never depends on the host's workgroup count agreeing
+    // with a per-group tile size, so the dispatch may be shaped for occupancy alone. Consecutive
+    // invocations read consecutive pixels, which is also the coalesced order.
+    const uint n = uint(pc.pixels);
+    const uint stride = gl_NumWorkGroups.x * gl_WorkGroupSize.x;
+    for (uint p = gl_GlobalInvocationID.x; p < n; p += stride) {
+        const uint word = pix[p];
+        const uint r = word & 0xffu;
+        const uint g = (word >> 8) & 0xffu;
+        const uint b = (word >> 16) & 0xffu;
+        const uint a = word >> 24;
+        atomicAdd(sub[3u * kBins + a], 1u); // the alpha channel counts EVERY pixel
+        if (a == 0u) continue;              // invisible: no colour to see, so none is binned
+        // Rec.601 luminance, the CPU reference's integer form: the weights (77,150,29) sum to 256,
+        // so the shift lands in [0,255] and the clamp below can never fire. Kept anyway, because
+        // computeHistogram keeps it and this is a transcription.
+        uint l = (r * 77u + g * 150u + b * 29u) >> 8;
+        l = min(l, 255u);
+        atomicAdd(sub[r], a);
+        atomicAdd(sub[kBins + g], a);
+        atomicAdd(sub[2u * kBins + b], a);
+        atomicAdd(sub[4u * kBins + l], a);
+    }
+    barrier();
+
+    // Fold the sub-histogram into the chunk's bins. Skipping empty bins is most of the saving: a
+    // typical image touches maybe half of one channel's range, so ~half these atomics never issue.
+    const uint base = uint(pc.binBase);
+    for (uint i = lane; i < kWords; i += gl_WorkGroupSize.x) {
+        const uint v = sub[i];
+        if (v != 0u) atomicAdd(bins[base + i], v);
+    }
+}

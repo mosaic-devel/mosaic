@@ -1,0 +1,12 @@
+# LeakSanitizer suppressions for known-benign, out-of-our-hands leak classes. Keep this list
+# SHORT and each entry justified -- a suppression that could hide a real Mosaic leak is worse
+# than a red suite.
+
+# putenv() hands ownership of the string to the process environment for the program's lifetime;
+# FLTK's Fl_Posix_System_Driver::putenv strdups internally (test_theme.cpp exercises the FLTK
+# scheme override). LSan flags the strings at exit by design. Not fixable from the caller side.
+leak:Fl_Posix_System_Driver::putenv
+
+# fontconfig keeps global caches that are only released by FcFini(), which FLTK (by upstream
+# decision) never calls. One-time, bounded, process-lifetime allocations.
+leak:libfontconfig

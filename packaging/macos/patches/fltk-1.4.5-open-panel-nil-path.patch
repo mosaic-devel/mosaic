@@ -1,0 +1,52 @@
+Fix a SIGSEGV in the macOS Open panel when an item has no filesystem path.
+
+FLopenDelegate is the NSOpenSavePanelDelegate FLTK installs whenever the open panel carries a
+filter popup. AppKit runs that panel out of process and asks the app to enable items in batches
+(-[NSSavePanel(ExportedInterface) requestAppEnabledStateForItems:replyBlock:]), and not every
+item it asks about is a plain file URL -- cloud, shared and smart-list rows answer nil to
+-[NSURL path]. shouldEnableURL: forwarded that nil to shouldShowFilename:, which sent
+fileSystemRepresentation to nil (NULL) and handed the NULL straight to fl_filename_match(), which
+dereferences its first argument:
+
+    0  fl_filename_match(char const*, char const*) + 424      <- ldrsb w0, [x19]; x19 = 0
+    1  fl_filename_match(char const*, char const*) + 672      <- the 'case *' recursion
+    2  -[FLopenDelegate panel:shouldShowFilename:] + 224
+    3  -[NSSavePanel(ExportedInterface) requestAppEnabledStateForItems:replyBlock:] + 876
+
+The same line also indexes filter_pattern[] with indexOfSelectedItem unchecked. The popup holds
+_filt_total patterns, then a separator, then "All Files", so only 0..numberOfItems-3 are valid
+indices; the separator row and the -1 "nothing selected" answer both read out of bounds. Only the
+"All Files" row was excluded.
+
+Guard all three: an unusable index, a nil filename, and a NULL pattern or path each mean "no
+pattern to test against", so the item is shown -- which is what the popup's own "All Files" row
+already does.
+
+Written against FLTK 1.4.5, not yet sent upstream; drop this patch once it lands there.
+
+--- a/src/Fl_Native_File_Chooser_MAC.mm
++++ b/src/Fl_Native_File_Chooser_MAC.mm
+@@ -497,11 +497,21 @@
+ }
+ - (BOOL)panel:(id)sender shouldShowFilename:(NSString *)filename
+ {
+-  if ( [nspopup indexOfSelectedItem] == [nspopup numberOfItems] - 1) return YES;
++  // The popup holds _filt_total patterns, then a separator, then "All Files": only
++  // 0..numberOfItems-3 index filter_pattern, and indexOfSelectedItem is -1 when nothing is
++  // selected. Anything else means "no pattern to test against", i.e. show the item.
++  NSInteger selected = [nspopup indexOfSelectedItem];
++  if (selected < 0 || selected > [nspopup numberOfItems] - 3) return YES;
++  // The panel runs out of process and asks about items that are not plain file URLs (cloud and
++  // shared rows, smart lists), whose -[NSURL path] is nil -- and so is the filename here.
++  if (filename == nil) return YES;
+   BOOL isdir = NO;
+   [[NSFileManager defaultManager] fileExistsAtPath:filename isDirectory:&isdir];
+   if (isdir) return YES;
+-  if ( fl_filename_match([filename fileSystemRepresentation], filter_pattern[([nspopup indexOfSelectedItem])]) ) return YES;
++  const char *fsname = [filename fileSystemRepresentation];
++  const char *pattern = filter_pattern[selected];
++  if (fsname == NULL || pattern == NULL) return YES;
++  if ( fl_filename_match(fsname, pattern) ) return YES;
+   return NO;
+ }
+ - (BOOL)panel:(id)sender shouldEnableURL:(NSURL *)url

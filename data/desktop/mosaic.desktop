@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Mosaic
+GenericName=Image Editor
+Comment=A professional, GPU-accelerated image editor
+TryExec=mosaic
+Exec=mosaic %f
+Icon=mosaic
+Terminal=false
+Categories=Graphics;2DGraphics;RasterGraphics;
+MimeType=image/x-mosaic;image/png;image/jpeg;
+StartupNotify=true
+StartupWMClass=mosaic

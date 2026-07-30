@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Mosaic modification: viewBox tightened from the cursor theme's 256-square (where the arrow
+     floated in hotspot margins, rendering tiny and soft at 20px) to a square fit of the art. -->
+<svg
+   width="192"
+   height="192"
+   viewBox="36.25 29.05 192 192"
+   fill="none"
+   version="1.1"
+   id="svg4"
+   sodipodi:docname="move.svg"
+   inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview4"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="3.1171875"
+     inkscape:cx="128"
+     inkscape:cy="128"
+     inkscape:window-width="1920"
+     inkscape:window-height="1006"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg4" />
+  <g
+     filter="url(#filter0_d_40_365)"
+     id="g2">
+    <path
+       fill-rule="evenodd"
+       clip-rule="evenodd"
+       d="M84.1001 48.5601V173.06L110.8 146.56L136.3 207.56L158.3 197.06L133.8 139.06H172.8L84.1001 48.5601Z"
+       fill="#00FF00"
+       id="path1"
+       style="fill:#000000;fill-opacity:1" />
+    <path
+       d="M88.0281 44.7102L78.6001 35.0909V48.5601V173.06V186.268L87.9746 176.964L108.876 156.218L131.225 209.681L133.454 215.013L138.669 212.524L160.669 202.024L165.411 199.76L163.366 194.92L142.094 144.56H172.8H185.892L176.728 135.21L88.0281 44.7102Z"
+       stroke="#0000FF"
+       stroke-width="11"
+       id="path2"
+       style="stroke:#ffffff;stroke-opacity:1;fill-opacity:1" />
+  </g>
+  <defs
+     id="defs4">
+    <filter
+       id="filter0_d_40_365"
+       x="55.1001"
+       y="13.6218"
+       width="155.883"
+       height="230.843"
+       filterUnits="userSpaceOnUse"
+       color-interpolation-filters="sRGB">
+      <feFlood
+         flood-opacity="0"
+         result="BackgroundImageFix"
+         id="feFlood2" />
+      <feColorMatrix
+         in="SourceAlpha"
+         type="matrix"
+         values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
+         result="hardAlpha"
+         id="feColorMatrix2" />
+      <feOffset
+         dx="-3"
+         dy="7"
+         id="feOffset2" />
+      <feGaussianBlur
+         stdDeviation="7.5"
+         id="feGaussianBlur2" />
+      <feColorMatrix
+         type="matrix"
+         values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.3 0"
+         id="feColorMatrix3" />
+      <feBlend
+         mode="normal"
+         in2="BackgroundImageFix"
+         result="effect1_dropShadow_40_365"
+         id="feBlend3" />
+      <feBlend
+         mode="normal"
+         in="SourceGraphic"
+         in2="effect1_dropShadow_40_365"
+         result="shape"
+         id="feBlend4" />
+    </filter>
+  </defs>
+</svg>

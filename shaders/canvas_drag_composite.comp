@@ -1,0 +1,102 @@
+#version 450
+
+// GPU-resident Move/Transform drag composite (S60-a). During a live Move/Resize/Rotate gesture on a
+// TOP-LEVEL layer, the document below the dragged layer is static; only the dragged layer's affine
+// transform changes per frame. Re-running the CPU compositor + re-uploading the whole canvas every
+// frame is what made dragging a big (5k x 8k) layer lag. Instead this compute pass composites the
+// static `below` texture + the dragged layer's source pixels (sampled through its live transform)
+// straight into the canvas texture each frame -- no CPU work, no per-frame upload.
+//
+// It is a SEPARATE pass from canvas_present.comp (whose push block is already at the 128-byte
+// budget, and which draws the ants/reticle/dial/HUD/crop box -- not worth risking). The present
+// pass then samples the result (the canvas texture) through the view transform exactly as always.
+//
+// Only SEPARABLE blend modes (0..18) are handled here; the dragged layer using a non-separable HSL
+// mode (Hue/Saturation/Color/Luminosity, 19..22) takes the CPU DragCompositeCache fallback (see
+// render::canUseGpuDrag). The blend math mirrors blend.hpp / composite_blend.comp.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(binding = 0, rgba8) uniform writeonly image2D uOut; // the canvas texture (document space)
+layout(binding = 1) uniform sampler2D uBelow;              // static composite below the dragged layer
+layout(binding = 2) uniform sampler2D uDragged;            // the dragged layer's source pixels
+
+layout(push_constant) uniform Push {
+    // Inverse of the dragged layer's world transform, document px -> layer-local px:
+    //   local = (r0.x*x + r0.y*y + t.x,  r1.x*x + r1.y*y + t.y)
+    vec2 invR0;
+    vec2 invR1;
+    vec2 invT;
+    vec2 docSize;     // output (document) size, px
+    vec2 draggedSize; // dragged source size, px
+    int mode;         // core::BlendMode (0..18, separable)
+    float opacity;    // dragged layer opacity, 0..1
+}
+pc;
+
+// Separable per-channel blend (enum 0..18) -- mirrors blend.hpp.
+float blendChannel(int m, float b, float s) {
+    if (m == 0) return s;                                   // Normal
+    if (m == 1) return min(b, s);                           // Darken
+    if (m == 2) return b * s;                               // Multiply
+    if (m == 3) return s <= 0.0 ? 0.0 : 1.0 - min(1.0, (1.0 - b) / s);  // ColorBurn
+    if (m == 4) return max(0.0, b + s - 1.0);              // LinearBurn
+    if (m == 5) return max(b, s);                           // Lighten
+    if (m == 6) return b + s - b * s;                      // Screen
+    if (m == 7) return s >= 1.0 ? 1.0 : min(1.0, b / (1.0 - s));        // ColorDodge
+    if (m == 8) return min(1.0, b + s);                    // LinearDodge
+    if (m == 9) return b <= 0.5 ? 2.0 * b * s : 1.0 - 2.0 * (1.0 - b) * (1.0 - s);  // Overlay
+    if (m == 10) {                                          // SoftLight
+        if (s <= 0.5) return b - (1.0 - 2.0 * s) * b * (1.0 - b);
+        float d = b <= 0.25 ? ((16.0 * b - 12.0) * b + 4.0) * b : sqrt(b);
+        return b + (2.0 * s - 1.0) * (d - b);
+    }
+    if (m == 11) return s <= 0.5 ? 2.0 * b * s : 1.0 - 2.0 * (1.0 - b) * (1.0 - s);  // HardLight
+    if (m == 12) {                                          // VividLight
+        if (s <= 0.5) { float d = 2.0 * s; return d <= 0.0 ? 0.0 : max(0.0, 1.0 - (1.0 - b) / d); }
+        float d = 2.0 * (1.0 - s);
+        return d <= 0.0 ? 1.0 : min(1.0, b / d);
+    }
+    if (m == 13) return clamp(b + 2.0 * s - 1.0, 0.0, 1.0);             // LinearLight
+    if (m == 14) return s <= 0.5 ? min(b, 2.0 * s) : max(b, 2.0 * s - 1.0);  // PinLight
+    if (m == 15) return abs(b - s);                        // Difference
+    if (m == 16) return b + s - 2.0 * b * s;               // Exclusion
+    if (m == 17) return max(0.0, b - s);                   // Subtract
+    if (m == 18) return s <= 0.0 ? 1.0 : min(1.0, b / s);  // Divide
+    return s;
+}
+
+// Source-over-with-blend (W3C), straight alpha -- separable path only.
+vec4 compositeOver(int m, vec4 cb, vec4 cs, float opacity) {
+    float asrc = cs.a * opacity;
+    if (asrc <= 0.0) return cb;
+    float ab = cb.a;
+    float ao = asrc + ab * (1.0 - asrc);
+    if (ao <= 0.0) return vec4(0.0);
+    vec3 bl = vec3(blendChannel(m, cb.r, cs.r), blendChannel(m, cb.g, cs.g),
+                   blendChannel(m, cb.b, cs.b));
+    vec3 mixed = (1.0 - ab) * cs.rgb + ab * bl;
+    vec3 co = (asrc * mixed + ab * (1.0 - asrc) * cb.rgb) / ao;
+    return vec4(co, ao);
+}
+
+void main() {
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    if (pos.x >= int(pc.docSize.x) || pos.y >= int(pc.docSize.y)) return;
+
+    // Normalized sample so `below` may be a tiny 1x1 transparent texture when there is nothing below
+    // the dragged layer (a single-layer doc) -- avoids compositing + uploading a full empty backdrop
+    // at gesture start. A doc-sized backdrop is sampled at texel centres = exact 1:1.
+    vec4 below = texture(uBelow, (vec2(pos) + 0.5) / pc.docSize);
+
+    // Map this document pixel into the dragged layer's local space; sample (bilinear) where it lands
+    // inside the source, else it contributes nothing.
+    vec2 d = vec2(pos) + 0.5;
+    vec2 ll = vec2(pc.invR0.x * d.x + pc.invR0.y * d.y + pc.invT.x,
+                   pc.invR1.x * d.x + pc.invR1.y * d.y + pc.invT.y);
+    vec4 src = vec4(0.0);
+    if (ll.x >= 0.0 && ll.y >= 0.0 && ll.x < pc.draggedSize.x && ll.y < pc.draggedSize.y)
+        src = texture(uDragged, ll / pc.draggedSize);
+
+    imageStore(uOut, pos, compositeOver(pc.mode, below, src, pc.opacity));
+}

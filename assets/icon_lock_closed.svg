@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Single WHITE ink, 16x16 native. Layer is locked: a shut shackle, both legs seated on the body.
+       Body and legs sit on half-integers so their straight edges land on whole pixels; only the
+       shackle's arc anti-aliases, as a curve must. -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="1">
+    <path d="M5.5 7.5 V5 A2.5 2.5 0 0 1 10.5 5 V7.5"/>
+    <path d="M3.5 7.5 H12.5 V13.5 H3.5 Z"/>
+  </g>
+  <circle cx="8" cy="10.5" r="1.4" fill="#FFFFFF"/>
+</svg>

@@ -1,0 +1,78 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": { "MOSAIC_BUILD_TESTS": "ON" }
+    },
+    {
+      "name": "linux-debug",
+      "inherits": "base",
+      "displayName": "Linux Debug",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "linux-release",
+      "inherits": "base",
+      "displayName": "Linux Release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "linux-asan",
+      "inherits": "linux-debug",
+      "displayName": "Linux Debug + ASan/UBSan",
+      "cacheVariables": { "MOSAIC_SANITIZE": "address,undefined" }
+    },
+    {
+      "name": "windows-x86_64",
+      "inherits": "base",
+      "displayName": "Windows (MinGW-w64 cross) x86_64",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/mingw-w64.cmake",
+        "MOSAIC_WIN_ARCH": "x86_64",
+        "MOSAIC_BUILD_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "windows-arm64",
+      "inherits": "windows-x86_64",
+      "displayName": "Windows (llvm-mingw cross) arm64",
+      "cacheVariables": { "MOSAIC_WIN_ARCH": "aarch64" }
+    },
+    {
+      "name": "macos-arm64",
+      "inherits": "base",
+      "displayName": "macOS (osxcross cross) arm64",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/osxcross.cmake",
+        "MOSAIC_OSX_ARCH": "arm64",
+        "MOSAIC_BUILD_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "macos-x86_64",
+      "inherits": "macos-arm64",
+      "displayName": "macOS (osxcross cross) x86_64",
+      "cacheVariables": { "MOSAIC_OSX_ARCH": "x86_64" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "linux-debug",           "configurePreset": "linux-debug" },
+    { "name": "linux-release",         "configurePreset": "linux-release" },
+    { "name": "linux-asan",            "configurePreset": "linux-asan" },
+    { "name": "windows-x86_64",        "configurePreset": "windows-x86_64" },
+    { "name": "windows-arm64",         "configurePreset": "windows-arm64" },
+    { "name": "macos-arm64",           "configurePreset": "macos-arm64" },
+    { "name": "macos-x86_64",          "configurePreset": "macos-x86_64" }
+  ],
+  "testPresets": [
+    { "name": "linux-debug", "configurePreset": "linux-debug", "output": { "outputOnFailure": true } },
+    { "name": "linux-asan",  "configurePreset": "linux-asan",  "output": { "outputOnFailure": true } }
+  ]
+}

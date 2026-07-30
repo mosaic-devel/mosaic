@@ -1,0 +1,73 @@
+// Win32 resource script for mosaic.exe (PLAN.md S57). Configured by src/app/CMakeLists.txt into
+// the build tree and compiled with windres / llvm-windres; @VAR@ placeholders are CMake's.
+//
+// Three things live in an .exe's resource section that a Windows user can actually see, and all
+// three are absent from a bare cross-compiled binary:
+//
+//   * the ICON -- without it Explorer, the taskbar and Alt-Tab draw the generic "unknown program"
+//     tile, which is the single loudest signal that a program was not really packaged;
+//   * VERSIONINFO -- Properties -> Details, and what an IT department's inventory scanner reads;
+//   * the MANIFEST -- DPI awareness, ComCtl32 v6, the UTF-8 code page and asInvoker (see
+//     mosaic.manifest, which explains each one).
+//
+// NO #include here, on purpose. VS_VERSION_INFO, VOS__WINDOWS32, VFT_APP and RT_MANIFEST are all
+// just small integers, and spelling them numerically means this file needs no C preprocessor pass
+// over <winver.h> -- so it compiles identically under GNU windres (x86_64) and llvm-windres
+// (aarch64), whose header search paths and preprocessor plumbing differ. Every literal below names
+// its symbolic constant in a comment.
+//
+// Paths are substituted absolute and FORWARD-slashed. That is correct rather than sloppy: in an .rc
+// string a backslash is an escape character, so a Windows-style path would have to be doubled --
+// and a cross-build from Linux produces forward slashes anyway.
+
+// ---- application icon -------------------------------------------------------
+// Resource id 1. The shell shows the icon with the LOWEST id as the executable's own, so this stays
+// 1 and nothing else in the file competes for it. Built from assets/app_icon.svg by make-ico.py at
+// seven sizes -- see that script for why one size is not enough.
+//
+// Substituted as a whole LINE rather than just a path: an ICON statement naming a file that is not
+// there is a fatal windres error, so when the icon could not be generated CMake replaces this with a
+// comment and the rest of the resources -- the manifest most of all -- still compile.
+@MOSAIC_RC_ICON_LINE@
+
+// ---- application manifest ---------------------------------------------------
+// Type 24 = RT_MANIFEST, id 1 = CREATEPROCESS_MANIFEST_RESOURCE_ID (the id the loader looks for in
+// an EXE; a DLL's would be 2). Read before main() runs.
+1 24 "@MOSAIC_RC_MANIFEST@"
+
+// ---- version information ----------------------------------------------------
+// 1 = VS_VERSION_INFO. The BINARY FILEVERSION/PRODUCTVERSION fields are four 16-bit integers and
+// can hold only the frozen 0.2.17 -- there is nowhere in them to put a git hash. The human-readable
+// STRING values carry "0.2.17+g<hash>", which is the identifier that actually distinguishes two
+// builds (see the comment on project(VERSION) in the top-level CMakeLists.txt).
+1 VERSIONINFO
+FILEVERSION    @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+FILEFLAGSMASK  0x3FL          // VS_FFI_FILEFLAGSMASK -- which FILEFLAGS bits are meaningful
+FILEFLAGS      0x2L           // VS_FF_PRERELEASE: 0.2.17 is "perma-alpha", so say so in the shell
+FILEOS         0x4L           // VOS__WINDOWS32
+FILETYPE       0x1L           // VFT_APP
+FILESUBTYPE    0x0L           // VFT2_UNKNOWN (unused for VFT_APP)
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        // 0409 = en-US, 04B0 = 1200 decimal = Unicode. The block name is the language and code page
+        // in hex, and it MUST agree with the VarFileInfo "Translation" pair below -- a mismatch is
+        // how a version resource ends up invisible in the Properties dialog.
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "The Mosaic project"
+            VALUE "FileDescription",  "@PROJECT_DESCRIPTION@"
+            VALUE "FileVersion",      "@MOSAIC_RC_VERSION@"
+            VALUE "InternalName",     "mosaic"
+            VALUE "LegalCopyright",   "GNU General Public License v3 or later"
+            VALUE "OriginalFilename", "mosaic.exe"
+            VALUE "ProductName",      "Mosaic"
+            VALUE "ProductVersion",   "@MOSAIC_RC_VERSION@"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

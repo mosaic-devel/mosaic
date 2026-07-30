@@ -1,0 +1,266 @@
+#version 450
+
+// GPU mirror of the CPU paper renderer's PER-PIXEL path (S55-h; docs/texture-generator.md §8.4).
+// Transcribed from src/core/texture/paper_render.cpp (+ the noise.cpp subset it rides: quintic
+// Perlin fBm and sparse-convolution Gabor). The CPU lane stays the reference; parity is
+// tolerance-based (tests/test_texture_gpu.cpp) -- double CPU vs float GPU. Where the CPU builds
+// a (win+2)^2 float height buffer and Sobels it, this kernel evaluates the same nine height taps
+// per pixel directly: identical samples, no second pass.
+//
+// The shader emits (shade, alpha) into an rgba32f target; the host quantises with the CPU's own
+// q() formula (render/texture_gpu.cpp), so the byte mapping is shared, not re-derived.
+//
+// DETERMINISM: a pure function of (params, frame pixel) -- no atomics, no shared memory -- so a
+// device produces identical bytes for identical inputs at any dispatch/band split.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer Params {
+    ivec4 pFrame;   // frameW, frameH, winX, winY
+    ivec4 pWin;     // winW, winH, kind (0 Wove / 1 Laid / 2 Felt), flags (bit0 deckle, bit1 print)
+    vec4 pGrain;    // feature, stretch, cos(grainAngle), sin(grainAngle)
+    vec4 pFiber;    // fiberFeature, fiberFreq, fiberOmega, fiberAmt
+    vec4 pLaid;     // laidPitch, chainPitch, laidDepth, feltFeature
+    vec4 pLight;    // lx, ly, lz, relief
+    vec4 pOren;     // onA, onB, sheen, printGrain
+    vec4 pHalf;     // Hx, Hy, Hz, printAmount
+    vec4 pDeckle;   // band, deckleFeature, deckleAmount, pad
+    uvec4 pSeedA;   // toothSeed (xy), fiberSeed (zw)
+    uvec4 pSeedB;   // laidSeed (xy), feltSeed (zw)
+    uvec4 pSeedC;   // deckleSeed (xy), printSeed (zw)
+};
+
+layout(binding = 1, rgba32f) uniform writeonly image2D uOut;
+
+layout(push_constant) uniform Push {
+    uint rowOff;  // the dispatch band's first window row (cancel/progress granularity)
+} pc;
+
+const float PI = 3.14159265358979323846;
+
+float clamp01(float v) { return clamp(v, 0.0, 1.0); }
+
+// paper_render.cpp's smoothstep: the clamp01 formula, which the chain-line term feeds REVERSED
+// edges (e0 > e1) -- GLSL's builtin is undefined there, this form is not.
+float smoothstepC(float e0, float e1, float v) {
+    float t = clamp01((v - e0) / (e1 - e0));
+    return t * t * (3.0 - 2.0 * t);
+}
+
+// ---- 64-bit hashing (noise.hpp), exact transcription -- see texture_sky.comp ---------------
+
+uvec2 u64shr(uvec2 a, uint k) {
+    if (k < 32u) return uvec2((a.x >> k) | (a.y << (32u - k)), a.y >> k);
+    if (k == 32u) return uvec2(a.y, 0u);
+    return uvec2(a.y >> (k - 32u), 0u);
+}
+
+uvec2 u64mul(uvec2 a, uvec2 b) {
+    uint hi, lo;
+    umulExtended(a.x, b.x, hi, lo);
+    return uvec2(lo, hi + a.x * b.y + a.y * b.x);
+}
+
+uvec2 u64fromI32(int v) { return uvec2(uint(v), v < 0 ? 0xFFFFFFFFu : 0u); }
+
+const uvec2 kMix1 = uvec2(0xed558ccdu, 0xff51afd7u);
+const uvec2 kMix2 = uvec2(0x1a85ec53u, 0xc4ceb9feu);
+const uvec2 kGold = uvec2(0x7f4a7c15u, 0x9e3779b9u);
+
+uvec2 avalanche(uvec2 z) {
+    z ^= u64shr(z, 33u);
+    z = u64mul(z, kMix1);
+    z ^= u64shr(z, 33u);
+    z = u64mul(z, kMix2);
+    z ^= u64shr(z, 33u);
+    return z;
+}
+
+uvec2 hashCoords(uvec2 seed, int x, int y) {
+    uvec2 h = seed ^ kGold;
+    h = avalanche(h ^ u64fromI32(x));
+    h = avalanche(h ^ u64fromI32(y));
+    h = avalanche(h);  // the inert z arm: avalanche(h ^ 0)
+    return h;
+}
+
+float hashToUnit(uvec2 h) { return float(u64shr(h, 40u).x) * (1.0 / 16777216.0); }
+
+uvec2 subSeedO(uvec2 seed, uint o) { return avalanche(seed ^ u64mul(uvec2(o, 0u), kGold)); }
+
+// ---- Perlin fBm (noise.cpp) -----------------------------------------------------------------
+
+float fadeQ(float t) { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
+
+float grad2(uvec2 seed, int cx, int cy, float dx, float dy) {
+    float a = hashToUnit(hashCoords(seed, cx, cy)) * (2.0 * PI);
+    return cos(a) * dx + sin(a) * dy;
+}
+
+float perlin2(uvec2 seed, vec2 p) {
+    vec2 fl = floor(p);
+    int ix = int(fl.x), iy = int(fl.y);
+    float fx = p.x - fl.x, fy = p.y - fl.y;
+    float u = fadeQ(fx), v = fadeQ(fy);
+    float n00 = grad2(seed, ix, iy, fx, fy);
+    float n10 = grad2(seed, ix + 1, iy, fx - 1.0, fy);
+    float n01 = grad2(seed, ix, iy + 1, fx, fy - 1.0);
+    float n11 = grad2(seed, ix + 1, iy + 1, fx - 1.0, fy - 1.0);
+    return mix(mix(n00, n10, u), mix(n01, n11, u), v) * 1.4142135623730951;
+}
+
+float fbm2(uvec2 seed, vec2 p, int octaves, float lacunarity, float gain) {
+    float sum = 0.0, norm = 0.0, amp = 1.0, freq = 1.0;
+    for (int o = 0; o < octaves; ++o) {
+        sum += amp * perlin2(subSeedO(seed, uint(o)), p * freq);
+        norm += amp;
+        amp *= gain;
+        freq *= lacunarity;
+    }
+    return norm > 0.0 ? sum / norm : 0.0;
+}
+
+// ---- Sparse-convolution Gabor noise (noise.cpp gabor2; Lagae et al. 2009) -------------------
+// The h chain advances EXACTLY as the CPU's: a skipped impulse (outside kernel support) leaves
+// the weight/angle draws unconsumed -- part of the determinism contract.
+
+float gabor2(uvec2 seed, vec2 p, float frequency, float omegaRad, float anisotropy) {
+    int ix = int(floor(p.x)), iy = int(floor(p.y));
+    const float kBandwidth = 1.3;
+    float aGauss = PI * kBandwidth * kBandwidth;
+    float twoPiF = 2.0 * PI * frequency;
+    float sum = 0.0;
+    for (int dy = -1; dy <= 1; ++dy)
+        for (int dx = -1; dx <= 1; ++dx) {
+            int cx = ix + dx, cy = iy + dy;
+            uvec2 h = hashCoords(seed, cx, cy);
+            for (int k = 0; k < 3; ++k) {
+                h = avalanche(h);
+                float px = float(cx) + hashToUnit(h);
+                h = avalanche(h);
+                float py = float(cy) + hashToUnit(h);
+                float ex = p.x - px, ey = p.y - py;
+                float d2 = ex * ex + ey * ey;
+                if (d2 > 2.25) continue;
+                h = avalanche(h);
+                float w = hashToUnit(h) * 2.0 - 1.0;
+                h = avalanche(h);
+                float randOmega = hashToUnit(h) * (2.0 * PI);
+                float omega = randOmega + (omegaRad - randOmega) * anisotropy;
+                float proj = ex * cos(omega) + ey * sin(omega);
+                sum += w * exp(-aGauss * d2) * cos(twoPiF * proj);
+            }
+        }
+    return sum * 1.40;  // kNormGabor
+}
+
+// ---- The §5.1/§5.2 layered height (paper_render.cpp heightAt) -------------------------------
+
+float heightAt(vec2 pp) {
+    float u = pp.x * pGrain.z + pp.y * pGrain.w;
+    float v = -pp.x * pGrain.w + pp.y * pGrain.z;
+
+    float h = fbm2(pSeedA.xy, vec2(u / (pGrain.x * pGrain.y), v / pGrain.x), 5, 2.0, 0.55);
+
+    if (pFiber.w > 0.0) {
+        float f = gabor2(pSeedA.zw, pp / pFiber.x, pFiber.y, pFiber.z, 1.0);
+        h += pFiber.w * f;
+    }
+
+    if (pWin.z == 1 && pLaid.z > 0.0) {  // Laid: corrugation + chain ridges, jitter-wobbled
+        float jit = fbm2(pSeedB.xy, vec2(u / (6.0 * pGrain.x), v / (6.0 * pGrain.x)), 2, 2.0, 0.5);
+        float laidCorr = sin(2.0 * PI * (v + 0.8 * pLaid.x * jit) / pLaid.x);
+        float cf = fract((u + 0.8 * pLaid.y * jit) / pLaid.y);
+        float cd = cf < 0.5 ? cf : 1.0 - cf;
+        float chainLine = smoothstepC(0.05, 0.0, cd);
+        h += pLaid.z * (0.45 * laidCorr + 0.35 * (2.0 * chainLine - 1.0));
+    }
+
+    if (pWin.z == 2) {  // Felt: coarse cloudy low-frequency relief
+        float felt = fbm2(pSeedB.zw, pp / pLaid.w, 3, 2.2, 0.6);
+        h += 0.6 * felt;
+    }
+    return h;
+}
+
+// The print-tooth cell of a frame pixel: floor(fx / grain), CORRECTED against exact-multiply
+// comparisons. Drivers may lower float division to a reciprocal multiply (Vulkan allows 2.5
+// ULP), which puts integer-exact quotients like 42/1.5 just below their true value -- and the
+// default Scale puts a cell boundary on every third pixel, so the CPU lane's cells (double
+// division) would disagree SYSTEMATICALLY without this. The correction restores the defining
+// property gx*grain <= fx < (gx+1)*grain under correctly-rounded multiplication.
+int printCell(float fx, float grain) {
+    int g = int(floor(fx / grain));
+    if (float(g + 1) * grain <= fx) ++g;
+    else if (float(g) * grain > fx) --g;
+    return g;
+}
+
+// ------------------------------------------------------------------------------------------
+
+void main() {
+    uint lx = gl_GlobalInvocationID.x;
+    uint ly = gl_GlobalInvocationID.y + pc.rowOff;
+    if (lx >= uint(pWin.x) || ly >= uint(pWin.y)) return;
+    float fx = float(pFrame.z) + float(lx);
+    float fy = float(pFrame.w) + float(ly);
+
+    // The nine Sobel taps: the same frame-pixel-centre samples the CPU's height buffer holds.
+    float tl = heightAt(vec2(fx - 0.5, fy - 0.5));
+    float tc = heightAt(vec2(fx + 0.5, fy - 0.5));
+    float tr = heightAt(vec2(fx + 1.5, fy - 0.5));
+    float ml = heightAt(vec2(fx - 0.5, fy + 0.5));
+    float mc = heightAt(vec2(fx + 0.5, fy + 0.5));
+    float mr = heightAt(vec2(fx + 1.5, fy + 0.5));
+    float bl = heightAt(vec2(fx - 0.5, fy + 1.5));
+    float bc = heightAt(vec2(fx + 0.5, fy + 1.5));
+    float br = heightAt(vec2(fx + 1.5, fy + 1.5));
+    float dhx = ((tr + 2.0 * mr + br) - (tl + 2.0 * ml + bl)) / 8.0;
+    float dhy = ((bl + 2.0 * bc + br) - (tl + 2.0 * tc + tr)) / 8.0;
+
+    float relief = pLight.w;
+    vec3 n = normalize(vec3(-relief * dhx, -relief * dhy, 1.0));
+
+    // Oren-Nayar rough-diffuse (paper_render.cpp pass 2).
+    vec3 L = pLight.xyz;
+    float ndl = max(0.0, dot(n, L));
+    float ndv = max(1e-4, n.z);
+    float thetaI = acos(clamp01(ndl));
+    float thetaR = acos(clamp01(ndv));
+    float alpha = max(thetaI, thetaR);
+    float beta = min(thetaI, thetaR);
+    vec3 lp = L - n * ndl;
+    vec3 vp = vec3(0.0, 0.0, 1.0) - n * ndv;
+    float ll = length(lp);
+    float vl = length(vp);
+    float cosPhi = 0.0;
+    if (ll > 1e-5 && vl > 1e-5) cosPhi = dot(lp, vp) / (ll * vl);
+    float diffuse = ndl * (pOren.x + pOren.y * max(0.0, cosPhi) * sin(alpha) * tan(beta));
+
+    float shade = 0.66 + 0.5 * diffuse;
+    if (pOren.z > 0.0) {
+        float ndh = max(0.0, dot(n, pHalf.xyz));
+        shade += pOren.z * 0.6 * pow(ndh, 48.0);
+    }
+
+    // Print tooth: Scale-relative speckle clustering in the tooth valleys.
+    if ((pWin.w & 2) != 0 && pHalf.w > 0.0) {
+        int gx = printCell(fx, pOren.w);
+        int gy = printCell(fy, pOren.w);
+        float valley = clamp01(0.5 - 0.6 * mc);
+        float thresh = clamp01(pHalf.w) * (0.12 + 0.88 * valley);
+        float r = hashToUnit(hashCoords(pSeedC.zw, gx, gy));
+        if (r < thresh) shade *= (1.0 - 0.45 * clamp01(pHalf.w));
+    }
+
+    // Deckle edge: fBm-perturbed distance to the FULL frame border -> alpha fringe.
+    float alphaOut = 1.0;
+    if ((pWin.w & 1) != 0) {
+        float edgeDist = min(min(fx, fy), min(float(pFrame.x - 1) - fx, float(pFrame.y - 1) - fy));
+        float nz = fbm2(pSeedC.xy, vec2(fx / pDeckle.y, fy / pDeckle.y), 4, 2.0, 0.5);
+        float perturbed = edgeDist + clamp01(pDeckle.z) * pDeckle.x * nz;
+        alphaOut = smoothstepC(0.0, pDeckle.x * 0.5, perturbed);
+    }
+
+    imageStore(uOut, ivec2(int(lx), int(ly)), vec4(shade, alphaOut, 0.0, 0.0));
+}

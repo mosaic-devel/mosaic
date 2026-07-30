@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "name": "Smalti",
+  "artist": "GIMP team & GNOME Project, with Mosaic additions",
+  "link": "https://www.gimp.org/",
+  "description": "Mosaic's default tool set, named for the coloured glass a mosaic is set from. Built on the GIMP color tool icons by the GIMP team (with roots in GNOME's art-libre set — icons by Jakub Steiner, Andreas Nilsson, Klaus Staedtler and others), CC-BY-SA 4.0. Mosaic additions and modifications: Hand and Move adapted from Kaiz Khatri's apple_cursor set (GPL-3.0); Inpaint and Red Eye reworked in-project; Blur, Dodge and Burn carry distinguishing badges; the Polygonal and Magnetic Lassos are derived from GIMP's free-select icon; the Edge Select Brush adds a lightning badge to the selection-brush art; the eleven shape-tool icons are Mosaic originals (CC0). Full per-icon provenance in docs/credits.md.",
+  "license": "CC-BY-SA-4.0 (GIMP icons) / GPL-3.0 (hand, move) / CC0-1.0 (shape tools)"
+}
