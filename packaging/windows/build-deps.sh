@@ -422,11 +422,36 @@ cmake_build "$SRC/fltk-1.4.5" fltk \
 # user-visible: AV1 encoding is expensive even vectorized, and the generic build makes AVIF export
 # slow enough to look broken. So the fallback is announced loudly rather than taken silently, with
 # the one-command fix, and re-running after installing an assembler picks it up (delete the stamp).
+#
+# ⚠⚠ And "has an assembler" is not the same as "has an assembler libaom ACCEPTS". aom 3.9.1's
+# test_nasm greps the output of `nasm -hf` for "-Ox"; nasm 3.x reworded that help text, so aom
+# rejects a perfectly capable assembler with "Unsupported nasm: multipass optimization not
+# supported." and stops the whole dependency stack. Arch moved to nasm 3.02, which is how this
+# surfaced -- it is a host-side version skew, nothing to do with the target. yasm's probe is
+# unaffected, so prefer yasm whenever nasm is 3 or newer, and tell aom exactly which binary to use
+# rather than letting its own search pick nasm again.
+aom_assembler() {
+  local n v
+  n="$(command -v nasm 2>/dev/null || true)"
+  if [ -n "$n" ]; then
+    v="$("$n" -v 2>/dev/null | grep -oE '[0-9]+' | head -1)"
+    if [ -n "$v" ] && [ "$v" -lt 3 ]; then echo "$n"; return; fi
+  fi
+  command -v yasm 2>/dev/null || true
+}
+
 AOM_ARGS=()
-if [ "$MOSAIC_WIN_ARCH" != aarch64 ] && ! have_asm; then
-  echo "  ⚠ no nasm/yasm on this host: building libaom WITHOUT SIMD (AVIF export will be slow)."
-  echo "    Install one (Arch: pacman -S nasm), then: rm $STAMPS/aom && re-run this script."
-  AOM_ARGS+=(-DAOM_TARGET_CPU=generic)
+if [ "$MOSAIC_WIN_ARCH" != aarch64 ]; then
+  AOM_AS="$(aom_assembler)"
+  if [ -n "$AOM_AS" ]; then
+    echo "  [aom] assembler: $AOM_AS"
+    AOM_ARGS+=(-DAS_EXECUTABLE="$AOM_AS")
+  else
+    echo "  ⚠ no assembler libaom accepts on this host: building it WITHOUT SIMD (AVIF export"
+    echo "    will be slow). Install yasm (Arch: pacman -S yasm) -- or nasm 2.x, but NOT nasm 3.x,"
+    echo "    which aom 3.9.1 rejects. Then: rm $STAMPS/aom && re-run this script."
+    AOM_ARGS+=(-DAOM_TARGET_CPU=generic)
+  fi
 fi
 t=$(fetch "https://storage.googleapis.com/aom-releases/libaom-3.9.1.tar.gz" aom.tar.gz); unpack "$t"
 cmake_build "$SRC/libaom-3.9.1" aom \

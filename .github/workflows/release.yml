@@ -250,8 +250,8 @@ jobs:
         run: |
           pacman -Syu --noconfirm --needed \
             cmake ninja git pkgconf curl patch \
-            mingw-w64-gcc msitools \
-            gperf nasm gettext zip util-linux \
+            mingw-w64-gcc msitools shaderc \
+            gperf nasm yasm gettext zip util-linux \
             python python-pillow librsvg \
             autoconf automake libtool
 
