@@ -1,0 +1,136 @@
+# Mosaic CI (PLAN.md S56-b).
+#
+# Three gates on every push and pull request:
+#   build      an Arch Linux container -- deliberately the same rolling toolchain the project is
+#              developed on, so the mandatory -Werror wall is exercised against the NEWEST GCC
+#              rather than a conservative LTS one. This is the job that catches "new compiler,
+#              new diagnostic" before it reaches a release branch.
+#   format     clang-format, on the files a commit actually touches (see the note below).
+#   tidy       clang-tidy, likewise scoped to touched files, advisory for now. Runs as a STEP of
+#              the build job rather than a job of its own: it needs compile_commands.json AND the
+#              generated sources (SPIR-V headers, embedded assets, wayland-scanner stubs), which is
+#              a whole build -- so it reuses the one the build job just did instead of paying for
+#              a second.
+#
+# ⚠ Why format/tidy are scoped to CHANGED FILES rather than the whole tree: the tree predates any
+# formatting gate and is not clang-format-clean (~48k lines of drift, and inconsistently so -- some
+# files indent case labels, more do not). A tree-wide gate could only be made green by a 48k-line
+# reformat commit, which would bury real history. Scoping to the diff holds NEW code to the bar
+# without churning old code; the tree converges as files are touched. Flip to tree-wide only after
+# a deliberate, standalone reformat commit.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags-ignore: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build + test (Arch, GCC)
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm --needed \
+            cmake ninja git pkgconf clang \
+            vulkan-headers vulkan-icd-loader vulkan-swrast shaderc \
+            fltk spdlog \
+            lcms2 freetype2 harfbuzz enchant hyphen \
+            libpng libjpeg-turbo libtiff libwebp libavif libjxl giflib \
+            zlib zstd lz4 fontconfig expat \
+            systemd-libs libxi libxrandr libcanberra \
+            wayland wayland-protocols \
+            gettext python xorg-server-xvfb
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure
+        run: cmake --preset linux-debug
+
+      - name: Build
+        run: cmake --build --preset linux-debug -j $(nproc)
+
+      # The suite is one doctest binary. GPU-backed cases fall back to the CPU path when no device
+      # is present; vulkan-swrast (lavapipe) is installed above so the Vulkan path is exercised too.
+      # xvfb-run covers any case that needs an X connection to construct an FLTK widget.
+      - name: Test
+        env:
+          MOSAIC_LOG_LEVEL: warn
+        run: xvfb-run -a ctest --preset linux-debug
+
+      - name: Upload failed golden-image diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-diffs
+          path: |
+            build/linux-debug/**/*.actual.png
+            build/linux-debug/**/*.diff.png
+            build/linux-debug/Testing/**
+          if-no-files-found: ignore
+
+      # Advisory until the existing warning backlog is burned down: .clang-tidy sets
+      # WarningsAsErrors:'' and the checks have never been enforced, so a blocking gate on day one
+      # would fail on pre-existing code rather than on the change under review.
+      - name: clang-tidy (changed files, advisory)
+        if: always()
+        continue-on-error: true
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base="HEAD~1"
+            git rev-parse -q --verify "$base" >/dev/null || { echo "no baseline; skipping"; exit 0; }
+          fi
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR "$base" HEAD \
+            | grep -E '\.cpp$' | grep -v '^third_party/' || true)
+          if [ ${#files[@]} -eq 0 ]; then echo "no C++ sources touched"; exit 0; fi
+          clang-tidy -p build/linux-debug "${files[@]}"
+
+  format:
+    name: clang-format (changed files)
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - run: pacman -Syu --noconfirm --needed clang git
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          # A new branch / first push reports an all-zero "before"; fall back to the last commit.
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base="HEAD~1"
+            git rev-parse -q --verify "$base" >/dev/null || { echo "no baseline; skipping"; exit 0; }
+          fi
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR "$base" HEAD \
+            | grep -E '\.(cpp|hpp|h|mm)$' | grep -v '^third_party/' || true)
+          if [ ${#files[@]} -eq 0 ]; then echo "no C++ files touched"; exit 0; fi
+          printf 'checking %d file(s)\n' "${#files[@]}"
+          clang-format --dry-run -Werror "${files[@]}"

@@ -17,3 +17,26 @@ FixNamespaceComments: true
 IncludeBlocks: Regroup
 SortIncludes: CaseSensitive
 ...
+---
+# Objective-C++ (.mm) -- the macOS platform/UI shims. Same C++ rules; a Language: ObjC
+# section must exist or clang-format refuses the file outright ("does not support Objective-C").
+Language: ObjC
+BasedOnStyle: LLVM
+Standard: c++20
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+AccessModifierOffset: -4
+PointerAlignment: Left
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+NamespaceIndentation: None
+FixNamespaceComments: true
+IncludeBlocks: Regroup
+SortIncludes: CaseSensitive
+ObjCSpaceAfterProperty: false
+ObjCSpaceBeforeProtocolList: true
+...
