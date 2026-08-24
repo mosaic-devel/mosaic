@@ -136,7 +136,10 @@ cp "$APPDIR/mosaic.svg" "$APPDIR/.DirIcon"
 # ---- 6. pack ----------------------------------------------------------------
 TOOL="${MOSAIC_APPIMAGETOOL:-}"
 if [ -z "$TOOL" ]; then
-  TOOL="$OUT/appimagetool-$ARCH.AppImage"
+  # NOT in $OUT itself: that directory is what CI uploads as the release artifact, and a glob of
+  # *.AppImage there would ship appimagetool alongside Mosaic as though it were part of the release.
+  mkdir -p "$OUT/.tools"
+  TOOL="$OUT/.tools/appimagetool-$ARCH.AppImage"
   if [ ! -x "$TOOL" ]; then
     echo "   fetching appimagetool for $ARCH"
     curl -fL --retry 3 -o "$TOOL" \

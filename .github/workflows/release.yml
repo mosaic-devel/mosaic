@@ -227,7 +227,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: linux-${{ matrix.arch }}
-          path: build/linux-appimage/*.AppImage
+          path: build/linux-appimage/Mosaic-*.AppImage
 
   # ---------------------------------------------------------------------------
   windows:
