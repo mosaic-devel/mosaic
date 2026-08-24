@@ -38,7 +38,7 @@ Prebuilt binaries for every platform are on the
 | --- | --- | --- |
 | Linux x86-64 / ARM64 | AppImage | glibc 2.39 floor — Ubuntu 24.04+, Debian 13+, Fedora 40+, rolling |
 | Windows x64 / ARM64 | MSI (per-user) or portable zip | ARM64 has never been run on hardware |
-| macOS 13.3+ | Universal DMG | Apple Silicon and Intel in one bundle |
+| macOS 11+ | Universal DMG | Apple Silicon and Intel in one bundle |
 
 A **Vulkan 1.2** driver is required on Linux and Windows. macOS runs on MoltenVK, which ships
 inside the bundle. Nothing is signed by a certificate authority, so each OS will object once —

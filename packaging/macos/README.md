@@ -91,13 +91,15 @@ drag-to-Applications layout. Set `MOSAIC_SKIP_BUILD=1` to reuse existing `build/
 
 ## Notes / limits (v1)
 
-- **Minimum macOS 13.3** (Ventura). ⚠ The reason usually given for this floor — that libc++ gates
-  floating-point `std::to_chars`/`from_chars` behind it — **no longer applies**:
-  `src/common/charconv_compat.hpp` supplies the whole fallback (`strtod` / `snprintf`, both
-  locale-corrected) gated on `_LIBCPP_VERSION`, so Mosaic never calls libc++'s floating-point
-  charconv at all. The floor is a candidate to be lowered; only a build can confirm it, since
-  libc++ availability errors are compile-time. Note `QLPreviewProvider` needs macOS 12, so the
-  space-bar preview extension cannot go below that even if the app can.
+- **Minimum macOS 11.0** (Big Sur), lowered from 13.3 in S59. The floor had been 13.3 because
+  libc++ gates floating-point `std::to_chars`/`from_chars` there — but that reason had already
+  stopped applying: `src/common/charconv_compat.hpp` supplies the whole fallback (`strtod` /
+  `snprintf`, both locale-corrected) behind `_LIBCPP_VERSION`, so Mosaic never calls libc++'s
+  floating-point charconv at all. 11.0 is the first Apple-Silicon release, so it is the lowest
+  floor worth having. The Quick Look **preview** extension still needs 12.0
+  (`QLPreviewProvider`) and its plist says so; `quicklook_macos.mm` already carries the matching
+  `API_AVAILABLE(macos(12.0))`, so one binary still serves both extensions and on macOS 11 that
+  one extension simply does not load.
 - Runtime is verified on a real Mac by the user; the cross-build is compile-/link-verified here.
 - Hyphenation, dark-mode detection, spell-check and the menu bar are **native** on macOS
   (CoreFoundation / NSAppearance / NSSpellChecker / the system menu bar) rather than degraded — see

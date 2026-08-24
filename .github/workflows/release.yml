@@ -385,9 +385,15 @@ jobs:
           key: macos-sdk-ARM64-v1
           fail-on-cache-miss: true
 
-      - name: Cache osxcross toolchain
+      # ⚠ restore + save SPLIT, not actions/cache, and this is the difference between a 10-minute
+      # job and a 40-minute one. actions/cache's save runs `post-if: success()`, so while any LATER
+      # step in this job was failing, the osxcross build it had just finished was thrown away --
+      # every attempt rebuilt the whole toolchain from source to reach the step that was actually
+      # broken. Saving explicitly with if: always() keeps the expensive, deterministic artefact
+      # regardless of what fails downstream of it.
+      - name: Restore osxcross toolchain
         id: osxcross-cache
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: /opt/osxcross/target
           key: osxcross-${{ hashFiles('sdk/*.tar.*') }}-v1
@@ -405,9 +411,16 @@ jobs:
           cp "$sdk" /opt/osxcross/tarballs/
           cd /opt/osxcross
           export CC=clang-20 CXX=clang++-20
-          # OSX_VERSION_MIN matches CMAKE_OSX_DEPLOYMENT_TARGET in cmake/toolchains/osxcross.cmake:
-          # macOS 13.3, the floor libc++ gates floating-point charconv behind.
-          UNATTENDED=1 OSX_VERSION_MIN=13.3 ./build.sh
+          # OSX_VERSION_MIN matches CMAKE_OSX_DEPLOYMENT_TARGET in cmake/toolchains/osxcross.cmake.
+          # It only sets the wrapper's DEFAULT; every compile passes -mmacosx-version-min explicitly.
+          UNATTENDED=1 OSX_VERSION_MIN=11.0 ./build.sh
+
+      - name: Save osxcross toolchain
+        if: always() && steps.osxcross-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: /opt/osxcross/target
+          key: osxcross-${{ hashFiles('sdk/*.tar.*') }}-v1
 
       # libdmg-hfsplus, two forks: planetbeing's `hfsplus` injects files into an HFS+ image
       # without mounting it (no root, no kernel driver), fanquake's `dmg` compresses that image
@@ -457,12 +470,12 @@ jobs:
           # author the Finder .DS_Store; Pillow rasterises the .icns and the background.
           /opt/dsstore-venv/bin/pip install --quiet ds_store mac_alias Pillow numpy
 
-      - name: Cache macOS dependency prefixes
+      - name: Restore macOS dependency prefixes
         id: macdeps-cache
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: /macdeps
-          key: macos-deps-${{ hashFiles('packaging/macos/build-deps.sh', 'packaging/macos/fetch-vulkan.sh') }}-v1
+          key: macos-deps-min11.0-${{ hashFiles('packaging/macos/build-deps.sh', 'packaging/macos/fetch-vulkan.sh') }}-v1
 
       - name: Cross-build dependencies + Vulkan (both arches)
         if: steps.macdeps-cache.outputs.cache-hit != 'true'
@@ -476,6 +489,15 @@ jobs:
               MOSAIC_MAC_VULKAN_STAGE=/macdeps/vulkan-runtime \
               bash packaging/macos/fetch-vulkan.sh
           done
+
+      # Saved on failure too, for the same reason as osxcross above: 20 libraries per architecture
+      # is far too expensive to discard because a later step broke.
+      - name: Save macOS dependency prefixes
+        if: always() && steps.macdeps-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: /macdeps
+          key: macos-deps-min11.0-${{ hashFiles('packaging/macos/build-deps.sh', 'packaging/macos/fetch-vulkan.sh') }}-v1
 
       - name: Build the DMG
         env:

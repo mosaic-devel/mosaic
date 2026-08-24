@@ -9,13 +9,12 @@
 #   export OSXCROSS_ROOT=/path/to/osxcross/target
 #   cmake --preset macos-arm64      # or macos-x86_64
 #
-# Deployment target is macOS 13.3 (Ventura) -- see CMAKE_OSX_DEPLOYMENT_TARGET below for why that
-# floor and not a lower one. A single floor covers both Intel and Apple-Silicon Macs. The SDK
-# version only bounds the newest APIs available at compile time; it does not raise this floor.
+# Deployment target is macOS 11.0 (Big Sur) -- the first Apple-Silicon release, so one floor covers
+# both Intel and Apple-Silicon Macs. The SDK version only bounds the newest APIs available at
+# compile time; it does not raise this floor.
 # ⚠ packaging/macos/build-deps.sh must agree (MOSAIC_MACOS_MIN): a dependency built at a different
 # floor than the app that links it warns on every object, and claims a compatibility it does not
-# have. This prose used to say 11.0 while the code below said 13.3, and the dep script believed
-# the prose.
+# have.
 
 if(NOT DEFINED ENV{OSXCROSS_ROOT})
     message(FATAL_ERROR
@@ -72,10 +71,19 @@ set(CMAKE_INSTALL_NAME_TOOL "${_osxcross}/bin/${_triple}-install_name_tool")
 set(CMAKE_LIBTOOL           "${_osxcross}/bin/${_triple}-libtool")
 
 set(CMAKE_OSX_ARCHITECTURES "${_machine}" CACHE STRING "")
-# macOS 13.3 (Ventura) floor: libc++ gates floating-point std::to_chars/std::from_chars behind it,
-# and Mosaic uses charconv for number formatting/parsing throughout. Lowering this again would mean
-# adding snprintf/strtod fallbacks at every charconv call site. (S58)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING "")
+# macOS 11.0 (Big Sur). This was 13.3 from S58 until S59, because libc++ gates floating-point
+# std::to_chars/std::from_chars behind 13.3 and Mosaic uses charconv throughout -- but that reason
+# had already stopped applying: src/common/charconv_compat.hpp supplies the ENTIRE fallback
+# (strtod / snprintf, both locale-corrected) behind _LIBCPP_VERSION, so Mosaic never calls libc++'s
+# floating-point charconv at all. The comment outlived the problem it described, and cost every Mac
+# older than Ventura for nothing.
+#
+# 11.0 is the first Apple-Silicon release, which makes it the lowest floor worth having: below it
+# there is no arm64 to serve. The Quick Look PREVIEW extension still needs 12.0 (QLPreviewProvider),
+# which is why its .appex plist says so -- src/thumbnailer/quicklook_macos.mm already carries the
+# API_AVAILABLE(macos(12.0)) annotation that makes referencing it from a lower-targeted binary
+# legal, so no second build is needed: on macOS 11 that one extension simply does not load.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "")
 
 # ---- find-root: SDK sysroot + optional cross-built dependency prefix ----------
 # MOSAIC_MAC_PREFIX (env) is where packaging/macos/build-deps.sh installs the per-arch

@@ -33,7 +33,8 @@ Verify a download against `SHA256SUMS`.
 ## Requirements
 
 A **Vulkan 1.2** driver is required on Linux and Windows; macOS goes through MoltenVK, which is
-bundled. The Linux AppImages are built against **glibc 2.39**, so they run on Ubuntu 24.04+,
+bundled, and needs **macOS 11 Big Sur or newer** (the Quick Look space-bar preview extension needs
+12.0 and simply does not load below that; thumbnails and the app itself do not). The Linux AppImages are built against **glibc 2.39**, so they run on Ubuntu 24.04+,
 Debian 13+, Fedora 40+ and the rolling distributions. They deliberately do not bundle the GPU
 stack — your own Mesa or proprietary driver is used.
 

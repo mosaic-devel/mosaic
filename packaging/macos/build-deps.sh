@@ -10,7 +10,7 @@
 # Optional env:
 #   MOSAIC_MAC_WORK    download + build scratch (default: $MOSAIC_MAC_PREFIX/../work-$ARCH)
 #   JOBS               parallel make jobs (default: nproc)
-#   MOSAIC_MACOS_MIN   deployment target (default: 13.3, matching the CMake toolchain)
+#   MOSAIC_MACOS_MIN   deployment target (default: 11.0, matching the CMake toolchain)
 #
 # Idempotent: each library drops a stamp in $PREFIX/.stamps; re-running skips finished ones.
 # Run once per arch (they use separate prefixes and may run concurrently).
@@ -20,12 +20,12 @@ set -euo pipefail
 : "${MOSAIC_MAC_ARCH:?set MOSAIC_MAC_ARCH to arm64 or x86_64}"
 : "${MOSAIC_MAC_PREFIX:?set MOSAIC_MAC_PREFIX to the per-arch install prefix}"
 JOBS="${JOBS:-$(nproc)}"
-# 13.3, NOT 11.0. This must match CMAKE_OSX_DEPLOYMENT_TARGET in cmake/toolchains/osxcross.cmake,
+# Must match CMAKE_OSX_DEPLOYMENT_TARGET in cmake/toolchains/osxcross.cmake,
 # which is the floor the app itself is built at (libc++ gates floating-point charconv there). When
 # they disagreed, the CMake-built dependencies carried 13.3 while the autotools-built ones carried
-# 11.0, and every link mixing the two warned "object file was built for newer macOS version (13.3)
-# than being linked (11.0)" -- once per object, which is enough noise to bury a real linker warning.
-MOSAIC_MACOS_MIN="${MOSAIC_MACOS_MIN:-13.3}"
+# a different floor, and every link mixing the two warned "object file was built for newer macOS
+# version than being linked" once per object -- enough noise to bury a real linker warning.
+MOSAIC_MACOS_MIN="${MOSAIC_MACOS_MIN:-11.0}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 
