@@ -174,15 +174,21 @@ jobs:
           curl -fL --retry 3 -o jxl.tar.gz \
             https://github.com/libjxl/libjxl/archive/refs/tags/v0.11.2.tar.gz
           tar xf jxl.tar.gz
+          # The flag set is packaging/windows/build-deps.sh's, verbatim. The tag archive ships
+          # WITHOUT libjxl's third_party submodules, so every bundled-dependency knob has to be
+          # turned off explicitly -- miss one (sjpeg, OpenEXR, the bundled libpng) and configure
+          # stops with "please run deps.sh to fetch the build dependencies".
           cmake -S libjxl-0.11.2 -B b-jxl -G Ninja \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$P" \
             -DBUILD_TESTING=OFF \
-            -DJPEGXL_ENABLE_TOOLS=OFF -DJPEGXL_ENABLE_EXAMPLES=OFF -DJPEGXL_ENABLE_BENCHMARK=OFF \
-            -DJPEGXL_ENABLE_DOXYGEN=OFF -DJPEGXL_ENABLE_MANPAGES=OFF \
-            -DJPEGXL_ENABLE_JNI=OFF -DJPEGXL_ENABLE_PLUGINS=OFF \
-            -DJPEGXL_ENABLE_TRANSCODE_JPEG=OFF -DJPEGXL_ENABLE_JPEGLI=OFF \
-            -DJPEGXL_ENABLE_SKCMS=OFF -DJPEGXL_FORCE_SYSTEM_BROTLI=ON \
-            -DJPEGXL_FORCE_SYSTEM_HWY=ON
+            -DJPEGXL_ENABLE_TOOLS=OFF -DJPEGXL_ENABLE_BENCHMARK=OFF -DJPEGXL_ENABLE_EXAMPLES=OFF \
+            -DJPEGXL_ENABLE_MANPAGES=OFF -DJPEGXL_ENABLE_JNI=OFF -DJPEGXL_ENABLE_SJPEG=OFF \
+            -DJPEGXL_ENABLE_OPENEXR=OFF -DJPEGXL_ENABLE_SKCMS=OFF -DJPEGXL_ENABLE_PLUGINS=OFF \
+            -DJPEGXL_ENABLE_DEVTOOLS=OFF -DJPEGXL_ENABLE_DOXYGEN=OFF \
+            -DJPEGXL_ENABLE_TRANSCODE_JPEG=ON \
+            -DJPEGXL_FORCE_SYSTEM_BROTLI=ON -DJPEGXL_FORCE_SYSTEM_HWY=ON \
+            -DJPEGXL_FORCE_SYSTEM_LCMS2=ON \
+            -DJPEGXL_BUNDLE_LIBPNG=OFF -DJPEGXL_ENABLE_AVX512=OFF
           cmake --build b-jxl -j "$(nproc)"
           cmake --install b-jxl
 
@@ -347,8 +353,15 @@ jobs:
         run: |
           sudo git clone --depth 1 https://github.com/tpoechtrager/osxcross.git /opt/osxcross
           sudo chown -R "$USER" /opt/osxcross
-          cp sdk/MacOSX*.sdk.tar.* /opt/osxcross/tarballs/
+          # Xcode carries more than one SDK, so gen_sdk_package.sh packaged more than one, and
+          # osxcross refuses to choose ("Please set the SDK_VERSION environment variable").
+          # Copy only the newest, so there is nothing to choose between.
+          sdk=$(ls sdk/MacOSX*.sdk.tar.* | sort -V | tail -1)
+          echo "using $sdk"
+          cp "$sdk" /opt/osxcross/tarballs/
           cd /opt/osxcross
+          # OSX_VERSION_MIN matches CMAKE_OSX_DEPLOYMENT_TARGET in cmake/toolchains/osxcross.cmake:
+          # macOS 13.3, the floor libc++ gates floating-point charconv behind.
           UNATTENDED=1 OSX_VERSION_MIN=13.3 ./build.sh
 
       # libdmg-hfsplus, two forks: planetbeing's `hfsplus` injects files into an HFS+ image
