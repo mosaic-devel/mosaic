@@ -91,11 +91,22 @@ drag-to-Applications layout. Set `MOSAIC_SKIP_BUILD=1` to reuse existing `build/
 
 ## Notes / limits (v1)
 
-- **Minimum macOS 13.3** (Ventura). libc++ gates floating-point `std::to_chars`/`from_chars` there.
+- **Minimum macOS 13.3** (Ventura). ⚠ The reason usually given for this floor — that libc++ gates
+  floating-point `std::to_chars`/`from_chars` behind it — **no longer applies**:
+  `src/common/charconv_compat.hpp` supplies the whole fallback (`strtod` / `snprintf`, both
+  locale-corrected) gated on `_LIBCPP_VERSION`, so Mosaic never calls libc++'s floating-point
+  charconv at all. The floor is a candidate to be lowered; only a build can confirm it, since
+  libc++ availability errors are compile-time. Note `QLPreviewProvider` needs macOS 12, so the
+  space-bar preview extension cannot go below that even if the app can.
 - Runtime is verified on a real Mac by the user; the cross-build is compile-/link-verified here.
-- Pen-tablet pressure, hyphenation, dark-mode detection, spell-check and the menu bar are all
-  **native** on macOS (NSEvent / CoreFoundation / NSAppearance / NSSpellChecker / the system menu
-  bar) rather than degraded — see `docs/build-macos.md`.
+- Hyphenation, dark-mode detection, spell-check and the menu bar are **native** on macOS
+  (CoreFoundation / NSAppearance / NSSpellChecker / the system menu bar) rather than degraded — see
+  `docs/build-macos.md`.
+- ⚠ **Pen-tablet pressure is NOT implemented on macOS.** This list used to claim it was, via
+  NSEvent; there is no `tablet_macos.mm` and never was. `src/platform/CMakeLists.txt` is the
+  authority: macOS "has no XInput2/zwp_tablet path (tablet pressure is a Mac-side follow-up)".
+  Tablet input exists on Wayland (`zwp_tablet_v2`), X11 (XInput2) and Windows (WinTab / Windows
+  Ink) only.
 - **Optional image formats still absent on macOS:** libtiff, libwebp, OpenEXR, LibRaw. PNG, JPEG,
   JPEG XL and `.mosaic` are all present. Add one by giving it a `cmake_build`/`auto_build` line in
   `build-deps.sh` — the CMake side already probes for each and disables cleanly when missing.

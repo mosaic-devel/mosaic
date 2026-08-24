@@ -9,9 +9,13 @@
 #   export OSXCROSS_ROOT=/path/to/osxcross/target
 #   cmake --preset macos-arm64      # or macos-x86_64
 #
-# Deployment target is macOS 11.0 (Big Sur) -- the first Apple-Silicon release -- so a single
-# floor covers both Intel and Apple-Silicon Macs. The SDK version only bounds the newest APIs
-# available at compile time; it does not raise this floor.
+# Deployment target is macOS 13.3 (Ventura) -- see CMAKE_OSX_DEPLOYMENT_TARGET below for why that
+# floor and not a lower one. A single floor covers both Intel and Apple-Silicon Macs. The SDK
+# version only bounds the newest APIs available at compile time; it does not raise this floor.
+# ⚠ packaging/macos/build-deps.sh must agree (MOSAIC_MACOS_MIN): a dependency built at a different
+# floor than the app that links it warns on every object, and claims a compatibility it does not
+# have. This prose used to say 11.0 while the code below said 13.3, and the dep script believed
+# the prose.
 
 if(NOT DEFINED ENV{OSXCROSS_ROOT})
     message(FATAL_ERROR
