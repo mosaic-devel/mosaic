@@ -238,7 +238,14 @@ void stagePointer(int x, int y) {
 } // namespace
 
 TEST_CASE("DatePicker claims the whole press/release pair (the click fall-through bug)") {
-    Fl_Double_Window win(0, 0, 320, 120);
+    // 420 tall, not 120: the calendar pop-up is 254x236, so a 120px window cannot contain it at
+    // all. openUnder() then took its "does not fit below" branch, flipped above, and clamped to
+    // y=0 -- landing the pop-up ON TOP of the picker that opened it, where it swallowed the second
+    // click and the calendar could never be toggled shut. That is a degenerate placement no real
+    // host reaches: the modals that use DatePicker are fixed-size and comfortably larger (the
+    // Texture Generator is 960x620). This subcase is about dispatch routing, so give it a window
+    // that can actually hold the widget under test.
+    Fl_Double_Window win(0, 0, 320, 420);
     win.begin();
     ChromeSensor chrome(10, 10, 200, 28); // the chrome UNDER the picker (same rect, below in z)
     DatePicker dp(10, 10, 200, 28);       // on top; its pop-up becomes the next (hidden) child

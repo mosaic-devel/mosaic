@@ -2,8 +2,8 @@
 
 #include <FL/Enumerations.H>
 #include <FL/Fl.H>
+#include <FL/Fl_Group.H>
 #include <FL/fl_draw.H>
-
 #include <algorithm>
 #include <cstdio>
 
@@ -254,6 +254,20 @@ public:
                 py = std::max(0, oy - kCalH - 2);
         }
         resize(px, py, kCalW, kCalH);
+
+        // RAISE INTO DISPATCH ORDER, not just paint order. The pop-up is a sub-window created with
+        // its owner -- in TextureGeneratorDialog that happens before the ScrollView holding the
+        // controls exists, so the pop-up sits EARLY in the dialog's child array. Fl_Group offers
+        // FL_PUSH to children last-added first, so every click over the open calendar was claimed
+        // by the ScrollView above it: the calendar painted on top (sub-windows always do) while
+        // being dispatched underneath, and no day could be clicked. Moving it to the end of the
+        // parent's child list makes the two orders agree. Done while still hidden, and idempotent
+        // when it is already last.
+        if (Fl_Group* g = parent()) {
+            g->remove(this);
+            g->add(this);
+        }
+
         show();
         m_open = true;
         g_activeCalendar = this;
