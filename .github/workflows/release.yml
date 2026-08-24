@@ -200,6 +200,7 @@ jobs:
           PKG_CONFIG_PATH: /opt/mosaic-deps/lib/pkgconfig
           LD_LIBRARY_PATH: /opt/mosaic-deps/lib
           MOSAIC_APPIMAGE_ARCH: ${{ matrix.arch }}
+          MOSAIC_VERSION: ${{ needs.meta.outputs.version }}
         run: bash packaging/linux/make-appimage.sh
 
       - name: Verify it starts
@@ -277,6 +278,7 @@ jobs:
       - name: Package (zip + MSI)
         env:
           MOSAIC_WIN_PREFIX: /deps/${{ matrix.arch }}
+          MOSAIC_VERSION: ${{ needs.meta.outputs.version }}
         run: bash packaging/windows/make-package.sh ${{ matrix.arch }}
 
       - uses: actions/upload-artifact@v4
@@ -429,6 +431,7 @@ jobs:
           MOSAIC_HFS_DMG: /opt/dmgtools/bin/dmg
           MOSAIC_DSSTORE_PYTHON: /opt/dsstore-venv/bin/python
           MOSAIC_CODESIGN: /opt/dmgtools/bin/rcodesign
+          MOSAIC_VERSION: ${{ needs.meta.outputs.version }}
         run: bash packaging/macos/make-dmg.sh
 
       # make-dmg.sh names the image after the Finder VOLUME name ("Mosaic.dmg"), which is right

@@ -45,8 +45,9 @@ if [ "${MOSAIC_SKIP_BUILD:-0}" != 1 ]; then
   cmake --build "$BUILD" -j "$JOBS"
 fi
 
-VERSION="$(sed -n 's/^[[:space:]]*VERSION[[:space:]]\+\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' \
-            "$REPO/CMakeLists.txt" | head -1)"
+# MOSAIC_VERSION overrides for a release build, matching the Windows and macOS packagers.
+VERSION="${MOSAIC_VERSION:-$(sed -n 's/^[[:space:]]*VERSION[[:space:]]\+\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' \
+            "$REPO/CMakeLists.txt" | head -1)}"
 [ -n "$VERSION" ] || { echo "could not read project version from CMakeLists.txt" >&2; exit 1; }
 echo "== Mosaic $VERSION AppImage for $ARCH =="
 

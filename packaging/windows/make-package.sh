@@ -98,6 +98,11 @@ fi
 # were read as evidence against code that was never in the binary. Same derivation as CMake's, so the
 # archive name and `mosaic.exe --version` always agree.
 version() {
+    # A RELEASE build passes MOSAIC_VERSION and gets exactly that, with no +g<rev>: the artifact
+    # name becomes part of a download URL (where "+" is at best %2B), the release page has to agree
+    # with it, and on macOS CFBundleShortVersionString must be numeric anyway. The git rev stays the
+    # default for every dev build, where the commit IS the identifier (PLAN item 9).
+    if [ -n "${MOSAIC_VERSION:-}" ]; then echo "$MOSAIC_VERSION"; return; fi
     local v rev
     v=$(grep -E "^\s*VERSION [0-9]" "$REPO/CMakeLists.txt" | head -1 | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
     rev=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || true)
