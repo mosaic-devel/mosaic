@@ -70,7 +70,7 @@ fetch() {  # fetch <url> <outfile> [mirror-url...]
   # www.freedesktop.org being unreachable from the runner (four connect timeouts at ~135s each,
   # while the same URL served fine elsewhere), which is a bad way to lose an hour of cross-builds.
   # --connect-timeout keeps a dead host from eating minutes before the fallback is even tried.
-  local url="$1" out="$SRC/$2"; shift 2
+  local url="$1" name="$2" out="$SRC/$2"; shift 2
   [ -f "$out" ] && { echo "$out"; return; }
   local u
   for u in "$url" "$@"; do
@@ -83,7 +83,7 @@ fetch() {  # fetch <url> <outfile> [mirror-url...]
     rm -f "$out.part"
     echo "  ... unreachable; trying the next mirror" >&2
   done
-  echo "all mirrors failed for $2" >&2
+  echo "all mirrors failed for $name" >&2
   return 1
 }
 unpack() { tar -xf "$1" -C "$SRC"; }
@@ -173,7 +173,8 @@ t=$(fetch "https://github.com/mm2/Little-CMS/releases/download/lcms2.16/lcms2-2.
 auto_build "$SRC/lcms2-2.16" lcms2 --without-jpeg --without-tiff
 
 # ---- freetype (CMake; zlib+png, no harfbuzz/brotli to avoid the cycle) -------
-t=$(fetch "https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.xz" freetype.tar.xz); unpack "$t"
+t=$(fetch "https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.xz" freetype.tar.xz \
+      "https://ftp.osuosl.org/pub/blfs/conglomeration/freetype/freetype-2.13.3.tar.xz"); unpack "$t"
 cmake_build "$SRC/freetype-2.13.3" freetype-noHb \
   -DFT_DISABLE_HARFBUZZ=ON -DFT_DISABLE_BROTLI=ON \
   -DFT_REQUIRE_ZLIB=ON -DFT_REQUIRE_PNG=ON \
