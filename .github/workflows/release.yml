@@ -346,6 +346,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build git pkg-config curl patch python3-pip python3-venv \
+            glslang-tools \
             llvm-dev libxml2-dev uuid-dev libssl-dev zlib1g-dev bzip2 cpio lsb-release wget \
             software-properties-common gnupg \
             libbz2-dev hfsprogs gettext autoconf automake libtool
