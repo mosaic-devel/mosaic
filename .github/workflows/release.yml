@@ -56,7 +56,7 @@ jobs:
       version: ${{ steps.v.outputs.version }}
       tag: ${{ steps.v.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: v
         run: |
           version=$(sed -n 's/^[[:space:]]*VERSION[[:space:]]\+\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' \
@@ -81,14 +81,14 @@ jobs:
     needs: meta
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Archive
         run: |
           v='${{ needs.meta.outputs.version }}'
           git archive --format=tar.gz --prefix="mosaic-$v/" \
             -o "mosaic-$v-source.tar.gz" HEAD
           sha256sum "mosaic-$v-source.tar.gz"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: source, path: '*.tar.gz' }
 
   # ---------------------------------------------------------------------------
@@ -108,7 +108,7 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Ubuntu 24.04 carries every Mosaic dependency EXCEPT FLTK: it ships 1.3.8 and Mosaic needs
       # 1.4 (Fl_Sys_Menu_Bar, the Wayland backend, the hybrid X11/Wayland driver). FLTK is built
@@ -139,7 +139,7 @@ jobs:
       #                   which ARE new enough, so there is one of each in the payload.
       - name: Cache from-source dependencies
         id: deps-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /opt/mosaic-deps
           key: linux-deps-${{ matrix.arch }}-ubuntu24.04-fltk1.4.5-jt3.0.4-jxl0.11.2-vkh1.4.350.1-v1
@@ -224,7 +224,7 @@ jobs:
           "$img" --appimage-extract >/dev/null
           ./squashfs-root/AppRun --version
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-${{ matrix.arch }}
           path: build/linux-appimage/*.AppImage
@@ -270,13 +270,13 @@ jobs:
           tar xf llvm-mingw.tar.xz -C /opt/llvm-mingw --strip-components=1
           /opt/llvm-mingw/bin/aarch64-w64-mingw32-clang --version
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # 24 libraries cross-built from source per arch. Keyed on the script, because the script IS
       # the dependency manifest -- it pins every version inline.
       - name: Cache dependency prefix
         id: deps-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /deps/${{ matrix.arch }}
           key: windows-deps-${{ matrix.arch }}-${{ hashFiles('packaging/windows/build-deps.sh') }}
@@ -294,7 +294,7 @@ jobs:
           MOSAIC_VERSION: ${{ needs.meta.outputs.version }}
         run: bash packaging/windows/make-package.sh ${{ matrix.arch }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-${{ matrix.arch }}
           path: |
@@ -316,7 +316,7 @@ jobs:
       # downloadable and Apple's SDK licence forbids redistribution; cache entries are not.
       - name: Restore cached SDK
         id: sdk-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: sdk
           key: macos-sdk-${{ runner.arch }}-v1
@@ -339,7 +339,7 @@ jobs:
       inputs.targets == 'all' || inputs.targets == 'macos'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install host toolchain
         run: |
@@ -368,7 +368,7 @@ jobs:
           clang --version
 
       - name: Restore macOS SDK
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: sdk
           key: macos-sdk-ARM64-v1
@@ -376,7 +376,7 @@ jobs:
 
       - name: Cache osxcross toolchain
         id: osxcross-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /opt/osxcross/target
           key: osxcross-${{ hashFiles('sdk/*.tar.*') }}-v1
@@ -404,7 +404,7 @@ jobs:
       # kernel refuses to execute an unsigned arm64 binary at all.
       - name: Cache DMG tooling
         id: dmgtools-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /opt/dmgtools
           key: dmgtools-v1
@@ -435,7 +435,7 @@ jobs:
 
       - name: Cache macOS dependency prefixes
         id: macdeps-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /macdeps
           key: macos-deps-${{ hashFiles('packaging/macos/build-deps.sh', 'packaging/macos/fetch-vulkan.sh') }}-v1
@@ -473,7 +473,7 @@ jobs:
           mv build/macos-dmg/Mosaic.dmg \
              "build/macos-dmg/Mosaic-${{ needs.meta.outputs.version }}-macos-universal.dmg"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-universal
           path: build/macos-dmg/*.dmg
@@ -490,9 +490,9 @@ jobs:
       (github.ref_type == 'tag' || inputs.publish)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true

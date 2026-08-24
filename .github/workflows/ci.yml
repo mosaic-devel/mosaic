@@ -56,7 +56,7 @@ jobs:
             wayland wayland-protocols \
             gettext python xorg-server-xvfb
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -76,7 +76,7 @@ jobs:
 
       - name: Upload failed golden-image diffs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: golden-diffs
           path: |
@@ -114,7 +114,7 @@ jobs:
     container: archlinux:base-devel
     steps:
       - run: pacman -Syu --noconfirm --needed clang git
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
