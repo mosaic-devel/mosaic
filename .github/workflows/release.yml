@@ -359,7 +359,13 @@ jobs:
           wget -qO llvm.sh https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 20
-          clang-20 --version
+          # apt.llvm.org installs VERSIONED binaries only. osxcross's generated compiler wrapper
+          # (oa64-clang++ and friends) looks up plain "clang" on PATH at run time, so without these
+          # links it keeps finding the distro's clang 18 -- CC=clang-20 covers only the cctools
+          # build, which is why the first attempt still failed the wrapper's own sanity compile.
+          sudo ln -sf /usr/bin/clang-20 /usr/bin/clang
+          sudo ln -sf /usr/bin/clang++-20 /usr/bin/clang++
+          clang --version
 
       - name: Restore macOS SDK
         uses: actions/cache/restore@v4
