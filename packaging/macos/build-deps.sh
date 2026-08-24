@@ -59,13 +59,27 @@ CMAKE_TC="$REPO/cmake/toolchains/osxcross.cmake"
 
 echo "== deps for $MOSAIC_MAC_ARCH -> $PREFIX (min $MOSAIC_MACOS_MIN, sdk $(basename "$SYSROOT")) =="
 
-fetch() {  # fetch <url> <outfile>
-  local url="$1" out="$SRC/$2"
+fetch() {  # fetch <url> <outfile> [mirror-url...]
+  # Extra URLs are MIRRORS, tried in order when the one before them fails. Upstream hosting is a
+  # single point of failure for the whole dependency stack: a CI run lost every architecture to
+  # www.freedesktop.org being unreachable from the runner (four connect timeouts at ~135s each,
+  # while the same URL served fine elsewhere), which is a bad way to lose an hour of cross-builds.
+  # --connect-timeout keeps a dead host from eating minutes before the fallback is even tried.
+  local url="$1" out="$SRC/$2"; shift 2
   [ -f "$out" ] && { echo "$out"; return; }
-  echo "  fetch $url" >&2
-  curl -fL --retry 3 -o "$out.part" "$url"
-  mv "$out.part" "$out"
-  echo "$out"
+  local u
+  for u in "$url" "$@"; do
+    echo "  fetch $u" >&2
+    if curl -fL --retry 3 --connect-timeout 20 --no-progress-meter -o "$out.part" "$u"; then
+      mv "$out.part" "$out"
+      echo "$out"
+      return
+    fi
+    rm -f "$out.part"
+    echo "  ... unreachable; trying the next mirror" >&2
+  done
+  echo "all mirrors failed for $2" >&2
+  return 1
 }
 unpack() { tar -xf "$1" -C "$SRC"; }
 done_stamp() { [ -f "$STAMPS/$1" ]; }
@@ -177,7 +191,8 @@ cmake_build "$SRC/expat-2.6.4" expat \
 # ---- fontconfig (autotools; needs freetype + expat) -------------------------
 # macOS font search paths baked in; no fc-cache is run at build time (cross).
 ensure_gperf
-t=$(fetch "https://www.freedesktop.org/software/fontconfig/release/fontconfig-2.14.2.tar.xz" fontconfig.tar.xz); unpack "$t"
+t=$(fetch "https://www.freedesktop.org/software/fontconfig/release/fontconfig-2.14.2.tar.xz" fontconfig.tar.xz \
+      "https://ftp.osuosl.org/pub/blfs/conglomeration/fontconfig/fontconfig-2.14.2.tar.xz"); unpack "$t"
 auto_build "$SRC/fontconfig-2.14.2" fontconfig \
   --disable-docs --disable-nls \
   --with-expat="$PREFIX" \
