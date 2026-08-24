@@ -419,8 +419,20 @@ jobs:
           cp pb/build/hfs/hfsplus /opt/dmgtools/bin/
           git clone --depth 1 https://github.com/fanquake/libdmg-hfsplus.git fq
           cmake -S fq -B fq/build -DCMAKE_BUILD_TYPE=Release
-          cmake --build fq/build -j "$(nproc)" --target dmg
-          cp fq/build/dmg/dmg /opt/dmgtools/bin/
+          # NOT --target dmg: in this fork "dmg" is the static LIBRARY target (it builds libdmg.a
+          # and nothing else), so the CLI never appeared and the copy failed on a path that does
+          # not exist. Build everything, then find the executable rather than assuming where it
+          # lands -- the two forks do not agree on layout and neither is ours to pin.
+          cmake --build fq/build -j "$(nproc)"
+          dmgbin=$(find fq/build -type f -executable ! -name '*.a' ! -name '*.o' \
+                     -name 'dmg*' | head -1)
+          if [ -z "$dmgbin" ]; then
+            echo "no dmg executable was built; what fq/build contains:" >&2
+            find fq/build -type f -executable >&2
+            exit 1
+          fi
+          echo "dmg tool: $dmgbin"
+          cp "$dmgbin" /opt/dmgtools/bin/dmg
           url=$(curl -fsSL https://api.github.com/repos/indygreg/apple-platform-rs/releases/latest \
                 | grep -o 'https://[^"]*x86_64-unknown-linux-musl\.tar\.gz' | head -1)
           curl -fL --retry 3 -o rc.tar.gz "$url"
