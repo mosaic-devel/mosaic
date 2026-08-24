@@ -691,6 +691,16 @@ void WindowRenderer::destroySwapchainObjects() noexcept {
     }
 }
 
+bool WindowRenderer::surfaceExtentChanged() const noexcept {
+    VkSurfaceCapabilitiesKHR caps{};
+    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, m_surface, &caps) != VK_SUCCESS)
+        return false; // cannot tell: prefer presenting over churning the swapchain
+    if (caps.currentExtent.width == UINT32_MAX)
+        return false; // the surface defers to us (Wayland): it cannot have moved on its own
+    return caps.currentExtent.width != m_extent.width ||
+           caps.currentExtent.height != m_extent.height;
+}
+
 bool WindowRenderer::recreate(std::string& error) {
     vkDeviceWaitIdle(m_device);
     destroySwapchainObjects();
@@ -3450,8 +3460,21 @@ bool WindowRenderer::drawFrame(common::Color8 clearColor, std::string& error) {
         MOSAIC_PERF_SCOPE("Present frame (queue present)", common::Lane::Gpu);
         presented = vkQueuePresentKHR(m_queue, &present);
     }
-    if (presented == VK_ERROR_OUT_OF_DATE_KHR || presented == VK_SUBOPTIMAL_KHR) {
-        m_needsRecreate = true; // rebuild before the next frame
+    if (presented == VK_ERROR_OUT_OF_DATE_KHR) {
+        m_needsRecreate = true; // genuinely unusable: rebuild before the next frame
+    } else if (presented == VK_SUBOPTIMAL_KHR) {
+        // SUBOPTIMAL is NOT an error. It means "this still presents correctly, but the swapchain no
+        // longer matches the surface's preferred configuration" -- and some drivers return it on
+        // EVERY present, permanently. Rebuilding unconditionally here is what made the Windows
+        // build flash: recreate() is a full vkDeviceWaitIdle + teardown + rebuild with no
+        // oldSwapchain handoff, so a persistently-suboptimal surface tore the swapchain down and
+        // rebuilt it once per frame, and the blank frame in between is the flash.
+        //
+        // A real resize does not need this path at all: it arrives through notifyResize() from the
+        // window's own resize handler, and a swapchain that has actually become unusable reports
+        // OUT_OF_DATE above. So rebuild only when the surface's extent genuinely moved out from
+        // under us, and otherwise keep presenting -- which is what SUBOPTIMAL invites us to do.
+        m_needsRecreate = surfaceExtentChanged();
     } else if (presented != VK_SUCCESS) {
         error = "vkQueuePresentKHR failed";
         return false;

@@ -721,6 +721,10 @@ private:
     WindowRenderer() = default;
 
     bool createSwapchain(std::string& error);
+    // Does the surface's reported extent still match the swapchain we built? Asked only when a
+    // present comes back VK_SUBOPTIMAL_KHR, to tell a real resize from a driver that simply
+    // prefers a different configuration -- see the call site in drawFrame().
+    [[nodiscard]] bool surfaceExtentChanged() const noexcept;
     void destroySwapchainObjects() noexcept;
     bool recreate(std::string& error);
 
