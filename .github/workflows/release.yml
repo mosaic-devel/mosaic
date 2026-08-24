@@ -346,7 +346,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build git pkg-config curl patch python3-pip python3-venv \
-            glslang-tools \
+            glslang-tools librsvg2-bin \
             llvm-dev libxml2-dev uuid-dev libssl-dev zlib1g-dev bzip2 cpio lsb-release wget \
             software-properties-common gnupg \
             libbz2-dev hfsprogs gettext autoconf automake libtool
@@ -453,7 +453,9 @@ jobs:
       - name: Python tooling for the DMG layout
         run: |
           python3 -m venv /opt/dsstore-venv
-          /opt/dsstore-venv/bin/pip install --quiet ds_store mac_alias Pillow
+          # numpy too: make-background.py uses it for the dithered gradient. ds_store + mac_alias
+          # author the Finder .DS_Store; Pillow rasterises the .icns and the background.
+          /opt/dsstore-venv/bin/pip install --quiet ds_store mac_alias Pillow numpy
 
       - name: Cache macOS dependency prefixes
         id: macdeps-cache
