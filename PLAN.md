@@ -1887,22 +1887,26 @@ VMA (MIT), nanosvg (zlib), doctest (MIT), nlohmann/json (MIT), **psd_sdk (BSD-2)
 7. **Tests:** new logic ships with doctest unit tests; rendering/filters ship a golden
    image; keep `ctest` green. Don't merge a red build.
 8. **Every commit must build** under `linux-debug` and pass `ctest`.
-9. **Versioning (pre-1.0) — FROZEN at `0.2.17` (perma-alpha; decision 2026-06-22).** The pre-1.0
-   version is a placeholder of the form `0.<phase>.<session>`; it sits at **`0.2.17`** (the Phase-2 /
-   S16 era) and **stays there until 1.0.0.** The original plan was to bump `project(VERSION …)` per
-   session, but the **roadmap went non-linear** — S37/S39/S51-a/S60-a all landed out of order while
-   early Phase-2/3 sessions (S17/S18/…) stayed open — so a single `0.<phase>.<session>` number can no
-   longer honestly describe the build, and re-numbering now would only confuse future readers. So we
-   **deliberately leave it at `0.2.17`**: think of it as "perma-alpha." The real per-build identifier
-   is the **short git commit** appended as build metadata — `mosaic --version` prints e.g.
-   `Mosaic 0.2.17+g8715cc5` (`-dirty` when the tree has uncommitted changes). **No release tags or
-   tarball version-stamping yet.** **Switch to true SemVer at `1.0.0`**, which lands only **after the
-   roadmap and the immediate backlog are essentially complete** — never mid-roadmap. (Long-tail backlog
-   items, e.g. the macOS port, may stay open and must not block 1.0.) At 1.0.0 the meaning flips —
-   MAJOR/MINOR/PATCH become breaking/feature/fix — and *that* is when release tags (`vX.Y.Z`) + archive
-   version-stamping begin. Mechanism: `MOSAIC_GIT_REV` is computed in the top-level `CMakeLists.txt`
-   and baked into the generated version header; configure re-runs when a commit lands (the git reflog
-   moves).
+9. **Versioning (pre-1.0) — `0.3.0`, and it moves on RELEASES (decision 2026-08-24; supersedes the
+   2026-06-22 "perma-alpha" freeze).** From S1 to S60 the version sat frozen at **`0.2.17`** and the
+   reasoning was sound at the time: the pre-1.0 number was a placeholder of the form
+   `0.<phase>.<session>`, the **roadmap went non-linear** (S37/S39/S51-a/S60-a landed out of order
+   while S17/S18 stayed open), so no `0.<phase>.<session>` could honestly describe a build — and
+   since nothing was ever *published*, the **short git commit** appended as build metadata was the
+   only identifier that meant anything to anyone.
+   **Publishing is what changed it.** A user who downloads an AppImage or an MSI has no git tree to
+   interrogate, and a bug report has to be able to name a build. So the rule is now: **the version
+   moves when, and only when, something is released** — which is the one thing SemVer actually asks
+   of a pre-1.0 number. `0.3.0` is the first tagged, published release (S59, 2026-08-24). The commit
+   is still appended and is still the exact identifier — `mosaic --version` prints e.g.
+   `Mosaic 0.3.0+g4148fc3` (`-dirty` with uncommitted changes) — but the number in front of it is
+   now the human-facing one, and it is what a release tag (`vX.Y.Z`) and every packaged artifact
+   name are stamped with.
+   **`1.0.0` is unchanged in meaning and still lands only after** the roadmap and immediate backlog
+   are essentially complete — never mid-roadmap. (Long-tail backlog items may stay open and must not
+   block 1.0.) At 1.0.0 MAJOR/MINOR/PATCH flip to breaking/feature/fix. Mechanism: `MOSAIC_GIT_REV`
+   is computed in the top-level `CMakeLists.txt` and baked into the generated version header;
+   configure re-runs when a commit lands (the git reflog moves).
 
 ---
 

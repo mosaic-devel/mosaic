@@ -1,0 +1,436 @@
+# Mosaic release engineering (PLAN.md S59).
+#
+# Produces, for one tag, every artifact a user might download:
+#
+#   Linux    Mosaic-<v>-x86_64.AppImage, Mosaic-<v>-aarch64.AppImage
+#   Windows  Mosaic-<v>-windows-{x86_64,aarch64}.{zip,msi}
+#   macOS    Mosaic-<v>-macos-universal.dmg   (arm64 + x86_64 in one bundle)
+#   source   mosaic-<v>-source.tar.gz          (submodule-free; git archive of the tag)
+#
+# Every binary is CROSS-BUILT FROM LINUX, which is how the project has always built (no Visual
+# Studio, no Mac). The two exceptions to "one Linux runner does everything" are deliberate:
+#
+#   * The AppImages build on Ubuntu 24.04 runners rather than in the Arch container CI uses.
+#     An AppImage cannot bundle glibc, so its floor IS the build host's glibc; Arch's 2.4x would
+#     produce an image that runs on Arch and nothing else. 24.04's 2.39 covers Ubuntu 24.04+,
+#     Debian 13+, Fedora 40+ and the rolling distros.
+#
+#   * A macos-latest runner is used for ONE thing: packaging the macOS SDK that osxcross needs,
+#     with Apple's own toolchain, on Apple's own hardware. It is handed to the Linux job through
+#     the ACTIONS CACHE and never an artifact -- cache entries are not publicly downloadable, so
+#     this is not a redistribution of Apple's SDK (which its licence forbids). The actual macOS
+#     build is still the osxcross cross-compile from Linux.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: 'Which artifacts to build'
+        type: choice
+        default: all
+        options: [all, linux, windows, macos]
+      publish:
+        description: 'Create/update the GitHub release (tag pushes always publish)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  meta:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          version=$(sed -n 's/^[[:space:]]*VERSION[[:space:]]\+\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' \
+                    CMakeLists.txt | head -1)
+          [ -n "$version" ] || { echo "no version in CMakeLists.txt" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.ref_type }}" = tag ]; then
+            tag="${{ github.ref_name }}"
+            # A tag must agree with the number the binaries will stamp themselves with, or the
+            # release page and `mosaic --version` disagree and every bug report is ambiguous.
+            [ "$tag" = "v$version" ] || {
+              echo "tag $tag does not match project version $version" >&2; exit 1; }
+          else
+            tag="v$version"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Mosaic $version ($tag)"
+
+  # ---------------------------------------------------------------------------
+  source:
+    name: Source tarball
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Archive
+        run: |
+          v='${{ needs.meta.outputs.version }}'
+          git archive --format=tar.gz --prefix="mosaic-$v/" \
+            -o "mosaic-$v-source.tar.gz" HEAD
+          sha256sum "mosaic-$v-source.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with: { name: source, path: '*.tar.gz' }
+
+  # ---------------------------------------------------------------------------
+  linux:
+    name: AppImage (${{ matrix.arch }})
+    needs: meta
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      inputs.targets == 'all' || inputs.targets == 'linux'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      # Ubuntu 24.04 carries every Mosaic dependency EXCEPT FLTK: it ships 1.3.8 and Mosaic needs
+      # 1.4 (Fl_Sys_Menu_Bar, the Wayland backend, the hybrid X11/Wayland driver). FLTK is built
+      # from source below; everything else is a distro package.
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build git pkg-config file desktop-file-utils \
+            libvulkan-dev glslang-tools \
+            libspdlog-dev liblcms2-dev libfreetype-dev libharfbuzz-dev \
+            libenchant-2-dev libhyphen-dev \
+            libpng-dev libturbojpeg0-dev libtiff-dev libwebp-dev libavif-dev libjxl-dev libgif-dev \
+            zlib1g-dev libzstd-dev liblz4-dev libfontconfig1-dev libexpat1-dev \
+            libsystemd-dev libxi-dev libxrandr-dev libcanberra-dev \
+            libwayland-dev wayland-protocols libwayland-bin libxkbcommon-dev libdecor-0-dev \
+            libpango1.0-dev libcairo2-dev libglu1-mesa-dev libxft-dev libxcursor-dev \
+            libxinerama-dev gettext
+
+      - name: Cache FLTK 1.4
+        id: fltk-cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/fltk
+          key: fltk-1.4.5-${{ matrix.arch }}-ubuntu24.04-v1
+
+      - name: Build FLTK 1.4
+        if: steps.fltk-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -fL --retry 3 -o fltk.tar.gz \
+            https://github.com/fltk/fltk/releases/download/release-1.4.5/fltk-1.4.5-source.tar.gz
+          tar xf fltk.tar.gz
+          cmake -S fltk-1.4.5 -B fltk-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/fltk \
+            -DFLTK_BUILD_TEST=OFF -DFLTK_BUILD_EXAMPLES=OFF -DFLTK_BUILD_FLUID=OFF \
+            -DFLTK_BUILD_SHARED_LIBS=OFF \
+            -DFLTK_BACKEND_WAYLAND=ON -DFLTK_BACKEND_X11=ON -DFLTK_USE_SYSTEM_LIBDECOR=ON
+          cmake --build fltk-build -j "$(nproc)"
+          sudo cmake --install fltk-build
+
+      - name: Build AppImage
+        env:
+          CMAKE_PREFIX_PATH: /opt/fltk
+          MOSAIC_APPIMAGE_ARCH: ${{ matrix.arch }}
+        run: bash packaging/linux/make-appimage.sh
+
+      - name: Verify it starts
+        run: |
+          img=$(ls build/linux-appimage/Mosaic-*.AppImage)
+          chmod +x "$img"
+          # No FUSE on the runner, so run the extracted payload rather than mounting.
+          "$img" --appimage-extract >/dev/null
+          ./squashfs-root/AppRun --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: build/linux-appimage/*.AppImage
+
+  # ---------------------------------------------------------------------------
+  windows:
+    name: Windows (${{ matrix.arch }})
+    needs: meta
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      inputs.targets == 'all' || inputs.targets == 'windows'
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    steps:
+      # Arch is the host here because packaging/windows/ was written against it: mingw-w64-gcc and
+      # msitools (wixl) are both official packages, and the x86_64 target then uses the same GCC
+      # family as the Linux build, which is why that -Werror-clean tree needs no new suppressions.
+      - name: Install host toolchain
+        run: |
+          pacman -Syu --noconfirm --needed \
+            cmake ninja git pkgconf curl patch \
+            mingw-w64-gcc msitools \
+            gperf nasm gettext zip util-linux \
+            python python-pillow librsvg \
+            autoconf automake libtool
+
+      # The GNU mingw-w64 toolchain has no aarch64 target at all, so Windows-on-ARM needs
+      # llvm-mingw. It is not in Arch's official repos; the upstream release tarball is the
+      # canonical distribution and is what the toolchain file expects at /opt/llvm-mingw.
+      - name: Install llvm-mingw (aarch64 only)
+        if: matrix.arch == 'aarch64'
+        run: |
+          url=$(curl -fsSL https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest \
+                | grep -o 'https://[^"]*ucrt-ubuntu[^"]*-x86_64\.tar\.xz' | head -1)
+          [ -n "$url" ] || { echo "could not resolve an llvm-mingw release URL" >&2; exit 1; }
+          echo "$url"
+          curl -fL --retry 3 -o llvm-mingw.tar.xz "$url"
+          mkdir -p /opt/llvm-mingw
+          tar xf llvm-mingw.tar.xz -C /opt/llvm-mingw --strip-components=1
+          /opt/llvm-mingw/bin/aarch64-w64-mingw32-clang --version
+
+      - uses: actions/checkout@v4
+
+      # 24 libraries cross-built from source per arch. Keyed on the script, because the script IS
+      # the dependency manifest -- it pins every version inline.
+      - name: Cache dependency prefix
+        id: deps-cache
+        uses: actions/cache@v4
+        with:
+          path: /deps/${{ matrix.arch }}
+          key: windows-deps-${{ matrix.arch }}-${{ hashFiles('packaging/windows/build-deps.sh') }}
+
+      - name: Cross-build dependencies
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        env:
+          MOSAIC_WIN_ARCH: ${{ matrix.arch }}
+          MOSAIC_WIN_PREFIX: /deps/${{ matrix.arch }}
+        run: bash packaging/windows/build-deps.sh
+
+      - name: Package (zip + MSI)
+        env:
+          MOSAIC_WIN_PREFIX: /deps/${{ matrix.arch }}
+        run: bash packaging/windows/make-package.sh ${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          path: |
+            build/windows-package/*.zip
+            build/windows-package/*.msi
+
+  # ---------------------------------------------------------------------------
+  macos-sdk:
+    name: Package macOS SDK
+    needs: meta
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      inputs.targets == 'all' || inputs.targets == 'macos'
+    runs-on: macos-latest
+    steps:
+      # The ONLY step in this workflow that runs on Apple hardware, and it compiles nothing: it
+      # repackages the SDK already present in the runner's Xcode into the tarball layout osxcross
+      # wants. Cached, never uploaded as an artifact -- artifacts on a public repo are publicly
+      # downloadable and Apple's SDK licence forbids redistribution; cache entries are not.
+      - name: Restore cached SDK
+        id: sdk-cache
+        uses: actions/cache@v4
+        with:
+          path: sdk
+          key: macos-sdk-${{ runner.arch }}-v1
+
+      - name: Generate SDK tarball
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/tpoechtrager/osxcross.git
+          cd osxcross
+          ./tools/gen_sdk_package.sh
+          mkdir -p "$GITHUB_WORKSPACE/sdk"
+          mv MacOSX*.sdk.tar.* "$GITHUB_WORKSPACE/sdk/"
+          ls -la "$GITHUB_WORKSPACE/sdk"
+
+  macos:
+    name: macOS universal DMG
+    needs: [meta, macos-sdk]
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      inputs.targets == 'all' || inputs.targets == 'macos'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build git pkg-config curl patch python3-pip python3-venv \
+            clang llvm-dev libxml2-dev uuid-dev libssl-dev zlib1g-dev bzip2 cpio \
+            libbz2-dev hfsprogs gettext autoconf automake libtool
+
+      - name: Restore macOS SDK
+        uses: actions/cache/restore@v4
+        with:
+          path: sdk
+          key: macos-sdk-ARM64-v1
+          fail-on-cache-miss: true
+
+      - name: Cache osxcross toolchain
+        id: osxcross-cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/osxcross/target
+          key: osxcross-${{ hashFiles('sdk/*.tar.*') }}-v1
+
+      - name: Build osxcross
+        if: steps.osxcross-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo git clone --depth 1 https://github.com/tpoechtrager/osxcross.git /opt/osxcross
+          sudo chown -R "$USER" /opt/osxcross
+          cp sdk/MacOSX*.sdk.tar.* /opt/osxcross/tarballs/
+          cd /opt/osxcross
+          UNATTENDED=1 OSX_VERSION_MIN=13.3 ./build.sh
+
+      # libdmg-hfsplus, two forks: planetbeing's `hfsplus` injects files into an HFS+ image
+      # without mounting it (no root, no kernel driver), fanquake's `dmg` compresses that image
+      # into the final .dmg. rcodesign is the ad-hoc signer -- NOT optional, the Apple Silicon
+      # kernel refuses to execute an unsigned arm64 binary at all.
+      - name: Cache DMG tooling
+        id: dmgtools-cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/dmgtools
+          key: dmgtools-v1
+
+      - name: Build DMG tooling
+        if: steps.dmgtools-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo mkdir -p /opt/dmgtools/bin && sudo chown -R "$USER" /opt/dmgtools
+          git clone --depth 1 https://github.com/planetbeing/libdmg-hfsplus.git pb
+          cmake -S pb -B pb/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build pb/build -j "$(nproc)" --target hfsplus
+          cp pb/build/hfs/hfsplus /opt/dmgtools/bin/
+          git clone --depth 1 https://github.com/fanquake/libdmg-hfsplus.git fq
+          cmake -S fq -B fq/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build fq/build -j "$(nproc)" --target dmg
+          cp fq/build/dmg/dmg /opt/dmgtools/bin/
+          url=$(curl -fsSL https://api.github.com/repos/indygreg/apple-platform-rs/releases/latest \
+                | grep -o 'https://[^"]*x86_64-unknown-linux-musl\.tar\.gz' | head -1)
+          curl -fL --retry 3 -o rc.tar.gz "$url"
+          tar xf rc.tar.gz
+          find . -name rcodesign -type f -exec cp {} /opt/dmgtools/bin/ \;
+          chmod +x /opt/dmgtools/bin/*
+
+      - name: Python tooling for the DMG layout
+        run: |
+          python3 -m venv /opt/dsstore-venv
+          /opt/dsstore-venv/bin/pip install --quiet ds_store mac_alias Pillow
+
+      - name: Cache macOS dependency prefixes
+        id: macdeps-cache
+        uses: actions/cache@v4
+        with:
+          path: /macdeps
+          key: macos-deps-${{ hashFiles('packaging/macos/build-deps.sh', 'packaging/macos/fetch-vulkan.sh') }}-v1
+
+      - name: Cross-build dependencies + Vulkan (both arches)
+        if: steps.macdeps-cache.outputs.cache-hit != 'true'
+        env:
+          OSXCROSS_ROOT: /opt/osxcross/target
+        run: |
+          for a in arm64 x86_64; do
+            MOSAIC_MAC_ARCH=$a MOSAIC_MAC_PREFIX=/macdeps/$a \
+              bash packaging/macos/build-deps.sh
+            MOSAIC_MAC_ARCH=$a MOSAIC_MAC_PREFIX=/macdeps/$a \
+              MOSAIC_MAC_VULKAN_STAGE=/macdeps/vulkan-runtime \
+              bash packaging/macos/fetch-vulkan.sh
+          done
+
+      - name: Build the DMG
+        env:
+          OSXCROSS_ROOT: /opt/osxcross/target
+          MOSAIC_MAC_DEPS_ROOT: /macdeps
+          MOSAIC_MAC_VULKAN_STAGE: /macdeps/vulkan-runtime
+          MOSAIC_HFS_NEWFS: /sbin/mkfs.hfsplus
+          MOSAIC_HFS_HFSPLUS: /opt/dmgtools/bin/hfsplus
+          MOSAIC_HFS_DMG: /opt/dmgtools/bin/dmg
+          MOSAIC_DSSTORE_PYTHON: /opt/dsstore-venv/bin/python
+          MOSAIC_CODESIGN: /opt/dmgtools/bin/rcodesign
+        run: bash packaging/macos/make-dmg.sh
+
+      # make-dmg.sh names the image after the Finder VOLUME name ("Mosaic.dmg"), which is right
+      # for what the user mounts and wrong for what they download.
+      - name: Name it for the release
+        run: |
+          mv build/macos-dmg/Mosaic.dmg \
+             "build/macos-dmg/Mosaic-${{ needs.meta.outputs.version }}-macos-universal.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: build/macos-dmg/*.dmg
+
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish release
+    needs: [meta, source, linux, windows, macos]
+    # always(): a platform that fails to build must not withhold the platforms that succeeded.
+    # The release is assembled from whatever artifacts exist, and the job summary says what is
+    # missing so a partial release is never mistaken for a complete one.
+    if: >-
+      always() && needs.meta.result == 'success' &&
+      (github.ref_type == 'tag' || inputs.publish)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Inventory
+        run: |
+          cd dist
+          ls -la
+          sha256sum * | tee SHA256SUMS
+          {
+            echo "### Artifacts"
+            echo
+            echo '| file | size |'
+            echo '| --- | --- |'
+            for f in *; do
+              [ "$f" = SHA256SUMS ] && continue
+              printf '| `%s` | %s |\n' "$f" "$(du -h "$f" | cut -f1)"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag='${{ needs.meta.outputs.tag }}'
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/* --clobber
+          else
+            gh release create "$tag" dist/* \
+              --title "Mosaic ${{ needs.meta.outputs.version }}" \
+              --notes-file docs/release-notes-${{ needs.meta.outputs.version }}.md \
+              --verify-tag
+          fi

@@ -1,11 +1,16 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(Mosaic
-    # FROZEN at 0.2.17 -- "perma-alpha" (PLAN.md item 9, decision 2026-06-22). Do NOT bump per
-    # session: the roadmap went non-linear, so a 0.<phase>.<session> number cannot honestly
-    # describe a build; the appended short git commit (0.2.17+g<rev>) is the real identifier.
-    # This changes next at 1.0.0 (true SemVer + release tags), never mid-roadmap.
-    VERSION 0.2.17
+    # 0.3.0 -- the first TAGGED, published release (PLAN.md item 9, decision 2026-08-24).
+    #
+    # This supersedes the "perma-alpha, frozen at 0.2.17" rule. That rule existed because a
+    # 0.<phase>.<session> number could not honestly describe a build of a non-linear roadmap, and
+    # nothing was ever published, so the git commit was the only identifier that meant anything.
+    # Publishing changes that: a downloaded binary has no git tree to interrogate, and a bug report
+    # has to be able to name a build. So the version now moves only when something is RELEASED,
+    # which is what SemVer asks of it. The short git commit is still appended (0.3.0+g<rev>) and is
+    # still the exact identifier; the number in front of it is now the human-facing one.
+    VERSION 0.3.0
     DESCRIPTION "A professional, GPU-accelerated, cross-platform image editor"
     HOMEPAGE_URL "https://github.com/mosaic-devel/mosaic"
     LANGUAGES CXX)
@@ -131,6 +136,15 @@ add_subdirectory(po)  # i18n template-extraction ('pot') target; self-disables w
 include(GNUInstallDirs)
 install(FILES data/brushes/Krita_4_Default_Resources.bundle
     DESTINATION "${CMAKE_INSTALL_DATADIR}/mosaic/brushes")
+
+# The vendored FOGRA39-based default CMYK press profile. core/color_management.cpp resolves it as
+# installedDataDir()/icc-profiles/ISOcoated_v2_300_eci.icc and falls back to a compile-time DEV path
+# that does not exist on a user's machine -- so without this rule every INSTALLED build (AppImage
+# included) silently had hasCmyk() == false and hid its CMYK UI. Loaded from disk on purpose: a
+# distro that objects to the profile's redistributable-but-non-DFSG licence can delete this one file
+# and get exactly that graceful degradation (docs/third-party-licenses.md).
+install(FILES third_party/icc-profiles/ISOcoated_v2_300_eci.icc
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/mosaic/icc-profiles")
 
 # Linux desktop integration (S48-b; overlaps S59 packaging, laid here first): the binary, the
 # .desktop entry that makes `mosaic %f` reachable from a file manager, the shared-mime-info
