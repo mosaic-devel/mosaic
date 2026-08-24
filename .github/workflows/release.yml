@@ -126,32 +126,73 @@ jobs:
             libsystemd-dev libxi-dev libxrandr-dev libcanberra-dev \
             libwayland-dev wayland-protocols libwayland-bin libxkbcommon-dev libdecor-0-dev \
             libpango1.0-dev libcairo2-dev libglu1-mesa-dev libegl1-mesa-dev libxft-dev libxcursor-dev \
-            libxinerama-dev gettext
+            libxinerama-dev gettext libbrotli-dev libhwy-dev nasm
 
-      - name: Cache FLTK 1.4
-        id: fltk-cache
+      # Three dependencies are TOO OLD on 24.04 and are built from source at the same versions
+      # packaging/windows/build-deps.sh pins, so every platform ships the same library behaviour:
+      #
+      #   FLTK            24.04 has 1.3.8; Mosaic needs 1.4 (Fl_Sys_Menu_Bar, the Wayland backend).
+      #   libjpeg-turbo   24.04 has 2.1.5, which predates the TurboJPEG 3 API (tj3Init, TJPARAM_*)
+      #                   that src/io/jpeg.cpp is written against.
+      #   libjxl          24.04 has 0.7.0; src/io/jxl.cpp calls JxlEncoderAllowExpertOptions (0.9)
+      #                   and JxlEncoderGetError (0.8). Built against the system brotli and highway,
+      #                   which ARE new enough, so there is one of each in the payload.
+      - name: Cache from-source dependencies
+        id: deps-cache
         uses: actions/cache@v4
         with:
-          path: /opt/fltk
-          key: fltk-1.4.5-${{ matrix.arch }}-ubuntu24.04-v1
+          path: /opt/mosaic-deps
+          key: linux-deps-${{ matrix.arch }}-ubuntu24.04-fltk1.4.5-jt3.0.4-jxl0.11.2-v1
 
-      - name: Build FLTK 1.4
-        if: steps.fltk-cache.outputs.cache-hit != 'true'
+      - name: Build from-source dependencies
+        if: steps.deps-cache.outputs.cache-hit != 'true'
         run: |
+          set -eux
+          sudo mkdir -p /opt/mosaic-deps && sudo chown -R "$USER" /opt/mosaic-deps
+          P=/opt/mosaic-deps
+
           curl -fL --retry 3 -o fltk.tar.gz \
             https://github.com/fltk/fltk/releases/download/release-1.4.5/fltk-1.4.5-source.tar.gz
           tar xf fltk.tar.gz
-          cmake -S fltk-1.4.5 -B fltk-build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/fltk \
+          cmake -S fltk-1.4.5 -B b-fltk -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$P" \
             -DFLTK_BUILD_TEST=OFF -DFLTK_BUILD_EXAMPLES=OFF -DFLTK_BUILD_FLUID=OFF \
             -DFLTK_BUILD_SHARED_LIBS=OFF \
             -DFLTK_BACKEND_WAYLAND=ON -DFLTK_BACKEND_X11=ON -DFLTK_USE_SYSTEM_LIBDECOR=ON
-          cmake --build fltk-build -j "$(nproc)"
-          sudo cmake --install fltk-build
+          cmake --build b-fltk -j "$(nproc)"
+          cmake --install b-fltk
+
+          curl -fL --retry 3 -o jt.tar.gz \
+            https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.0.4/libjpeg-turbo-3.0.4.tar.gz
+          tar xf jt.tar.gz
+          cmake -S libjpeg-turbo-3.0.4 -B b-jt -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$P" \
+            -DENABLE_STATIC=OFF -DWITH_TURBOJPEG=ON
+          cmake --build b-jt -j "$(nproc)"
+          cmake --install b-jt
+
+          curl -fL --retry 3 -o jxl.tar.gz \
+            https://github.com/libjxl/libjxl/archive/refs/tags/v0.11.2.tar.gz
+          tar xf jxl.tar.gz
+          cmake -S libjxl-0.11.2 -B b-jxl -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$P" \
+            -DBUILD_TESTING=OFF \
+            -DJPEGXL_ENABLE_TOOLS=OFF -DJPEGXL_ENABLE_EXAMPLES=OFF -DJPEGXL_ENABLE_BENCHMARK=OFF \
+            -DJPEGXL_ENABLE_DOXYGEN=OFF -DJPEGXL_ENABLE_MANPAGES=OFF \
+            -DJPEGXL_ENABLE_JNI=OFF -DJPEGXL_ENABLE_PLUGINS=OFF \
+            -DJPEGXL_ENABLE_TRANSCODE_JPEG=OFF -DJPEGXL_ENABLE_JPEGLI=OFF \
+            -DJPEGXL_ENABLE_SKCMS=OFF -DJPEGXL_FORCE_SYSTEM_BROTLI=ON \
+            -DJPEGXL_FORCE_SYSTEM_HWY=ON
+          cmake --build b-jxl -j "$(nproc)"
+          cmake --install b-jxl
 
       - name: Build AppImage
         env:
-          CMAKE_PREFIX_PATH: /opt/fltk
+          # The from-source libraries are shared, so ldd must resolve them from the prefix while
+          # make-appimage.sh walks the closure -- that is how they get copied into the AppDir.
+          CMAKE_PREFIX_PATH: /opt/mosaic-deps
+          PKG_CONFIG_PATH: /opt/mosaic-deps/lib/pkgconfig
+          LD_LIBRARY_PATH: /opt/mosaic-deps/lib
           MOSAIC_APPIMAGE_ARCH: ${{ matrix.arch }}
         run: bash packaging/linux/make-appimage.sh
 

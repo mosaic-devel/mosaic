@@ -193,8 +193,25 @@ vkdep=$("$OTOOL" -L "$APP/Contents/MacOS/mosaic" | awk '/libvulkan/{print $1; ex
 # invalidates it. rcodesign signs a bundle RECURSIVELY, so the nested dylibs and the Quick Look
 # .appex are covered by this one call (an unsigned nested bundle would invalidate the host's own
 # signature, so recursion is not a convenience here -- it is the requirement).
+#
+# The nested .appex bundles are signed WITH ENTITLEMENTS, scoped to their bundle paths: macOS
+# requires an app extension to be sandboxed, and pkd refuses to register one whose signature does
+# not say so. Signing the whole app with no entitlement dictionary -- which is what this did until
+# S59 -- yields extensions that are structurally complete and never load.
+#
+# Errors are NOT swallowed. This used to redirect both streams to /dev/null and print its success
+# message from an && chain, so a failed signature was completely silent -- and an unsigned bundle
+# does not merely lose thumbnails, it does not launch at all on Apple Silicon.
 if [ -x "$RCODESIGN" ]; then
-    "$RCODESIGN" sign "$APP" >/dev/null 2>&1 && echo "ad-hoc signed Mosaic.app"
+    ENTS="$HERE/appex-entitlements.plist"
+    if ! "$RCODESIGN" sign \
+            --entitlements-xml-path "Contents/PlugIns/MosaicQuickLook.appex:$ENTS" \
+            --entitlements-xml-path "Contents/PlugIns/MosaicQuickLookPreview.appex:$ENTS" \
+            "$APP"; then
+        echo "ERROR: rcodesign failed -- the app will not launch on Apple Silicon." >&2
+        exit 1
+    fi
+    echo "ad-hoc signed Mosaic.app (extensions sandboxed)"
 else
     echo "WARNING: no rcodesign found -- the app will NOT launch on Apple Silicon (unsigned arm64" >&2
     echo "         is rejected by the kernel). Install rcodesign or set MOSAIC_CODESIGN." >&2
