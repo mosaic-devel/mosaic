@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <string>
@@ -27,6 +28,33 @@
 
 namespace mosaic::core::text {
 namespace {
+
+// Load a dictionary from an in-memory buffer.
+//
+// hnj_hyphen_load_data() is NOT part of upstream hyphen 2.8.8 -- it is a DISTRO PATCH. Arch and
+// Fedora ship it, Debian and Ubuntu do not, and calling it unconditionally is what broke the first
+// Ubuntu build of this file. MOSAIC_HAVE_HYPHEN_LOAD_DATA is the configure-time probe
+// (src/core/CMakeLists.txt); without it the buffer round-trips through an anonymous tmpfile(),
+// which is plain ISO C and therefore exists everywhere -- the same fallback
+// packaging/windows/build-deps.sh patches into the copy it cross-builds, and for the same reason.
+// NOT fmemopen: that is a POSIX-2008 stdio extension mingw-w64 does not have.
+// The cost is one small write per dictionary, which happens once per language per process.
+HyphenDict* loadDictFromMemory(const char* data, std::size_t len) {
+#ifdef MOSAIC_HAVE_HYPHEN_LOAD_DATA
+    return hnj_hyphen_load_data(data, len);
+#else
+    std::FILE* f = std::tmpfile();
+    if (f == nullptr) return nullptr;
+    if (len != 0 && std::fwrite(data, 1, len, f) != len) {
+        std::fclose(f);
+        return nullptr;
+    }
+    std::rewind(f);
+    HyphenDict* dict = hnj_hyphen_load_file(f);
+    std::fclose(f);
+    return dict;
+#endif
+}
 
 // Lowercase a BCP-47/locale string and unify the separator, so "en_US" and "EN-us" key alike.
 std::string normLang(std::string_view s) {
@@ -141,7 +169,7 @@ struct Hyphenator::Impl {
         const std::string data((std::istreambuf_iterator<char>(in)),
                                std::istreambuf_iterator<char>());
         if (data.empty()) return nullptr;
-        return hnj_hyphen_load_data(data.data(), data.size());
+        return loadDictFromMemory(data.data(), data.size());
 #else
         return hnj_hyphen_load(utf8Path.c_str());
 #endif
@@ -182,7 +210,7 @@ Hyphenator& Hyphenator::operator=(Hyphenator&&) noexcept = default;
 bool Hyphenator::loadDictionaryData(std::string_view language, std::string_view dicData) {
     const std::string ll = primaryLanguageSubtag(normLang(language));
     if (ll.empty()) return false;
-    HyphenDict* d = hnj_hyphen_load_data(dicData.data(), dicData.size());
+    HyphenDict* d = loadDictFromMemory(dicData.data(), dicData.size());
     if (!d) return false;
     if (auto it = m_impl->dataDicts.find(ll); it != m_impl->dataDicts.end() && it->second)
         hnj_hyphen_free(it->second);

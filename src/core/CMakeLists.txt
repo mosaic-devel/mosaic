@@ -22,6 +22,21 @@ else()
     find_library(HYPHEN_LIB NAMES hyphen REQUIRED)
     find_path(HYPHEN_INCLUDE_DIR NAMES hyphen.h REQUIRED)
     set(MOSAIC_HYPHEN_SOURCE text/hyphenator.cpp)
+
+    # hnj_hyphen_load_data (load a dictionary from memory) is NOT in upstream hyphen 2.8.8 -- it is
+    # a DISTRO PATCH. Arch and Fedora carry it; Debian and Ubuntu do not, and a build there failed
+    # to compile on the symbol. So probe for it rather than assuming it: hyphenator.cpp falls back
+    # to a tmpfile() round-trip when it is absent, which is the same thing
+    # packaging/windows/build-deps.sh patches into its own cross-built copy.
+    include(CheckCXXSourceCompiles)
+    set(CMAKE_REQUIRED_INCLUDES "${HYPHEN_INCLUDE_DIR}")
+    set(CMAKE_REQUIRED_LIBRARIES "${HYPHEN_LIB}")
+    check_cxx_source_compiles("
+        #include <hyphen.h>
+        int main() { return hnj_hyphen_load_data(\"\", 0) == nullptr; }"
+        MOSAIC_HAVE_HYPHEN_LOAD_DATA)
+    unset(CMAKE_REQUIRED_INCLUDES)
+    unset(CMAKE_REQUIRED_LIBRARIES)
 endif()
 
 # enchant-2 backs core/text/spell_checker.cpp (Type spell-checking, deferred §2). It unifies the
@@ -165,6 +180,9 @@ else()
     # libhyphen (hyphenator.cpp) + enchant (spell_checker.cpp) are the Linux text backends.
     target_link_libraries(mosaic_core PRIVATE ${HYPHEN_LIB} PkgConfig::ENCHANT)
     target_include_directories(mosaic_core PRIVATE ${HYPHEN_INCLUDE_DIR})
+    if(MOSAIC_HAVE_HYPHEN_LOAD_DATA)
+        target_compile_definitions(mosaic_core PRIVATE MOSAIC_HAVE_HYPHEN_LOAD_DATA)
+    endif()
 endif()
 
 # The system hyphenation-dictionary dir (hyph_*.dic), read at runtime by the libhyphen Hyphenator.

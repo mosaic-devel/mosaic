@@ -5,19 +5,22 @@
 #              developed on, so the mandatory -Werror wall is exercised against the NEWEST GCC
 #              rather than a conservative LTS one. This is the job that catches "new compiler,
 #              new diagnostic" before it reaches a release branch.
-#   format     clang-format, on the files a commit actually touches (see the note below).
+#   format     clang-format, on the LINES a commit actually changes (see the note below).
 #   tidy       clang-tidy, likewise scoped to touched files, advisory for now. Runs as a STEP of
 #              the build job rather than a job of its own: it needs compile_commands.json AND the
 #              generated sources (SPIR-V headers, embedded assets, wayland-scanner stubs), which is
 #              a whole build -- so it reuses the one the build job just did instead of paying for
 #              a second.
 #
-# ⚠ Why format/tidy are scoped to CHANGED FILES rather than the whole tree: the tree predates any
-# formatting gate and is not clang-format-clean (~48k lines of drift, and inconsistently so -- some
-# files indent case labels, more do not). A tree-wide gate could only be made green by a 48k-line
-# reformat commit, which would bury real history. Scoping to the diff holds NEW code to the bar
-# without churning old code; the tree converges as files are touched. Flip to tree-wide only after
-# a deliberate, standalone reformat commit.
+# ⚠ Why the lint gates are scoped to a commit's own diff rather than the whole tree: the tree
+# predates any formatting gate and is not clang-format-clean (~48k lines of drift, and
+# inconsistently so -- some files indent case labels, more do not). A tree-wide gate could only be
+# made green by a 48k-line reformat commit, which would bury real history.
+#
+# The format job goes further and checks changed LINES, via git-clang-format, not changed FILES:
+# most of these files are large and legacy, so a whole-file check would fail on drift that a change
+# merely stood next to. Line scoping holds new code to the bar and lets the tree converge as it is
+# touched. Flip to tree-wide only after a deliberate, standalone reformat commit.
 name: CI
 
 on:
@@ -106,7 +109,7 @@ jobs:
           clang-tidy -p build/linux-debug "${files[@]}"
 
   format:
-    name: clang-format (changed files)
+    name: clang-format (changed lines)
     runs-on: ubuntu-latest
     container: archlinux:base-devel
     steps:
@@ -133,4 +136,15 @@ jobs:
             | grep -E '\.(cpp|hpp|h|mm)$' | grep -v '^third_party/' || true)
           if [ ${#files[@]} -eq 0 ]; then echo "no C++ files touched"; exit 0; fi
           printf 'checking %d file(s)\n' "${#files[@]}"
-          clang-format --dry-run -Werror "${files[@]}"
+          # git-clang-format, not clang-format: it reformats only the LINES this commit changed.
+          # Whole-file checking would fail on pre-existing drift in any legacy file a change so
+          # much as brushes against, which makes the gate unadoptable rather than strict.
+          diff=$(git clang-format --diff "$base" -- "${files[@]}" 2>/dev/null || true)
+          case "$diff" in
+            ""|*"no modified files"*|*"did not modify any files"*)
+              echo "changed lines are clang-format clean"; exit 0 ;;
+          esac
+          echo "$diff"
+          echo
+          echo "::error::Changed lines are not clang-format clean. Run: git clang-format $base"
+          exit 1
