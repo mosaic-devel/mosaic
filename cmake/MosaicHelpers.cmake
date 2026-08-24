@@ -25,6 +25,23 @@ function(mosaic_apply_warnings target)
                 -Wno-unused-const-variable -Wno-missing-braces -Wno-unused-lambda-capture
                 -Wno-unused-private-field)
         endif()
+
+        # GCC 12/13 report false -Wstringop-overflow / -Warray-bounds / -Wrestrict inside
+        # <bits/stl_algobase.h> for perfectly ordinary container calls, once the standard library
+        # has been inlined far enough that the optimizer loses track of the region's size. The one
+        # that surfaced here is ByteWriter::text() in src/formats/formats.hpp -- a
+        # vector<uint8_t>::insert of a two-character string_view, reported as "writing 1 byte into
+        # a region of size 0". The code is correct; the analysis is not, and upstream fixed this
+        # family in GCC 14.
+        #
+        # Scoped to GCC BELOW 14 so the diagnostics stay fully armed on the compilers the project
+        # is developed and CI'd against (the Arch container's GCC is far newer). Without this an
+        # LTS-distro build -- which is exactly what the release AppImages need, since an AppImage's
+        # glibc floor is its build host's -- cannot get past -Werror.
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 14)
+            target_compile_options(${target} PRIVATE
+                -Wno-stringop-overflow -Wno-array-bounds -Wno-restrict)
+        endif()
     elseif(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX)
     endif()
