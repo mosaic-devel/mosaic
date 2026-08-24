@@ -23,7 +23,7 @@ struct RunOptions {
 
     // Theme to apply at start-up. main() resolves this from the persisted settings; the in-app
     // theme picker (S51) will re-apply at runtime.
-    ThemeMode themeMode = ThemeMode::System;
+    ThemeMode themeMode = ThemeMode::Dark;
 
     // The persisted colour-picker surface key (Settings::pickerSurface) and where to write it
     // back when the user switches surfaces (empty path => don't persist). S12-a part 2.

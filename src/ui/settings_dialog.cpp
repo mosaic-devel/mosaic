@@ -2939,7 +2939,7 @@ void SettingsDialog::seed(const common::Settings& s) {
         static_cast<Fl_Valuator*>(m_tabletSpeedMax)->value(s.tabletSpeedMax);
     if (m_tabletSpeedWindow != nullptr)
         static_cast<Fl_Valuator*>(m_tabletSpeedWindow)->value(s.tabletSpeedWindowMs);
-    selectCardAt(m_themeCards, themeModeIndex(parseThemeMode(s.theme).value_or(ThemeMode::System)));
+    selectCardAt(m_themeCards, themeModeIndex(parseThemeMode(s.theme).value_or(ThemeMode::Dark)));
     if (!m_lineStyleCards.empty())
         selectCardAt(m_lineStyleCards, lineStyleIndex(s.overlayLineStyle));
     if (!m_featherCards.empty())

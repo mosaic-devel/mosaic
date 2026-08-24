@@ -710,7 +710,7 @@ int main(int argc, char** argv) {
 
     // Default: launch the GUI shell (FLTK window + Vulkan canvas), themed per settings.
     const mosaic::ui::ThemeMode themeMode =
-        mosaic::ui::parseThemeMode(settings.theme).value_or(mosaic::ui::ThemeMode::System);
+        mosaic::ui::parseThemeMode(settings.theme).value_or(mosaic::ui::ThemeMode::Dark);
     const int rc = mosaic::ui::runApp(mosaic::ui::RunOptions{.openPaths = std::move(openPathArgs),
                                                      .autoQuitFrames = guiFrames,
                                                      .themeMode = themeMode,

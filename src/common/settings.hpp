@@ -15,7 +15,11 @@ struct Settings {
     // On-disk schema version; bump when a field changes incompatibly (drives migrations later).
     static constexpr int kSchemaVersion = 1;
 
-    std::string theme = "system";   // "system" | "dark" | "light"
+    // Dark is the DEFAULT, not just an option (2026-08-24, user call): it is the identity the
+    // application is designed around, and an image editor's chrome competing with the image is
+    // the thing a neutral default gets wrong. "system" remains fully supported and is one click
+    // away in Settings, where it also picks up the OS accent colour and live theme changes.
+    std::string theme = "dark";     // "system" | "dark" | "light"
     std::string logLevel = "info";  // trace|debug|info|warn|error|critical|off
     std::string language;           // empty => follow the system locale; else e.g. "de", "ja"
     std::string units = "auto";     // measurement system: "auto" (follow the locale) | "metric" |

@@ -42,7 +42,12 @@ icon's palette (canvas ground `#171B2B`, default accent the icon blue `#5E7EFF`)
 
 `ui::ThemeMode { System, Dark, Light }`:
 
-- **Dark / Light** — fixed built-in palettes (deterministic; no OS calls).
+- **Dark / Light** — fixed built-in palettes (deterministic; no OS calls). **Dark is the
+  default** on a fresh install (`Settings::theme`, 2026-08-24): it is the identity the
+  application is designed around, and chrome competing with the image is the thing a neutral
+  default gets wrong for an image editor. It is a default, not a policy — **System** is one
+  click away in Settings and is the only mode that follows OS changes or picks up the OS
+  accent colour.
 - **System** — follows the host: `platform::detectColorScheme()` and
   `platform::detectAccentColor()` (see `platform/system_theme.*`). Detection is **best-effort
   and never blocks**:

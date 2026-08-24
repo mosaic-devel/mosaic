@@ -31,7 +31,7 @@ The on-disk shape:
 {
   "language": "",
   "logLevel": "info",
-  "theme": "system",
+  "theme": "dark",
   "version": 1
 }
 ```

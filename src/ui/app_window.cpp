@@ -6467,7 +6467,7 @@ public:
                 return ok;
             };
             host.setThemeMode = [this](const std::string& mode) {
-                setThemeMode(parseThemeMode(mode).value_or(ThemeMode::System));
+                setThemeMode(parseThemeMode(mode).value_or(ThemeMode::Dark));
             };
             host.setCropSwitchToolAfterApply = [this](bool on) {
                 m_cropSwitchToolAfterApply =
@@ -14140,7 +14140,8 @@ private:
     // Declared last so it is destroyed FIRST -- unsubscribes from theme changes before any chrome
     // it would touch is torn down. Assigned in the ctor once all chrome exists.
     ThemeSubscription m_themeSub;
-    ThemeMode m_themeMode = ThemeMode::System; // current mode; the System watcher re-resolves on OS change
+    // current mode; the System watcher re-resolves on OS change
+    ThemeMode m_themeMode = ThemeMode::Dark;
 };
 
 void cbSettings(Fl_Widget*, void* mainWindow) {
