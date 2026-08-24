@@ -41,7 +41,10 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  # Keyed on the TARGET as well as the ref, so a manual linux-only run and a manual windows-only
+  # run do not queue behind each other -- the Windows dependency stack takes far longer to build
+  # than everything else combined, and serialising the two makes iterating on either painful.
+  group: release-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.targets || 'all' }}
   cancel-in-progress: false
 
 jobs:
