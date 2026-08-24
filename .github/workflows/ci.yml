@@ -54,7 +54,8 @@ jobs:
             zlib zstd lz4 fontconfig expat \
             systemd-libs libxi libxrandr libcanberra \
             wayland wayland-protocols \
-            gettext python xorg-server-xvfb
+            gettext python xorg-server-xvfb \
+            ttf-dejavu noto-fonts hunspell hunspell-en_us
 
       - uses: actions/checkout@v7
         with:
@@ -69,6 +70,14 @@ jobs:
       # The suite is one doctest binary. GPU-backed cases fall back to the CPU path when no device
       # is present; vulkan-swrast (lavapipe) is installed above so the Vulkan path is exercised too.
       # xvfb-run covers any case that needs an X connection to construct an FLTK widget.
+      #
+      # ⚠ FONTS ARE A TEST DEPENDENCY, which is easy to miss because no CMake probe names them.
+      # archlinux:base-devel ships none, and a large part of the suite measures TEXT: dialog
+      # heights that depend on where a title wraps, settings rows sized to their label, the date
+      # picker's popup geometry. With no font installed those measure against whatever degenerate
+      # fallback FLTK lands on and the assertions fail for reasons that have nothing to do with the
+      # change under test. ttf-dejavu + noto-fonts give fontconfig a real, stable answer.
+      # hunspell is the same story for enchant, which otherwise loads no provider at all.
       - name: Test
         env:
           MOSAIC_LOG_LEVEL: warn

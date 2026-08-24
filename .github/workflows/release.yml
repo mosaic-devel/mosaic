@@ -367,6 +367,16 @@ jobs:
           sudo ln -sf /usr/bin/clang++-20 /usr/bin/clang++
           clang --version
 
+      # Every cached prefix this job uses lives outside $HOME, and the job runs as the
+      # unprivileged `runner` (unlike the Windows job, which is root inside a container). Create
+      # them up front and hand them over: a build step can sudo, but actions/cache CANNOT -- it
+      # extracts as the runner user, so a cache HIT on a root-owned prefix fails just as surely as
+      # the mkdir did. Doing it before the first cache step covers both directions.
+      - name: Prepare cached prefixes
+        run: |
+          sudo mkdir -p /macdeps /opt/osxcross /opt/dmgtools/bin
+          sudo chown -R "$USER" /macdeps /opt/osxcross /opt/dmgtools
+
       - name: Restore macOS SDK
         uses: actions/cache/restore@v6
         with:
@@ -384,8 +394,8 @@ jobs:
       - name: Build osxcross
         if: steps.osxcross-cache.outputs.cache-hit != 'true'
         run: |
-          sudo git clone --depth 1 https://github.com/tpoechtrager/osxcross.git /opt/osxcross
-          sudo chown -R "$USER" /opt/osxcross
+          # /opt/osxcross was created and chowned above and is empty, which is all git clone asks.
+          git clone --depth 1 https://github.com/tpoechtrager/osxcross.git /opt/osxcross
           # Xcode carries more than one SDK, so gen_sdk_package.sh packaged more than one, and
           # osxcross refuses to choose ("Please set the SDK_VERSION environment variable").
           # Copy only the newest, so there is nothing to choose between.
@@ -412,7 +422,6 @@ jobs:
       - name: Build DMG tooling
         if: steps.dmgtools-cache.outputs.cache-hit != 'true'
         run: |
-          sudo mkdir -p /opt/dmgtools/bin && sudo chown -R "$USER" /opt/dmgtools
           git clone --depth 1 https://github.com/planetbeing/libdmg-hfsplus.git pb
           cmake -S pb -B pb/build -DCMAKE_BUILD_TYPE=Release
           cmake --build pb/build -j "$(nproc)" --target hfsplus
