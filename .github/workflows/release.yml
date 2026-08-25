@@ -43,12 +43,19 @@ on:
 # never expire. That is stable only by accident: GitHub evicts a cache after 7 days idle, and the
 # next miss would silently build against whatever master happened to be that morning. Bump these
 # deliberately; nothing else moves them.
+#
+# ⚠ ALL PREFIXED MOSAIC_. Workflow-level env is exported into every step, so a name that lands in
+# some tool's OWN configuration namespace becomes that tool's problem. RCODESIGN_TAG did exactly
+# that: rcodesign reads its config from RCODESIGN_* variables, parsed the name as a config key
+# `tag` in its default profile, and refused to sign at all --
+# `UnknownField("tag", ["sign", "remote-sign"])`. OSXCROSS_* is the same hazard (osxcross reads
+# OSXCROSS_ROOT and friends). Do not name a variable after the tool it configures.
 env:
-  OSXCROSS_REF: 27d21e4977c9751d01199c7a226a6faf494c3dd9
-  LIBDMG_PB_REF: 7ac55ec64c96f7800d9818ce64c79670e7f02b67
-  LIBDMG_FQ_REF: 7ac55ec64c96f7800d9818ce64c79670e7f02b67
-  RCODESIGN_TAG: apple-codesign/0.29.0
-  LLVM_MINGW_TAG: '20260616'
+  MOSAIC_OSXCROSS_REF: 27d21e4977c9751d01199c7a226a6faf494c3dd9
+  MOSAIC_LIBDMG_PB_REF: 7ac55ec64c96f7800d9818ce64c79670e7f02b67
+  MOSAIC_LIBDMG_FQ_REF: 7ac55ec64c96f7800d9818ce64c79670e7f02b67
+  MOSAIC_RCODESIGN_TAG: apple-codesign/0.29.0
+  MOSAIC_LLVM_MINGW_TAG: '20260616'
 
 permissions:
   contents: write
@@ -286,9 +293,9 @@ jobs:
       - name: Install llvm-mingw (aarch64 only)
         if: matrix.arch == 'aarch64'
         run: |
-          url=$(curl -fsSL "https://api.github.com/repos/mstorsjo/llvm-mingw/releases/tags/$LLVM_MINGW_TAG" \
+          url=$(curl -fsSL "https://api.github.com/repos/mstorsjo/llvm-mingw/releases/tags/$MOSAIC_LLVM_MINGW_TAG" \
                 | grep -o 'https://[^"]*ucrt-ubuntu[^"]*-x86_64\.tar\.xz' | head -1)
-          [ -n "$url" ] || { echo "no llvm-mingw asset for tag $LLVM_MINGW_TAG" >&2; exit 1; }
+          [ -n "$url" ] || { echo "no llvm-mingw asset for tag $MOSAIC_LLVM_MINGW_TAG" >&2; exit 1; }
           echo "$url"
           curl -fL --retry 3 -o llvm-mingw.tar.xz "$url"
           mkdir -p /opt/llvm-mingw
@@ -361,7 +368,7 @@ jobs:
         if: steps.sdk-cache.outputs.cache-hit != 'true'
         run: |
           git clone https://github.com/tpoechtrager/osxcross.git
-          git -C osxcross checkout --quiet "$OSXCROSS_REF"
+          git -C osxcross checkout --quiet "$MOSAIC_OSXCROSS_REF"
           cd osxcross
           ./tools/gen_sdk_package.sh
           mkdir -p "$GITHUB_WORKSPACE/sdk"
@@ -440,7 +447,7 @@ jobs:
         run: |
           # /opt/osxcross was created and chowned above and is empty, which is all git clone asks.
           git clone https://github.com/tpoechtrager/osxcross.git /opt/osxcross
-          git -C /opt/osxcross checkout --quiet "$OSXCROSS_REF"
+          git -C /opt/osxcross checkout --quiet "$MOSAIC_OSXCROSS_REF"
           # Xcode carries more than one SDK, so gen_sdk_package.sh packaged more than one, and
           # osxcross refuses to choose ("Please set the SDK_VERSION environment variable").
           # Copy only the newest, so there is nothing to choose between.
@@ -475,12 +482,12 @@ jobs:
         if: steps.dmgtools-cache.outputs.cache-hit != 'true'
         run: |
           git clone https://github.com/planetbeing/libdmg-hfsplus.git pb
-          git -C pb checkout --quiet "$LIBDMG_PB_REF"
+          git -C pb checkout --quiet "$MOSAIC_LIBDMG_PB_REF"
           cmake -S pb -B pb/build -DCMAKE_BUILD_TYPE=Release
           cmake --build pb/build -j "$(nproc)" --target hfsplus
           cp pb/build/hfs/hfsplus /opt/dmgtools/bin/
           git clone https://github.com/fanquake/libdmg-hfsplus.git fq
-          git -C fq checkout --quiet "$LIBDMG_FQ_REF"
+          git -C fq checkout --quiet "$MOSAIC_LIBDMG_FQ_REF"
           cmake -S fq -B fq/build -DCMAKE_BUILD_TYPE=Release
           # NOT --target dmg: in this fork "dmg" is the static LIBRARY target (it builds libdmg.a
           # and nothing else), so the CLI never appeared and the copy failed on a path that does
@@ -496,10 +503,10 @@ jobs:
           fi
           echo "dmg tool: $dmgbin"
           cp "$dmgbin" /opt/dmgtools/bin/dmg
-          tag=$(printf '%s' "$RCODESIGN_TAG" | sed 's|/|%2F|')
+          tag=$(printf '%s' "$MOSAIC_RCODESIGN_TAG" | sed 's|/|%2F|')
           url=$(curl -fsSL "https://api.github.com/repos/indygreg/apple-platform-rs/releases/tags/$tag" \
                 | grep -o 'https://[^"]*x86_64-unknown-linux-musl\.tar\.gz' | head -1)
-          [ -n "$url" ] || { echo "no rcodesign asset for tag $RCODESIGN_TAG" >&2; exit 1; }
+          [ -n "$url" ] || { echo "no rcodesign asset for tag $MOSAIC_RCODESIGN_TAG" >&2; exit 1; }
           curl -fL --retry 3 -o rc.tar.gz "$url"
           tar xf rc.tar.gz
           find . -name rcodesign -type f -exec cp {} /opt/dmgtools/bin/ \;
