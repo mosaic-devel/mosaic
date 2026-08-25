@@ -55,6 +55,22 @@ void preferWaylandBackendIfUnset();
 // which is what custom-cursor rasterization does (ui::chromeCursorScale).
 [[nodiscard]] int windowBufferScale(Fl_Window* win);
 
+// Raise a shown sub-window to the TOP of its sibling z-order.
+//
+// This exists for one reason: on Windows the Vulkan canvas is a sibling sub-window that
+// nativeSurfaceHandle() deliberately sinks to HWND_BOTTOM so it acts as the chrome's backdrop
+// (see there). Sinking the canvas fixes the strobing, but it does not by itself guarantee that a
+// pop-up shown LATER comes out above it: FLTK creates a sub-window's HWND lazily on first show(),
+// and the resulting order is whatever Win32 happened to give it. The observed symptom is exact --
+// a menu's first submenu opens BEHIND the canvas, and the next one hovered, with the window now
+// already created, opens in front.
+//
+// So a window that must be on top has to SAY so, every time it is shown, rather than relying on
+// creation order. A no-op on X11, Wayland and macOS: menus there are separate top-level surfaces
+// (or AppKit's own), never siblings competing with the canvas, which is why only Windows shows
+// this. Safe to call on a null or not-yet-shown window.
+void raiseNativeWindowToTop(Fl_Window* win);
+
 // Fill `out` with the native handles for a *shown* window. Returns false / sets `error`
 // if the window is not yet shown or no usable handle is available.
 [[nodiscard]] bool nativeSurfaceHandle(Fl_Window* win, NativeSurfaceHandle& out,

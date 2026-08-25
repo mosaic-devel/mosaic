@@ -46,6 +46,23 @@ int windowBufferScale(Fl_Window* /*win*/) {
     return 1;
 }
 
+void raiseNativeWindowToTop(Fl_Window* win) {
+    // The counterpart to the HWND_BOTTOM sink in nativeSurfaceHandle(): that makes the canvas the
+    // backdrop, and this is how anything that must sit ON the backdrop asserts it. Called on every
+    // show() rather than once, because FLTK creates a sub-window's HWND lazily and reuses it after
+    // hide(), so "already correct" and "never ordered at all" are indistinguishable from here --
+    // and SetWindowPos on an already-top window is cheap and idempotent.
+    if (win == nullptr || win->shown() == 0)
+        return;
+    HWND hwnd = fl_win32_xid(win);
+    if (hwnd == nullptr)
+        return;
+    // NOT SWP_SHOWWINDOW: FLTK's show() owns visibility, and forcing it here would map a window
+    // that FLTK is in the middle of hiding. NOACTIVATE keeps the keyboard focus where the menu
+    // code put it (openFor() calls take_focus() straight after).
+    SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
 bool nativeSurfaceHandle(Fl_Window* win, NativeSurfaceHandle& out, std::string& error) {
     if (win == nullptr || win->shown() == 0) {
         error = "native handle requested for a window that is not shown";

@@ -66,6 +66,11 @@ CAMetalLayer* ensureMetalLayer(NSView* content) {
 
 } // namespace
 
+void raiseNativeWindowToTop(Fl_Window* /*win*/) {
+    // Nothing to do on macOS: the menus are AppKit's own (Fl_Sys_Menu_Bar draws into the system
+    // menu bar, S58-b), and the canvas is a dedicated NSView subview rather than a sibling window.
+}
+
 bool nativeSurfaceHandle(Fl_Window* win, NativeSurfaceHandle& out, std::string& error) {
     if (win == nullptr || win->shown() == 0) {
         error = "native handle requested for a window that is not shown";

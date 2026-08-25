@@ -42,6 +42,13 @@ int windowBufferScale(Fl_Window* win) {
     return scale > 0 ? scale : 1;
 }
 
+void raiseNativeWindowToTop(Fl_Window* /*win*/) {
+    // Nothing to do on X11 or Wayland. A menu pop-up is not a sibling of the canvas here: on X11
+    // FLTK maps it as an override-redirect TOP-LEVEL window, and on Wayland the canvas lives on its
+    // own wl_subsurface with the chrome on the parent surface. Neither can be occluded by the
+    // canvas, which is exactly why the bug this answers is Windows-only.
+}
+
 bool nativeSurfaceHandle(Fl_Window* win, NativeSurfaceHandle& out, std::string& error) {
     if (win == nullptr || win->shown() == 0) {
         error = "native handle requested for a window that is not shown";

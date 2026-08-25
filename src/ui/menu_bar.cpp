@@ -1,5 +1,6 @@
 #include "ui/menu_bar.hpp"
 
+#include "platform/native_window.hpp" // raiseNativeWindowToTop: the pop-up's z-order on Windows
 #include "ui/keymap.hpp" // the text-editor fence names actions; the keymap knows their chords
 #include "ui/theme.hpp"
 #include "ui/widgets.hpp" // Marquee (the ticker's horizontal overflow scroll)
@@ -436,6 +437,12 @@ public:
         resize(px, py, pw, ph);
         m_selfSizing = false;
         show();
+        // Assert the z-order every time, not just the first: on Windows the Vulkan canvas is a
+        // sibling sub-window deliberately sunk to HWND_BOTTOM, and a pop-up shown afterwards is
+        // NOT guaranteed to come out above it -- the first submenu of a menu opened behind the
+        // canvas while the next one hovered, its window by then already created, opened in front.
+        // A no-op off Windows, where menus are not siblings of the canvas at all.
+        platform::raiseNativeWindowToTop(this);
         redraw();     // refill when reused for a title switch (same window, new contents)
         take_focus(); // so the open menu accepts keyboard navigation (after a mnemonic opens it)
     }
