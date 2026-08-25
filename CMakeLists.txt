@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(Mosaic
-    # 0.3.0 -- the first TAGGED, published release (PLAN.md item 9, decision 2026-08-24).
+    # 0.3.1 -- Windows interface fixes on top of 0.3.0 (PLAN.md item 9).
+    #
+    # 0.3.0 was the first TAGGED, published release (decision 2026-08-24).
     #
     # This supersedes the "perma-alpha, frozen at 0.2.17" rule. That rule existed because a
     # 0.<phase>.<session> number could not honestly describe a build of a non-linear roadmap, and
@@ -10,7 +12,7 @@ project(Mosaic
     # has to be able to name a build. So the version now moves only when something is RELEASED,
     # which is what SemVer asks of it. The short git commit is still appended (0.3.0+g<rev>) and is
     # still the exact identifier; the number in front of it is now the human-facing one.
-    VERSION 0.3.0
+    VERSION 0.3.1
     DESCRIPTION "A professional, GPU-accelerated, cross-platform image editor"
     HOMEPAGE_URL "https://github.com/mosaic-devel/mosaic"
     LANGUAGES CXX)

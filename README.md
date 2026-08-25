@@ -2,10 +2,10 @@
 > **Development is paused indefinitely, and this is alpha software.** The feature surface is
 > broad; the polish is not.
 >
-> - The **Windows** port is buggy. Running it under Wine causes rapid flashing — **do not run it
->   if you have epilepsy.**
-> - The **macOS** Quick Look and thumbnail extensions may not work, and can make Finder hang. They
->   install automatically when you open the DMG — Apple's design, not a choice Mosaic makes.
+> - The **Windows** port is not the main priority and may contain bugs.
+> - The **macOS** Quick Look and thumbnail extensions are unverified on hardware and have been
+>   reported to hang Finder. They install automatically when you open the DMG — Apple's design,
+>   not a choice Mosaic makes.
 > - **Performance degrades on large documents**, on every platform.
 >
 > **This project is not sponsored or endorsed by Anthropic.**

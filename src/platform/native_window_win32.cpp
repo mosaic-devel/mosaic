@@ -20,10 +20,9 @@
 // below are OURS, not FLTK's, and an FLTK that stopped leaking the system header would otherwise
 // break this file at a distance. The toolchain defines NOMINMAX globally
 // (cmake/toolchains/mingw-w64.cmake), so <windows.h> cannot clobber std::min/std::max here.
-#include <windows.h>
-
 #include <cstring>
 #include <vector>
+#include <windows.h>
 
 namespace mosaic::platform {
 
@@ -86,7 +85,8 @@ void applyNativeWindowShape(Fl_Window* win, const unsigned char* rgba, int w, in
         const unsigned char* row = rgba + static_cast<std::size_t>(y) * w * 4;
         int x = 0;
         while (x < w) {
-            while (x < w && row[x * 4 + 3] < 128) // alpha is a clean 0/255 here; 128 is just a guard
+            while (x < w &&
+                   row[x * 4 + 3] < 128) // alpha is a clean 0/255 here; 128 is just a guard
                 ++x;
             if (x >= w)
                 break;
