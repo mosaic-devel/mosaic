@@ -742,6 +742,11 @@ private:
 // sub-window) leave their Dropdowns on Fl_Choice's stock list.
 class DropdownPopup : public Fl_Double_Window {
 public:
+    // Assert z-order on every show: on Windows this is a sibling of the Vulkan canvas (sunk to
+    // HWND_BOTTOM as the chrome's backdrop) and would otherwise open UNDER it, invisibly. See
+    // ui::Popover::show(). A no-op off Windows.
+    void show() override;
+
     DropdownPopup();
     ~DropdownPopup() override;
 
@@ -826,6 +831,11 @@ struct ContextAction {
 // menu by top_window(). Fields whose top-level created none fall back to FLTK's stock menu.
 class ContextMenu : public Fl_Double_Window {
 public:
+    // Assert z-order on every show: on Windows this is a sibling of the Vulkan canvas (sunk to
+    // HWND_BOTTOM as the chrome's backdrop) and would otherwise open UNDER it, invisibly. See
+    // ui::Popover::show(). A no-op off Windows.
+    void show() override;
+
     ContextMenu();
     ~ContextMenu() override;
 

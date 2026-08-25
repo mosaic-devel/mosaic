@@ -7022,12 +7022,6 @@ void VulkanCanvas::renderFrame() {
     ensureRenderer();
     if (!m_renderer)
         return;
-    // The canvas is the BACKDROP: every FLTK overlay that opens over it -- menus, pop-overs, the
-    // corner panels, combo-box drop-downs, the shaped bubble flyouts -- must be above it. On
-    // Windows those are all sibling sub-windows whose HWND is created lazily on first show(), so
-    // stating the rule here, on the one window it concerns, is what keeps a pop-up added later
-    // from having to know about it. Costs one z-order read per frame; see the header.
-    platform::keepNativeWindowAtBottom(this);
     if (m_gesture.active() && m_gesture.previewDirty()) {
         // Live gesture preview, coalesced to the frame (drag events only mark it dirty), straight
         // to the canvas, never the command stack. LASSOS draw their path as a smooth inverted line

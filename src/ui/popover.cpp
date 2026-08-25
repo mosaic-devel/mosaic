@@ -1,4 +1,5 @@
 #include "ui/popover.hpp"
+#include "platform/native_window.hpp" // raiseNativeWindowToTop: overlay z-order on Windows
 
 #include "common/image.hpp"
 #include "ui/color_flyout.hpp" // dismissActiveColorFlyoutOnOutsideClick (a panel hosts the colour chip)
@@ -60,6 +61,11 @@ void Popover::reapplyTheme() {
 Popover::~Popover() {
     if (g_active == this)
         g_active = nullptr;
+}
+
+void Popover::show() {
+    Fl_Double_Window::show();
+    platform::raiseNativeWindowToTop(this);
 }
 
 void Popover::showAnchored(const Fl_Widget* anchor) {

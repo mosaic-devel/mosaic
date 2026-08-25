@@ -306,6 +306,14 @@ jobs:
 
       - uses: actions/checkout@v7
 
+      # This job runs as ROOT inside a container while the checkout was made by the runner user, so
+      # git refuses the repo for "dubious ownership" -- and CMakeLists' rev-parse runs with
+      # ERROR_QUIET, so the refusal is silent: MOSAIC_GIT_REV comes out empty and every Windows
+      # binary reported a bare "0.3.0" with no commit and no -dirty flag. The AppImage job does not
+      # hit this because it runs directly on the runner as the user that checked out.
+      - name: Trust the checkout (container runs as a different user)
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       # 24 libraries cross-built from source per arch. Keyed on the script, because the script IS
       # the dependency manifest -- it pins every version inline.
       # restore + save split, as in the macOS job: actions/cache saves under post-if: success(),

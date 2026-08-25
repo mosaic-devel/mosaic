@@ -28,6 +28,11 @@ namespace mosaic::ui {
 
 class BubbleFlyout : public Fl_Double_Window {
 public:
+    // Assert z-order on every show: on Windows this is a sibling of the Vulkan canvas (sunk to
+    // HWND_BOTTOM as the chrome's backdrop) and would otherwise open UNDER it, invisibly. See
+    // ui::Popover::show(). A no-op off Windows.
+    void show() override;
+
     // Shared geometry (one definition -- referenced by every subclass's content layout).
     static constexpr int kTri = 10;               // triangle depth / strip width == the anchor GAP
     static constexpr int kTriH = 18;              // triangle base height

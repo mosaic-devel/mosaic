@@ -111,6 +111,11 @@ version() {
     echo "${v}+g${rev}"
 }
 VERSION="$(version)"
+# The FULL identifier, always with +g<rev>, whatever MOSAIC_VERSION says. The artifact NAME wants
+# the clean release number, but the MSI's Comments field is the one place the commit can live (its
+# ProductVersion is numeric-only), so stripping the rev from both left a release .msi that could
+# not say which build it was.
+FULLVERSION="$(MOSAIC_VERSION= version)"
 # The MSI's ProductVersion field is numeric-only (major.minor.build, compared field by field), so the
 # git rev cannot live there. It goes in the package Comments instead, and in the exe's VERSIONINFO
 # strings (packaging/windows/mosaic.rc.in). See mosaic.wxs for what that costs at upgrade time.
@@ -406,7 +411,7 @@ FILESWXS="$OUT/$NAME-files.wxs"
         -D Win64=yes \
         -D MosaicStage="$STAGE" \
         -D MosaicVersion="$NUMVERSION" \
-        -D MosaicBuild="$VERSION" \
+        -D MosaicBuild="$FULLVERSION" \
         -D MosaicIcon="$OUT/mosaic.ico" \
         "$HERE/mosaic.wxs" "$FILESWXS"
 

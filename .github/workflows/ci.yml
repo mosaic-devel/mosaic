@@ -61,6 +61,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Container runs as root over a checkout owned by the runner user; without this git refuses
+      # the repo and CMakeLists' silent rev-parse leaves the build with no commit in its version.
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Configure
         run: cmake --preset linux-debug
 

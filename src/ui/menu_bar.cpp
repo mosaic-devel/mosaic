@@ -359,6 +359,13 @@ public:
     // is the pop-up to use for a nested submenu row (nullptr = no deeper nesting). `keyboard` opens
     // in keyboard mode (item mnemonic underlines shown); a mouse-opened menu stays clean until a key
     // is pressed (see handleKey) -- matches modern menus: mnemonics only when you're driving by key.
+    // Assert z-order on every show: on Windows this is a sibling of the Vulkan canvas (sunk to
+    // HWND_BOTTOM as the chrome's backdrop) and would otherwise open UNDER it. See ui::Popover.
+    void show() override {
+        Fl_Double_Window::show();
+        platform::raiseNativeWindowToTop(this);
+    }
+
     void openFor(MenuBar* bar, const Fl_Menu_Item* parent, int hostX, int hostY, MenuPopup* sub,
                  bool keyboard) {
         m_bar = bar;
@@ -436,13 +443,7 @@ public:
         m_selfSizing = true; // the resize below is OURS -- let it through the swallow in resize()
         resize(px, py, pw, ph);
         m_selfSizing = false;
-        show();
-        // Assert the z-order every time, not just the first: on Windows the Vulkan canvas is a
-        // sibling sub-window deliberately sunk to HWND_BOTTOM, and a pop-up shown afterwards is
-        // NOT guaranteed to come out above it -- the first submenu of a menu opened behind the
-        // canvas while the next one hovered, its window by then already created, opened in front.
-        // A no-op off Windows, where menus are not siblings of the canvas at all.
-        platform::raiseNativeWindowToTop(this);
+        show(); // the show() override below asserts this pop-up's z-order over the canvas
         redraw();     // refill when reused for a title switch (same window, new contents)
         take_focus(); // so the open menu accepts keyboard navigation (after a mnemonic opens it)
     }

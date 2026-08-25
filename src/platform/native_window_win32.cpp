@@ -63,23 +63,6 @@ void raiseNativeWindowToTop(Fl_Window* win) {
     SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
 
-void keepNativeWindowAtBottom(Fl_Window* win) {
-    if (win == nullptr || win->shown() == 0)
-        return;
-    HWND hwnd = fl_win32_xid(win);
-    if (hwnd == nullptr)
-        return;
-    // GW_HWNDLAST from any sibling is the bottom-most of that sibling chain. If that is already
-    // us, there is nothing to do -- which is the common case, so the per-frame cost is one read.
-    if (GetWindow(hwnd, GW_HWNDLAST) == hwnd)
-        return;
-    // SWP_NOREDRAW: we are about to present over this whole client area anyway, and letting Win32
-    // invalidate it here would hand GDI a repaint to race the present with -- the very thing the
-    // clipping styles in nativeSurfaceHandle() exist to stop.
-    SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0,
-                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOREDRAW);
-}
-
 bool nativeSurfaceHandle(Fl_Window* win, NativeSurfaceHandle& out, std::string& error) {
     if (win == nullptr || win->shown() == 0) {
         error = "native handle requested for a window that is not shown";

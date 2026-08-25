@@ -40,6 +40,14 @@ public:
     Popover(int W, int H);
     ~Popover() override;
 
+    // Every overlay must assert its z-order on EVERY show, not rely on creation order. On Windows
+    // it is a sibling sub-window of the Vulkan canvas, which nativeSurfaceHandle() sinks to
+    // HWND_BOTTOM to act as the chrome's backdrop; FLTK creates a sub-window's HWND lazily on
+    // first show(), so without this the pop-up opens UNDER the canvas and is simply invisible.
+    // Overriding show() rather than patching call sites covers every subclass and every caller.
+    // A no-op off Windows.
+    void show() override;
+
     // Position next to `anchor` (a sibling under the same top-level window) and show. The popover is
     // placed just to the right of the anchor, bottom-aligned so it opens upward, clamped to stay
     // within the parent window, at its fixed construction size. Remembers the anchor (for reanchor())

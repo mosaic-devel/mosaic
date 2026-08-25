@@ -1,4 +1,5 @@
 #include "ui/widgets.hpp"
+#include "platform/native_window.hpp" // raiseNativeWindowToTop: overlay z-order on Windows
 
 #include "common/charconv_compat.hpp"
 #include "common/i18n.hpp"
@@ -606,6 +607,11 @@ DropdownPopup::~DropdownPopup() {
                            g_dropdownPopups.end());
 }
 
+void DropdownPopup::show() {
+    Fl_Double_Window::show();
+    platform::raiseNativeWindowToTop(this);
+}
+
 void DropdownPopup::openFor(Dropdown* owner) {
     m_owner = owner;
     m_items.clear();
@@ -1026,6 +1032,11 @@ ContextMenu::~ContextMenu() {
         g_activeContextMenu = nullptr;
     g_contextMenus.erase(std::remove(g_contextMenus.begin(), g_contextMenus.end(), this),
                          g_contextMenus.end());
+}
+
+void ContextMenu::show() {
+    Fl_Double_Window::show();
+    platform::raiseNativeWindowToTop(this);
 }
 
 void ContextMenu::openWith(int hostX, int hostY, std::vector<ContextAction> actions) {

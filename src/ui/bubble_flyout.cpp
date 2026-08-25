@@ -1,4 +1,5 @@
 #include "ui/bubble_flyout.hpp"
+#include "platform/native_window.hpp" // raiseNativeWindowToTop: overlay z-order on Windows
 
 #include "ui/popover.hpp" // Popover::bubbleSupported (shape() is backend-gated)
 #include "ui/theme.hpp"
@@ -83,6 +84,11 @@ void BubbleFlyout::placeBubble(const Fl_Widget* anchor) {
     m_tipY = std::clamp((ay + anchor->h() / 2) - py, kTriH / 2 + kPad, h() - kTriH / 2 - kPad);
     resize(px, py, w(), h());
     applyBubbleShape(); // before show(), like the Popover
+}
+
+void BubbleFlyout::show() {
+    Fl_Double_Window::show();
+    platform::raiseNativeWindowToTop(this);
 }
 
 void BubbleFlyout::applyBubbleShape() {

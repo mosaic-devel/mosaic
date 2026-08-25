@@ -1,4 +1,5 @@
 #include "ui/date_picker.hpp"
+#include "platform/native_window.hpp" // raiseNativeWindowToTop: overlay z-order
 
 #include <FL/Enumerations.H>
 #include <FL/Fl.H>
@@ -271,6 +272,13 @@ public:
         show();
         m_open = true;
         g_activeCalendar = this;
+    }
+
+    // Assert z-order on every show: on Windows this is a sibling of the Vulkan canvas (sunk to
+    // HWND_BOTTOM as the chrome's backdrop) and would otherwise open UNDER it. See ui::Popover.
+    void show() override {
+        Fl_Double_Window::show();
+        platform::raiseNativeWindowToTop(this);
     }
 
     void hide() override {
