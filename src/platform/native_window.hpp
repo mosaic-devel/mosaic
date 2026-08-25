@@ -71,6 +71,23 @@ void preferWaylandBackendIfUnset();
 // this. Safe to call on a null or not-yet-shown window.
 void raiseNativeWindowToTop(Fl_Window* win);
 
+// Keep `win` at the BOTTOM of its sibling z-order, cheaply, if it has drifted off it.
+//
+// The companion to raiseNativeWindowToTop(), and the general answer where that one is the narrow
+// one. On Windows every FLTK overlay -- menus, pop-overs, the corner panels, combo-box drop-downs,
+// the shaped bubble flyouts -- is a sub-window SIBLING of the Vulkan canvas, and each is created
+// lazily on its first show(), landing wherever Win32 puts it. Fixing that per pop-up means every
+// overlay must remember to ask, and a new one added later silently will not.
+//
+// The invariant is much simpler stated on the canvas, of which there is exactly one: the thing
+// being presented into is the BACKDROP, so it belongs at the bottom, always. Assert that once per
+// frame and every sibling -- present and future -- is above it without knowing this exists. The
+// check is a single GetWindow() read; the corrective SetWindowPos only runs when the order has
+// actually drifted, which is a handful of times in a session rather than per frame.
+//
+// A no-op on X11, Wayland and macOS, where overlays are not siblings of the canvas at all.
+void keepNativeWindowAtBottom(Fl_Window* win);
+
 // Fill `out` with the native handles for a *shown* window. Returns false / sets `error`
 // if the window is not yet shown or no usable handle is available.
 [[nodiscard]] bool nativeSurfaceHandle(Fl_Window* win, NativeSurfaceHandle& out,

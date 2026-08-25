@@ -71,6 +71,10 @@ void raiseNativeWindowToTop(Fl_Window* /*win*/) {
     // menu bar, S58-b), and the canvas is a dedicated NSView subview rather than a sibling window.
 }
 
+void keepNativeWindowAtBottom(Fl_Window* /*win*/) {
+    // No-op: the canvas is a dedicated NSView subview, not a sibling window.
+}
+
 bool nativeSurfaceHandle(Fl_Window* win, NativeSurfaceHandle& out, std::string& error) {
     if (win == nullptr || win->shown() == 0) {
         error = "native handle requested for a window that is not shown";

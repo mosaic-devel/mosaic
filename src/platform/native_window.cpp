@@ -49,6 +49,12 @@ void raiseNativeWindowToTop(Fl_Window* /*win*/) {
     // canvas, which is exactly why the bug this answers is Windows-only.
 }
 
+void keepNativeWindowAtBottom(Fl_Window* /*win*/) {
+    // No-op for the same reason raiseNativeWindowToTop() is: on X11 an FLTK overlay is an
+    // override-redirect top-level, and on Wayland the canvas has its own wl_subsurface. Neither
+    // competes with the canvas for a sibling z-order.
+}
+
 bool nativeSurfaceHandle(Fl_Window* win, NativeSurfaceHandle& out, std::string& error) {
     if (win == nullptr || win->shown() == 0) {
         error = "native handle requested for a window that is not shown";
