@@ -7,6 +7,7 @@
 #   MOSAIC_APPIMAGE_ARCH   x86_64 | aarch64        (default: uname -m)
 #   MOSAIC_APPIMAGE_OUT    output directory        (default: build/linux-appimage)
 #   MOSAIC_APPIMAGETOOL    path to appimagetool    (default: downloaded next to the output)
+#   MOSAIC_APPIMAGETOOL_VERSION  appimagetool release to fetch (default: the pin below)
 #   MOSAIC_SKIP_BUILD=1    reuse an existing build/linux-release tree
 #   JOBS                   parallel build jobs     (default: nproc)
 #
@@ -18,6 +19,10 @@
 set -euo pipefail
 
 ARCH="${MOSAIC_APPIMAGE_ARCH:-$(uname -m)}"
+# PINNED, not "continuous". appimagetool's continuous tag is rebuilt in place, so the packer that
+# produced a shipped release could not be identified afterwards, and a rebuild of an old tag would
+# silently use a newer packer. Bump deliberately.
+APPIMAGETOOL_VERSION="${MOSAIC_APPIMAGETOOL_VERSION:-1.9.1}"
 JOBS="${JOBS:-$(nproc)}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
@@ -143,7 +148,7 @@ if [ -z "$TOOL" ]; then
   if [ ! -x "$TOOL" ]; then
     echo "   fetching appimagetool for $ARCH"
     curl -fL --retry 3 -o "$TOOL" \
-      "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage"
+      "https://github.com/AppImage/appimagetool/releases/download/$APPIMAGETOOL_VERSION/appimagetool-$ARCH.AppImage"
     chmod +x "$TOOL"
   fi
 fi

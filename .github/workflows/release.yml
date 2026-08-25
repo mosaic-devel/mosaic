@@ -37,6 +37,19 @@ on:
         type: boolean
         default: false
 
+# Pinned build TOOLS. The library stacks are pinned inside packaging/*/build-deps.sh and their
+# cache keys hash those scripts, but the tooling was fetched from moving targets -- `git clone` of
+# master, "releases/latest", appimagetool's `continuous` -- while sitting behind cache keys that
+# never expire. That is stable only by accident: GitHub evicts a cache after 7 days idle, and the
+# next miss would silently build against whatever master happened to be that morning. Bump these
+# deliberately; nothing else moves them.
+env:
+  OSXCROSS_REF: 27d21e4977c9751d01199c7a226a6faf494c3dd9
+  LIBDMG_PB_REF: 7ac55ec64c96f7800d9818ce64c79670e7f02b67
+  LIBDMG_FQ_REF: 7ac55ec64c96f7800d9818ce64c79670e7f02b67
+  RCODESIGN_TAG: apple-codesign/0.29.0
+  LLVM_MINGW_TAG: '20260616'
+
 permissions:
   contents: write
 
@@ -137,6 +150,11 @@ jobs:
       #   libjxl          24.04 has 0.7.0; src/io/jxl.cpp calls JxlEncoderAllowExpertOptions (0.9)
       #                   and JxlEncoderGetError (0.8). Built against the system brotli and highway,
       #                   which ARE new enough, so there is one of each in the payload.
+      # ⚠ The key names every pinned version, so a version bump invalidates it correctly -- but it
+      # does NOT hash this workflow, so changing a BUILD FLAG here without touching a version would
+      # reuse a stale prefix. Bump the -v1 suffix when that happens. (The Windows and macOS stacks
+      # avoid this by living in a script the key hashes; this one would too if it moved into
+      # packaging/linux/build-deps.sh.)
       - name: Cache from-source dependencies
         id: deps-cache
         uses: actions/cache@v6
@@ -261,9 +279,9 @@ jobs:
       - name: Install llvm-mingw (aarch64 only)
         if: matrix.arch == 'aarch64'
         run: |
-          url=$(curl -fsSL https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest \
+          url=$(curl -fsSL "https://api.github.com/repos/mstorsjo/llvm-mingw/releases/tags/$LLVM_MINGW_TAG" \
                 | grep -o 'https://[^"]*ucrt-ubuntu[^"]*-x86_64\.tar\.xz' | head -1)
-          [ -n "$url" ] || { echo "could not resolve an llvm-mingw release URL" >&2; exit 1; }
+          [ -n "$url" ] || { echo "no llvm-mingw asset for tag $LLVM_MINGW_TAG" >&2; exit 1; }
           echo "$url"
           curl -fL --retry 3 -o llvm-mingw.tar.xz "$url"
           mkdir -p /opt/llvm-mingw
@@ -324,7 +342,8 @@ jobs:
       - name: Generate SDK tarball
         if: steps.sdk-cache.outputs.cache-hit != 'true'
         run: |
-          git clone --depth 1 https://github.com/tpoechtrager/osxcross.git
+          git clone https://github.com/tpoechtrager/osxcross.git
+          git -C osxcross checkout --quiet "$OSXCROSS_REF"
           cd osxcross
           ./tools/gen_sdk_package.sh
           mkdir -p "$GITHUB_WORKSPACE/sdk"
@@ -402,7 +421,8 @@ jobs:
         if: steps.osxcross-cache.outputs.cache-hit != 'true'
         run: |
           # /opt/osxcross was created and chowned above and is empty, which is all git clone asks.
-          git clone --depth 1 https://github.com/tpoechtrager/osxcross.git /opt/osxcross
+          git clone https://github.com/tpoechtrager/osxcross.git /opt/osxcross
+          git -C /opt/osxcross checkout --quiet "$OSXCROSS_REF"
           # Xcode carries more than one SDK, so gen_sdk_package.sh packaged more than one, and
           # osxcross refuses to choose ("Please set the SDK_VERSION environment variable").
           # Copy only the newest, so there is nothing to choose between.
@@ -436,11 +456,13 @@ jobs:
       - name: Build DMG tooling
         if: steps.dmgtools-cache.outputs.cache-hit != 'true'
         run: |
-          git clone --depth 1 https://github.com/planetbeing/libdmg-hfsplus.git pb
+          git clone https://github.com/planetbeing/libdmg-hfsplus.git pb
+          git -C pb checkout --quiet "$LIBDMG_PB_REF"
           cmake -S pb -B pb/build -DCMAKE_BUILD_TYPE=Release
           cmake --build pb/build -j "$(nproc)" --target hfsplus
           cp pb/build/hfs/hfsplus /opt/dmgtools/bin/
-          git clone --depth 1 https://github.com/fanquake/libdmg-hfsplus.git fq
+          git clone https://github.com/fanquake/libdmg-hfsplus.git fq
+          git -C fq checkout --quiet "$LIBDMG_FQ_REF"
           cmake -S fq -B fq/build -DCMAKE_BUILD_TYPE=Release
           # NOT --target dmg: in this fork "dmg" is the static LIBRARY target (it builds libdmg.a
           # and nothing else), so the CLI never appeared and the copy failed on a path that does
@@ -456,8 +478,10 @@ jobs:
           fi
           echo "dmg tool: $dmgbin"
           cp "$dmgbin" /opt/dmgtools/bin/dmg
-          url=$(curl -fsSL https://api.github.com/repos/indygreg/apple-platform-rs/releases/latest \
+          tag=$(printf '%s' "$RCODESIGN_TAG" | sed 's|/|%2F|')
+          url=$(curl -fsSL "https://api.github.com/repos/indygreg/apple-platform-rs/releases/tags/$tag" \
                 | grep -o 'https://[^"]*x86_64-unknown-linux-musl\.tar\.gz' | head -1)
+          [ -n "$url" ] || { echo "no rcodesign asset for tag $RCODESIGN_TAG" >&2; exit 1; }
           curl -fL --retry 3 -o rc.tar.gz "$url"
           tar xf rc.tar.gz
           find . -name rcodesign -type f -exec cp {} /opt/dmgtools/bin/ \;
