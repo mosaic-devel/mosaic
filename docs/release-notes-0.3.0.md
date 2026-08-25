@@ -20,13 +20,13 @@ below are real rather than boilerplate.
 
 | Platform | File | Notes |
 | --- | --- | --- |
-| Linux x86-64 | `Mosaic-0.3.0-x86_64.AppImage` | `chmod +x`, then run |
-| Linux ARM64 | `Mosaic-0.3.0-aarch64.AppImage` | `chmod +x`, then run |
+| Linux x86-64 | `Mosaic-0.3.0-linux-x86_64.AppImage` | `chmod +x`, then run |
+| Linux ARM64 | `Mosaic-0.3.0-linux-aarch64.AppImage` | `chmod +x`, then run |
 | Windows x64 | `Mosaic-0.3.0-windows-x86_64.msi` | per-user installer |
 | Windows x64 | `Mosaic-0.3.0-windows-x86_64.zip` | no installer; unzip and run |
 | Windows ARM64 | `Mosaic-0.3.0-windows-aarch64.{msi,zip}` | **never tested on hardware** |
 | macOS | `Mosaic-0.3.0-macos-universal.dmg` | one image, Apple Silicon + Intel |
-| Source | `mosaic-0.3.0-source.tar.gz` | GPLv3; see README for build instructions |
+| Source | `Mosaic-0.3.0-source.tar.gz` | GPLv3; see README for build instructions |
 
 Verify a download against `SHA256SUMS`.
 
@@ -40,7 +40,7 @@ stack — your own Mesa or proprietary driver is used.
 
 ## First launch
 
-**Linux** — `chmod +x Mosaic-0.3.0-*.AppImage && ./Mosaic-0.3.0-*.AppImage`.
+**Linux** — `chmod +x Mosaic-0.3.0-linux-*.AppImage && ./Mosaic-0.3.0-linux-*.AppImage`.
 
 **Windows** — SmartScreen will say "Windows protected your PC" once, because the binary carries no
 Authenticode signature. **More info → Run anyway**. Windows needs no signature to *execute*

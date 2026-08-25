@@ -3981,6 +3981,25 @@ In-scope additions already folded into the roadmap or strongly recommended:
 
 ## 12. Backlog / Eventualities
 
+- ⚠ **Windows/Wine UI defects — the Vulkan canvas has no child window of its own (open, S59).**
+  Two user-reported symptoms with one likely root cause. **Submenus render BEHIND the Vulkan
+  canvas** (on real Windows *and* Wine), and **FLTK chrome flickers** (Wine only; native Windows
+  does not show it). The asymmetry across platforms is the evidence: Wayland gives the canvas a
+  dedicated `wl_subsurface` (`platform/wayland_subsurface.cpp`), macOS a dedicated NSView subview
+  carrying the `CAMetalLayer` (`native_window_macos.mm`), and X11 gets away with the main window
+  because FLTK's menus there are override-redirect TOP-LEVEL X windows that always float above.
+  Windows alone presents into **FLTK's own HWND** — `native_window_win32.cpp` says so in its
+  header: "the HWND FLTK already made IS presentable … it never touches the window". A swapchain
+  that owns an HWND's client area is composited by DWM as one layer, so GDI chrome and popups
+  cannot reliably appear over it, and the chrome repaint races the present — a race DWM hides and
+  Wine does not. *Likely fix:* mirror the other two platforms and create a dedicated child HWND
+  (`WS_CHILD | WS_CLIPSIBLINGS`) for the surface. **Unverified — there is no Windows machine in
+  this loop.**
+  ⚠ Note for the record: the `VK_SUBOPTIMAL_KHR` swapchain-recreation fix in S59 was committed
+  claiming to address this flicker. It does NOT — the user confirmed the symptoms are FLTK
+  compositing, not swapchain churn. That change stands on its own merits (it strictly reduces
+  swapchain teardown) but is not a fix for anything reported here.
+
 - ~~**macOS port** (osxcross + MoltenVK): blocked mainly on build tooling + testing access~~ — **BUILT
   2026-07-23/24 and promoted out of the backlog into S58** (universal `.app` + `.dmg`, native menu bar,
   Quick Look, dark mode, tablet, JXL, three rounds of real-M1 feedback). The "testing access" half of the

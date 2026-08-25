@@ -105,9 +105,11 @@ jobs:
       - name: Archive
         run: |
           v='${{ needs.meta.outputs.version }}'
+          # Capital M like every other asset: GitHub sorts release assets case-insensitively by
+          # name, and a lone lowercase outlier is just an inconsistency in the listing.
           git archive --format=tar.gz --prefix="mosaic-$v/" \
-            -o "mosaic-$v-source.tar.gz" HEAD
-          sha256sum "mosaic-$v-source.tar.gz"
+            -o "Mosaic-$v-source.tar.gz" HEAD
+          sha256sum "Mosaic-$v-source.tar.gz"
       - uses: actions/upload-artifact@v7
         with: { name: source, path: '*.tar.gz' }
 

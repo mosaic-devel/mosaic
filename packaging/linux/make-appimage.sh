@@ -153,7 +153,10 @@ if [ -z "$TOOL" ]; then
   fi
 fi
 
-IMAGE="$OUT/Mosaic-$VERSION-$ARCH.AppImage"
+# "linux-" is in the name so the two AppImages sort ADJACENTLY on the release page: GitHub
+# orders assets case-insensitively by filename, and without it "…-aarch64.AppImage" and
+# "…-x86_64.AppImage" land at opposite ends of the list with every other platform between.
+IMAGE="$OUT/Mosaic-$VERSION-linux-$ARCH.AppImage"
 rm -f "$IMAGE"
 # --appimage-extract-and-run: CI containers have no FUSE, so appimagetool cannot mount itself.
 # --no-appstream: Mosaic ships no AppStream metainfo yet (still open under S59).
