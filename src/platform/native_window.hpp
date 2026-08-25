@@ -71,6 +71,19 @@ void preferWaylandBackendIfUnset();
 // this. Safe to call on a null or not-yet-shown window.
 void raiseNativeWindowToTop(Fl_Window* win);
 
+// Re-apply a shown window's SHAPE from an RGBA mask (alpha 0 = cut away), or clear it when
+// `rgba` is null. `w`/`h` are the mask's dimensions and must match the window's.
+//
+// Windows only; a no-op elsewhere, and deliberately so. FLTK implements shape() two different
+// ways: off X11 the platform driver masks during the draw_begin()/draw_end() bracket, which is
+// per-draw and therefore always current -- that is the path ui::BubbleFlyout::draw() is careful to
+// route through, and fixing it for Wayland fixed macOS for free. The Windows driver instead sets a
+// real window REGION, and a region is applied when the HWND is created. Re-opening a pop-up reuses
+// its HWND, so the region from the FIRST open survives; since every open re-places the bubble with
+// a different tip position and size, that stale region no longer matches the geometry and the
+// cut-away areas come back opaque. Hence: own the region here and set it on every open.
+void applyNativeWindowShape(Fl_Window* win, const unsigned char* rgba, int w, int h);
+
 // Fill `out` with the native handles for a *shown* window. Returns false / sets `error`
 // if the window is not yet shown or no usable handle is available.
 [[nodiscard]] bool nativeSurfaceHandle(Fl_Window* win, NativeSurfaceHandle& out,

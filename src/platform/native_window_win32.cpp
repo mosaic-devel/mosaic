@@ -22,6 +22,9 @@
 // (cmake/toolchains/mingw-w64.cmake), so <windows.h> cannot clobber std::min/std::max here.
 #include <windows.h>
 
+#include <cstring>
+#include <vector>
+
 namespace mosaic::platform {
 
 void preferWaylandBackendIfUnset() {
@@ -61,6 +64,60 @@ void raiseNativeWindowToTop(Fl_Window* win) {
     // that FLTK is in the middle of hiding. NOACTIVATE keeps the keyboard focus where the menu
     // code put it (openFor() calls take_focus() straight after).
     SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
+void applyNativeWindowShape(Fl_Window* win, const unsigned char* rgba, int w, int h) {
+    if (win == nullptr || win->shown() == 0)
+        return;
+    HWND hwnd = fl_win32_xid(win);
+    if (hwnd == nullptr)
+        return;
+    if (rgba == nullptr || w <= 0 || h <= 0) {
+        SetWindowRgn(hwnd, nullptr, TRUE); // no shape: back to the full rectangle
+        return;
+    }
+
+    // Build the region as one ExtCreateRegion call over a RECT run per opaque span, rather than
+    // CombineRgn per span: a few hundred CombineRgn calls per open is the kind of thing that shows
+    // up as a stutter when a flyout is opened repeatedly, and the batched form is one GDI call.
+    std::vector<RECT> rects;
+    rects.reserve(static_cast<std::size_t>(h));
+    for (int y = 0; y < h; ++y) {
+        const unsigned char* row = rgba + static_cast<std::size_t>(y) * w * 4;
+        int x = 0;
+        while (x < w) {
+            while (x < w && row[x * 4 + 3] < 128) // alpha is a clean 0/255 here; 128 is just a guard
+                ++x;
+            if (x >= w)
+                break;
+            const int runStart = x;
+            while (x < w && row[x * 4 + 3] >= 128)
+                ++x;
+            rects.push_back(RECT{runStart, y, x, y + 1});
+        }
+    }
+    if (rects.empty()) {
+        SetWindowRgn(hwnd, nullptr, TRUE);
+        return;
+    }
+
+    const std::size_t bytes = sizeof(RGNDATAHEADER) + rects.size() * sizeof(RECT);
+    std::vector<unsigned char> blob(bytes);
+    auto* data = reinterpret_cast<RGNDATA*>(blob.data());
+    data->rdh.dwSize = sizeof(RGNDATAHEADER);
+    data->rdh.iType = RDH_RECTANGLES;
+    data->rdh.nCount = static_cast<DWORD>(rects.size());
+    data->rdh.nRgnSize = static_cast<DWORD>(rects.size() * sizeof(RECT));
+    data->rdh.rcBound = RECT{0, 0, w, h};
+    std::memcpy(data->Buffer, rects.data(), rects.size() * sizeof(RECT));
+
+    HRGN rgn = ExtCreateRegion(nullptr, static_cast<DWORD>(bytes), data);
+    if (rgn == nullptr)
+        return; // leave whatever region is in force rather than clearing to a rectangle
+    // SetWindowRgn TAKES OWNERSHIP on success -- deleting rgn afterwards would be a double free.
+    // On failure it does not, so the region has to be released on that path.
+    if (SetWindowRgn(hwnd, rgn, TRUE) == 0)
+        DeleteObject(rgn);
 }
 
 bool nativeSurfaceHandle(Fl_Window* win, NativeSurfaceHandle& out, std::string& error) {

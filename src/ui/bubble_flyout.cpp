@@ -88,6 +88,13 @@ void BubbleFlyout::placeBubble(const Fl_Widget* anchor) {
 void BubbleFlyout::show() {
     Fl_Double_Window::show();
     platform::raiseNativeWindowToTop(this);
+    // AFTER show(), and on EVERY show: there is no HWND to carry a region until the window has
+    // been made, which is exactly why the first open looked right and every reopen did not --
+    // FLTK's Windows driver applies its region at HWND creation, and the reused HWND kept the
+    // first open's region while the bubble had since been re-placed and resized under it.
+    // applyBubbleShape() has already rebuilt m_shapeBuf for this open's geometry.
+    if (m_useShape && !m_shapeBuf.empty())
+        platform::applyNativeWindowShape(this, m_shapeBuf.data(), w(), h());
 }
 
 void BubbleFlyout::applyBubbleShape() {

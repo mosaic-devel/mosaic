@@ -71,6 +71,11 @@ void raiseNativeWindowToTop(Fl_Window* /*win*/) {
     // menu bar, S58-b), and the canvas is a dedicated NSView subview rather than a sibling window.
 }
 
+void applyNativeWindowShape(Fl_Window* /*win*/, const unsigned char* /*rgba*/, int /*w*/,
+                            int /*h*/) {
+    // No-op: the Cocoa driver masks during the draw bracket, like Wayland. See the header.
+}
+
 bool nativeSurfaceHandle(Fl_Window* win, NativeSurfaceHandle& out, std::string& error) {
     if (win == nullptr || win->shown() == 0) {
         error = "native handle requested for a window that is not shown";

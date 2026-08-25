@@ -65,6 +65,13 @@ Popover::~Popover() {
 void Popover::show() {
     Fl_Double_Window::show();
     platform::raiseNativeWindowToTop(this);
+    // Same reason as ui::BubbleFlyout::show(): on Windows shape() is a window REGION applied when
+    // the HWND is made, so a reused HWND keeps the region from its FIRST open while the pop-over
+    // has since been re-placed under it. Applied unconditionally rather than behind
+    // buildBubbleShape()'s unchanged-geometry cache -- that cache is about not rebuilding the
+    // MASK, and says nothing about whether this HWND has ever carried a region.
+    if (m_bubble && !m_shapeBuf.empty())
+        platform::applyNativeWindowShape(this, m_shapeBuf.data(), w(), h());
 }
 
 void Popover::showAnchored(const Fl_Widget* anchor) {

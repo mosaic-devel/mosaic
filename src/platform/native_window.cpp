@@ -49,6 +49,12 @@ void raiseNativeWindowToTop(Fl_Window* /*win*/) {
     // canvas, which is exactly why the bug this answers is Windows-only.
 }
 
+void applyNativeWindowShape(Fl_Window* /*win*/, const unsigned char* /*rgba*/, int /*w*/,
+                            int /*h*/) {
+    // No-op: FLTK's X11 and Wayland drivers apply shape() during the draw bracket, so it is always
+    // current and needs no help from us. See the header.
+}
+
 bool nativeSurfaceHandle(Fl_Window* win, NativeSurfaceHandle& out, std::string& error) {
     if (win == nullptr || win->shown() == 0) {
         error = "native handle requested for a window that is not shown";
