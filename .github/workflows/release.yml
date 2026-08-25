@@ -51,6 +51,10 @@ on:
 # `UnknownField("tag", ["sign", "remote-sign"])`. OSXCROSS_* is the same hazard (osxcross reads
 # OSXCROSS_ROOT and friends). Do not name a variable after the tool it configures.
 env:
+  # A TAG build must be able to prove what it is: CMake fails configure unless the tree is a clean
+  # checkout with a readable commit (see CMakeLists). Deliberately only on tag pushes -- a manual
+  # dispatch is often run against a branch mid-investigation, and blocking that would be obstructive.
+  MOSAIC_REQUIRE_CLEAN_GIT_REV: ${{ github.ref_type == 'tag' && 'ON' || 'OFF' }}
   MOSAIC_OSXCROSS_REF: 27d21e4977c9751d01199c7a226a6faf494c3dd9
   MOSAIC_LIBDMG_PB_REF: 7ac55ec64c96f7800d9818ce64c79670e7f02b67
   MOSAIC_LIBDMG_FQ_REF: 7ac55ec64c96f7800d9818ce64c79670e7f02b67

@@ -1,4 +1,5 @@
 #include "ui/date_picker.hpp"
+
 #include "platform/native_window.hpp" // raiseNativeWindowToTop: overlay z-order
 
 #include <FL/Enumerations.H>

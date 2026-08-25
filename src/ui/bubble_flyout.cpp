@@ -1,13 +1,12 @@
 #include "ui/bubble_flyout.hpp"
-#include "platform/native_window.hpp" // raiseNativeWindowToTop: overlay z-order on Windows
 
-#include "ui/popover.hpp" // Popover::bubbleSupported (shape() is backend-gated)
+#include "platform/native_window.hpp" // raiseNativeWindowToTop: overlay z-order on Windows
+#include "ui/popover.hpp"             // Popover::bubbleSupported (shape() is backend-gated)
 #include "ui/theme.hpp"
 
 #include <FL/Fl.H>
 #include <FL/Fl_RGB_Image.H>
 #include <FL/fl_draw.H>
-
 #include <algorithm>
 
 namespace mosaic::ui {

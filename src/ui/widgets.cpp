@@ -1,9 +1,9 @@
 #include "ui/widgets.hpp"
-#include "platform/native_window.hpp" // raiseNativeWindowToTop: overlay z-order on Windows
 
 #include "common/charconv_compat.hpp"
 #include "common/i18n.hpp"
 #include "core/blend_mode.hpp"
+#include "platform/native_window.hpp" // raiseNativeWindowToTop: overlay z-order on Windows
 #include "ui/theme.hpp"
 
 #include <FL/Enumerations.H> // fl_rgb_color
@@ -14,7 +14,6 @@
 #include <FL/Fl_Menu_Item.H>
 #include <FL/Fl_RGB_Image.H>
 #include <FL/fl_draw.H>
-
 #include <algorithm>
 #include <cctype>
 #include <charconv>

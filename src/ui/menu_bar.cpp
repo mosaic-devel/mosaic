@@ -357,9 +357,9 @@ public:
 
     // Render `parent`'s direct children, placed at (hostX, hostY) in the top-level's coords. `sub`
     // is the pop-up to use for a nested submenu row (nullptr = no deeper nesting). `keyboard` opens
-    // in keyboard mode (item mnemonic underlines shown); a mouse-opened menu stays clean until a key
-    // is pressed (see handleKey) -- matches modern menus: mnemonics only when you're driving by key.
-    // Assert z-order on every show: on Windows this is a sibling of the Vulkan canvas (sunk to
+    // in keyboard mode (item mnemonic underlines shown); a mouse-opened menu stays clean until a
+    // key is pressed (see handleKey) -- matches modern menus: mnemonics only when you're driving by
+    // key. Assert z-order on every show: on Windows this is a sibling of the Vulkan canvas (sunk to
     // HWND_BOTTOM as the chrome's backdrop) and would otherwise open UNDER it. See ui::Popover.
     void show() override {
         Fl_Double_Window::show();
@@ -443,7 +443,7 @@ public:
         m_selfSizing = true; // the resize below is OURS -- let it through the swallow in resize()
         resize(px, py, pw, ph);
         m_selfSizing = false;
-        show(); // the show() override below asserts this pop-up's z-order over the canvas
+        show();       // the show() override below asserts this pop-up's z-order over the canvas
         redraw();     // refill when reused for a title switch (same window, new contents)
         take_focus(); // so the open menu accepts keyboard navigation (after a mnemonic opens it)
     }

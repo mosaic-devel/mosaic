@@ -1,7 +1,7 @@
 #include "ui/popover.hpp"
-#include "platform/native_window.hpp" // raiseNativeWindowToTop: overlay z-order on Windows
 
 #include "common/image.hpp"
+#include "platform/native_window.hpp" // raiseNativeWindowToTop: overlay z-order on Windows
 #include "ui/color_flyout.hpp" // dismissActiveColorFlyoutOnOutsideClick (a panel hosts the colour chip)
 #include "ui/theme.hpp"
 #include "ui/widgets.hpp" // dismissActiveDropdownPopupOnOutsideClick (a popover may host Dropdowns)
@@ -12,7 +12,6 @@
 #include <FL/Fl_Widget.H>
 #include <FL/Fl_Window.H>
 #include <FL/fl_draw.H>
-
 #include <algorithm>
 #include <cmath>
 #include <cstddef>

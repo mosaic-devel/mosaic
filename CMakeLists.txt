@@ -27,26 +27,89 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 # MOSAIC_GIT_REV ("g<hash>" / "g<hash>-dirty", empty without git) is baked into the version header
 # (src/common) and shown by `mosaic --version`. Configure re-runs when a commit lands (the reflog
 # moves), so the hash tracks HEAD. See PLAN.md §8.9.
+# ⚠ Three ways this can lie, all of which have bitten:
+#
+#  1. `git diff --quiet` returns 0 clean, 1 DIRTY, and >1 on ERROR. Testing `NOT rc EQUAL 0`
+#     therefore stamps "-dirty" on a pristine tree whenever git merely fails -- which is what a
+#     container running as root over a runner-owned checkout does (safe.directory). A tagged
+#     release would have shipped claiming to be a modified build.
+#  2. ERROR_QUIET on the rev-parse hid that same failure the other way: no hash, no dirty flag, and
+#     a binary that cannot say which commit it is. Every Windows artifact reported a bare version
+#     until this was found.
+#  3. A fresh checkout has fresh mtimes, so git's stat cache reports phantom differences until the
+#     index is refreshed -- a false "-dirty" that appears only in CI.
+#
+# So: refresh the index first, treat 0/1 as the ONLY meaningful answers, and never guess. When the
+# answer cannot be established the version says "-unknown" rather than silently picking one.
 set(MOSAIC_GIT_REV "")
 find_package(Git QUIET)
-if(Git_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+if(NOT Git_FOUND OR NOT EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    # Legitimate and expected when building from the released source tarball, which carries no
+    # history. Not a warning: there is nothing misconfigured, the build simply has no commit.
+    set(MOSAIC_GIT_STATE "no-git")
+else()
     execute_process(
         COMMAND "${GIT_EXECUTABLE}" rev-parse --short HEAD
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         OUTPUT_VARIABLE _git_hash OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE _git_rc ERROR_QUIET)
-    if(_git_rc EQUAL 0 AND _git_hash)
-        set(MOSAIC_GIT_REV "g${_git_hash}")
+        RESULT_VARIABLE _git_rc ERROR_VARIABLE _git_err)
+    if(NOT _git_rc EQUAL 0 OR NOT _git_hash)
+        # Loud, because a build that cannot identify itself is not a build anyone can act on a bug
+        # report about. The usual cause is git refusing the worktree's ownership.
+        string(STRIP "${_git_err}" _git_err)
+        message(WARNING
+            "git is available and ${CMAKE_SOURCE_DIR}/.git exists, but `git rev-parse` failed, so "
+            "this build cannot record which commit it is.\n  git said: ${_git_err}\n"
+            "  In a container, this is usually ownership: "
+            "git config --global --add safe.directory <path>")
+        set(MOSAIC_GIT_STATE "rev-parse-failed")
+    else()
+        # Refresh the stat cache first, or a fresh checkout's mtimes read as modifications.
+        # diff-index rather than diff: it is the plumbing form and does not page or colour.
+        execute_process(COMMAND "${GIT_EXECUTABLE}" update-index -q --refresh
+                        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" RESULT_VARIABLE _ignored
+                        OUTPUT_QUIET ERROR_QUIET)
         execute_process(
-            COMMAND "${GIT_EXECUTABLE}" diff --quiet HEAD --
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" RESULT_VARIABLE _git_dirty)
-        if(NOT _git_dirty EQUAL 0)
-            set(MOSAIC_GIT_REV "${MOSAIC_GIT_REV}-dirty")
+            COMMAND "${GIT_EXECUTABLE}" diff-index --quiet HEAD --
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            RESULT_VARIABLE _git_dirty OUTPUT_QUIET ERROR_QUIET)
+        if(_git_dirty EQUAL 0)
+            set(MOSAIC_GIT_REV "g${_git_hash}")
+            set(MOSAIC_GIT_STATE "clean")
+        elseif(_git_dirty EQUAL 1)
+            set(MOSAIC_GIT_REV "g${_git_hash}-dirty")
+            set(MOSAIC_GIT_STATE "dirty")
+        else()
+            # Neither answer is safe to assume, so say so in the version itself.
+            set(MOSAIC_GIT_REV "g${_git_hash}-unknown")
+            set(MOSAIC_GIT_STATE "dirty-unknown")
+            message(WARNING
+                "`git diff-index` failed (exit ${_git_dirty}), so this build cannot tell whether "
+                "the worktree is clean. Version reports -unknown rather than guessing.")
         endif()
     endif()
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
         "${CMAKE_SOURCE_DIR}/.git/logs/HEAD")
 endif()
+
+# A RELEASE must never ship a binary that cannot identify itself, or that is quietly built from a
+# modified tree. CI turns this on for the packaging jobs; it is off for ordinary development, where
+# a dirty tree is the normal state and a warning is the right volume.
+# Defaults from the environment so CI can set it once for the whole workflow, rather than every
+# packaging script having to remember to forward a -D (there are three, on three platforms).
+set(_mosaic_require_clean OFF)
+if(DEFINED ENV{MOSAIC_REQUIRE_CLEAN_GIT_REV})
+    set(_mosaic_require_clean "$ENV{MOSAIC_REQUIRE_CLEAN_GIT_REV}")
+endif()
+option(MOSAIC_REQUIRE_CLEAN_GIT_REV
+       "Fail configure unless the build can prove it is a clean, identified commit"
+       ${_mosaic_require_clean})
+if(MOSAIC_REQUIRE_CLEAN_GIT_REV AND NOT MOSAIC_GIT_STATE STREQUAL "clean")
+    message(FATAL_ERROR
+        "MOSAIC_REQUIRE_CLEAN_GIT_REV is ON but the build state is '${MOSAIC_GIT_STATE}'. "
+        "A release build must be a clean checkout with a readable commit.")
+endif()
+
 if(MOSAIC_GIT_REV)
     message(STATUS "Mosaic version: ${PROJECT_VERSION}+${MOSAIC_GIT_REV}")
 else()
