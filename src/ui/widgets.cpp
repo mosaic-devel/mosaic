@@ -2505,13 +2505,18 @@ void NumberField::commitExpression() {
 }
 
 std::string formatFieldNumber(double value, double step) {
-    char buf[32];
-    std::to_chars_result r{};
-    if (step >= 1.0)
-        r = std::to_chars(buf, buf + sizeof buf, std::lround(value));
-    else
-        r = std::to_chars(buf, buf + sizeof buf, value);
-    return r.ec == std::errc() ? std::string(buf, r.ptr) : std::string();
+    // The INTEGER arm can call std::to_chars directly -- libc++ only ever gated the
+    // floating-point overloads. The fractional arm must not: libc++ marks to_chars(double)
+    // unavailable below macOS 13.3, so calling it is a hard compile error at the project's 11.0
+    // deployment floor. common::gToString is the house wrapper for exactly this (it drops to
+    // snprintf on libc++), and it is what the rest of this file already effectively uses -- the
+    // NumberField commit path a few lines up formats with "%.10g", which is gToString's default.
+    if (step >= 1.0) {
+        char buf[32];
+        const auto r = std::to_chars(buf, buf + sizeof buf, std::lround(value));
+        return r.ec == std::errc() ? std::string(buf, r.ptr) : std::string();
+    }
+    return common::gToString(value);
 }
 
 namespace {

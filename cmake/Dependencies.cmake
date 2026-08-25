@@ -19,7 +19,13 @@ endfunction()
 find_package(Vulkan QUIET)
 _mosaic_record("${Vulkan_FOUND}" "Vulkan (headers + loader)")
 
-find_package(FLTK QUIET)
+# CONFIG, not module mode. src/ui and src/platform both do `find_package(FLTK REQUIRED CONFIG)`,
+# because FLTK 1.4 ships its own FLTKConfig.cmake -- but this probe used plain find_package(), which
+# resolves CMake's legacy FindFLTK module, looks in different places, and reported "[absent] FLTK"
+# on builds where FLTK was present and the real lookup had already succeeded. A summary that
+# contradicts the build it is summarising is worse than no summary: it sent a reader looking for a
+# missing dependency during the macOS cross-build, where FLTK comes from the cross-built prefix.
+find_package(FLTK QUIET CONFIG)
 _mosaic_record("${FLTK_FOUND}" "FLTK (GUI toolkit)")
 
 find_package(Intl QUIET)
