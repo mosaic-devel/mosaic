@@ -155,9 +155,9 @@ jobs:
       # reuse a stale prefix. Bump the -v1 suffix when that happens. (The Windows and macOS stacks
       # avoid this by living in a script the key hashes; this one would too if it moved into
       # packaging/linux/build-deps.sh.)
-      - name: Cache from-source dependencies
+      - name: Restore from-source dependencies
         id: deps-cache
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: /opt/mosaic-deps
           key: linux-deps-${{ matrix.arch }}-ubuntu24.04-fltk1.4.5-jt3.0.4-jxl0.11.2-vkh1.4.350.1-v1
@@ -222,6 +222,13 @@ jobs:
             -DJPEGXL_BUNDLE_LIBPNG=OFF -DJPEGXL_ENABLE_AVX512=OFF
           cmake --build b-jxl -j "$(nproc)"
           cmake --install b-jxl
+
+      - name: Save from-source dependencies
+        if: always() && steps.deps-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: /opt/mosaic-deps
+          key: linux-deps-${{ matrix.arch }}-ubuntu24.04-fltk1.4.5-jt3.0.4-jxl0.11.2-vkh1.4.350.1-v1
 
       - name: Build AppImage
         env:
@@ -292,9 +299,13 @@ jobs:
 
       # 24 libraries cross-built from source per arch. Keyed on the script, because the script IS
       # the dependency manifest -- it pins every version inline.
-      - name: Cache dependency prefix
+      # restore + save split, as in the macOS job: actions/cache saves under post-if: success(),
+      # which would discard this ~50-minute cross-build whenever a LATER step failed -- and the
+      # later steps are exactly the ones being iterated on. This is the most expensive artefact in
+      # the pipeline, so it is the one that least deserves being thrown away.
+      - name: Restore dependency prefix
         id: deps-cache
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: /deps/${{ matrix.arch }}
           key: windows-deps-${{ matrix.arch }}-${{ hashFiles('packaging/windows/build-deps.sh') }}
@@ -305,6 +316,13 @@ jobs:
           MOSAIC_WIN_ARCH: ${{ matrix.arch }}
           MOSAIC_WIN_PREFIX: /deps/${{ matrix.arch }}
         run: bash packaging/windows/build-deps.sh
+
+      - name: Save dependency prefix
+        if: always() && steps.deps-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: /deps/${{ matrix.arch }}
+          key: windows-deps-${{ matrix.arch }}-${{ hashFiles('packaging/windows/build-deps.sh') }}
 
       - name: Package (zip + MSI)
         env:
