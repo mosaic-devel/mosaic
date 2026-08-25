@@ -82,16 +82,16 @@ void applyNativeWindowShape(Fl_Window* win, const unsigned char* rgba, int w, in
     std::vector<RECT> rects;
     rects.reserve(static_cast<std::size_t>(h));
     for (int y = 0; y < h; ++y) {
-        const unsigned char* row = rgba + static_cast<std::size_t>(y) * w * 4;
+        const unsigned char* row = rgba + (static_cast<std::size_t>(y) * w * 4);
         int x = 0;
         while (x < w) {
             while (x < w &&
-                   row[x * 4 + 3] < 128) // alpha is a clean 0/255 here; 128 is just a guard
+                   row[(x * 4) + 3] < 128) // alpha is a clean 0/255 here; 128 is just a guard
                 ++x;
             if (x >= w)
                 break;
             const int runStart = x;
-            while (x < w && row[x * 4 + 3] >= 128)
+            while (x < w && row[(x * 4) + 3] >= 128)
                 ++x;
             rects.push_back(RECT{runStart, y, x, y + 1});
         }
