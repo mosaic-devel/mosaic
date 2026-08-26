@@ -9,10 +9,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <mutex>
 #include <variant>
 #include <vector>
 
 #include "common/dither.hpp"
+#include "common/profiler.hpp"
+#include "common/thread_pool.hpp"
 #include "core/layer_effects.hpp"
 #include "render/blend.hpp"
 #include "render/effect_primitives.hpp"
@@ -30,25 +33,70 @@ struct Box {
     [[nodiscard]] bool empty() const noexcept { return x1 <= x0 || y1 <= y0; }
 };
 
-// Tight box of pixels with alpha > `minAlpha`, clamped to the buffer (empty if none). minAlpha=0 is
-// the full extent (incl. the 1px AA rim); minAlpha=0.5 is the geometric silhouette (the >=50%-covered
-// interior), which is STABLE under edge-AA changes -- used to anchor the pattern phase (below).
-[[nodiscard]] Box alphaBox(const ImageF& io, float minAlpha = 0.0f) {
+// Both coverage boxes of `io`, in ONE PARALLEL PASS.
+//
+// These are the first thing applyEffects does, and they used to be two SERIAL full-buffer scans.
+// The effects buffer is the target buffer whenever the layer's footprint fits inside it (see
+// renderLayer), so on a large document that is ~640 MB of float RGBA streamed twice on one thread
+// before any effect has done any work -- while the effect work itself is ROI-clipped and banded.
+// Everything else in the renderer goes through parallelFor; this did not.
+//
+//   `any`   -- alpha > 0: the full extent, 1px AA rim included. Drives the ROI and the
+//              fill-opacity dim.
+//   `solid` -- alpha > 0.5: the geometric silhouette. The paint PHASE anchor (gradient box origin /
+//              pattern tile origin) uses this because it is STABLE: the AA rim adds ~1px, so
+//              anchoring to `any` shifts the box origin when the Move-AA filter toggles or a live
+//              drag swaps kernels (the "pattern snaps then snaps back" bug).
+//
+// Fusing them is safe because a texel with alpha <= 0 cannot be > 0.5 either, so the cheap test
+// gates both. The band merge is min/max only, which is order-independent -- the result does not
+// depend on the thread count, as the compositor's determinism rule requires.
+struct AlphaBoxes {
+    Box any;
+    Box solid;
+};
+
+[[nodiscard]] AlphaBoxes alphaBoxes(const ImageF& io) {
     const int w = static_cast<int>(io.width), h = static_cast<int>(io.height);
-    int minx = w, miny = h, maxx = -1, maxy = -1;
-    for (int y = 0; y < h; ++y) {
-        const std::size_t row = static_cast<std::size_t>(y) * w * 4;
-        for (int x = 0; x < w; ++x) {
-            if (io.rgba[row + static_cast<std::size_t>(x) * 4 + 3] > minAlpha) {
-                minx = std::min(minx, x);
-                miny = std::min(miny, y);
-                maxx = std::max(maxx, x);
-                maxy = std::max(maxy, y);
+    if (w <= 0 || h <= 0) return {};
+    struct Acc {
+        int minx, miny, maxx, maxy;
+        void hit(int x, int y) noexcept {
+            minx = std::min(minx, x);
+            miny = std::min(miny, y);
+            maxx = std::max(maxx, x);
+            maxy = std::max(maxy, y);
+        }
+        void merge(const Acc& o) noexcept {
+            minx = std::min(minx, o.minx);
+            miny = std::min(miny, o.miny);
+            maxx = std::max(maxx, o.maxx);
+            maxy = std::max(maxy, o.maxy);
+        }
+        [[nodiscard]] Box box() const noexcept {
+            return maxx < 0 ? Box{} : Box{minx, miny, maxx + 1, maxy + 1};
+        }
+    };
+    const Acc empty{w, h, -1, -1};
+    Acc any = empty, solid = empty;
+    std::mutex merge;
+    common::parallelFor(static_cast<std::size_t>(h), 32, [&](std::size_t y0, std::size_t y1) {
+        Acc la = empty, ls = empty;
+        for (std::size_t y = y0; y < y1; ++y) {
+            const std::size_t row = y * static_cast<std::size_t>(w) * 4;
+            const int yi = static_cast<int>(y);
+            for (int x = 0; x < w; ++x) {
+                const float a = io.rgba[row + static_cast<std::size_t>(x) * 4 + 3];
+                if (a <= 0.0f) continue;
+                la.hit(x, yi);
+                if (a > 0.5f) ls.hit(x, yi);
             }
         }
-    }
-    if (maxx < 0) return {};
-    return {minx, miny, maxx + 1, maxy + 1};
+        const std::lock_guard<std::mutex> lock(merge);
+        any.merge(la);
+        solid.merge(ls);
+    });
+    return {any.box(), solid.box()};
 }
 
 // Evaluate a Paint at buffer pixel (px,py). Gradients are keyed to the layer's content box,
@@ -611,8 +659,10 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
     if (fx.empty() || io.empty()) return;
     const int w = static_cast<int>(io.width), h = static_cast<int>(io.height);
 
-    // Every effect attaches to the layer's coverage; nothing to do without any.
-    const Box content = alphaBox(io);  // full extent: drives the ROI + the fill-opacity dim
+    // Every effect attaches to the layer's coverage; nothing to do without any. One pass yields
+    // both the extent and the phase anchor (see alphaBoxes).
+    const AlphaBoxes boxes = alphaBoxes(io);
+    const Box content = boxes.any;  // full extent: drives the ROI + the fill-opacity dim
     if (content.empty()) return;
 
     // The paint PHASE anchor (gradient box origin / pattern tile origin). Anchoring to `content`
@@ -621,7 +671,7 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
     // cheaper kernel (the "pattern snaps then snaps back" bug). Anchor instead to the geometric
     // silhouette (alpha>=0.5), which those edge changes leave put. Fall back to content if the whole
     // shape is faint (all < 0.5).
-    Box anchor = alphaBox(io, 0.5f);
+    Box anchor = boxes.solid;
     if (anchor.empty()) anchor = content;
 
     // Region of interest = content dilated by the max outward reach (+AA margin), clamped to the
@@ -677,17 +727,25 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
     const bool anyInnerGlow =
         fx.innerGlow.enabled && !std::holds_alternative<core::vec::NoPaint>(fx.innerGlow.paint);
     std::vector<float> sdShadow;
-    if (anyDropShadow || anyInnerShadow || anyOuterGlow || anyInnerGlow)
+    if (anyDropShadow || anyInnerShadow || anyOuterGlow || anyInnerGlow) {
+        MOSAIC_PERF_SCOPE("FX signed-distance field", common::Lane::Cpu);
         sdShadow = fx::signedDistanceField(alpha, rw, rh);
+    }
 
     // BELOW -- drop shadows / outer glow composite UNDER `io`: LE-e. Render them into a transparent
     // ROI-sized scratch (drop shadows in vector order, then the outer glow -- later over earlier),
     // then place io's own pixels OVER it so the effect shows through io's transparent + AA-rim areas.
     if (anyDropShadow || anyOuterGlow) {
         std::vector<ColorF> below(static_cast<std::size_t>(rw) * rh, ColorF{0.0f, 0.0f, 0.0f, 0.0f});
-        applyDropShadows(below, fx.dropShadows, sdShadow, rw, rh);
-        applyOuterGlow(below, fx.outerGlow, sdShadow, anchor, rx0, ry0, rw, rh, antialias,
-                       bufferToLayer);
+        {
+            MOSAIC_PERF_SCOPE("FX drop shadows", common::Lane::Cpu);
+            applyDropShadows(below, fx.dropShadows, sdShadow, rw, rh);
+        }
+        {
+            MOSAIC_PERF_SCOPE("FX outer glow", common::Lane::Cpu);
+            applyOuterGlow(below, fx.outerGlow, sdShadow, anchor, rx0, ry0, rw, rh, antialias,
+                           bufferToLayer);
+        }
         for (int y = 0; y < rh; ++y) {
             for (int x = 0; x < rw; ++x) {
                 const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
@@ -703,25 +761,40 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
     // MID overlays (doc §5.3): colour -> gradient -> pattern, in the fixed z-order, each clipped to
     // the shape's ORIGINAL coverage and composited with its own blend + opacity on top of the layer's
     // (fill-dimmed) pixels. Independent -- all three can coexist (the PS/Affinity composable model).
-    applyOverlay(io, fx.colorOverlay, alpha, anchor, rx0, ry0, rw, rh, antialias, bufferToLayer);
-    applyOverlay(io, fx.gradientOverlay, alpha, anchor, rx0, ry0, rw, rh, antialias, bufferToLayer);
-    applyOverlay(io, fx.patternOverlay, alpha, anchor, rx0, ry0, rw, rh, antialias, bufferToLayer);
+    {
+        MOSAIC_PERF_SCOPE("FX overlays", common::Lane::Cpu);
+        applyOverlay(io, fx.colorOverlay, alpha, anchor, rx0, ry0, rw, rh, antialias, bufferToLayer);
+        applyOverlay(io, fx.gradientOverlay, alpha, anchor, rx0, ry0, rw, rh, antialias,
+                     bufferToLayer);
+        applyOverlay(io, fx.patternOverlay, alpha, anchor, rx0, ry0, rw, rh, antialias,
+                     bufferToLayer);
+    }
 
     // SATIN (LE-f) -- after pattern overlay, before inner shadow. The folded-fabric sheen: the shape's
     // coverage interfered with an offset copy of itself, clipped to the silhouette (doc §5.6).
-    applySatin(io, fx.satin, alpha, rx0, ry0, rw, rh);
+    {
+        MOSAIC_PERF_SCOPE("FX satin", common::Lane::Cpu);
+        applySatin(io, fx.satin, alpha, rx0, ry0, rw, rh);
+    }
 
     // INNER shadow/glow (LE-e) -- after overlays/satin, before bevel. These composite OVER io,
     // CLIPPED to the captured `alpha` (like the overlays), so they only ever ink inside the silhouette.
-    if (anyInnerShadow)
+    if (anyInnerShadow) {
+        MOSAIC_PERF_SCOPE("FX inner shadows", common::Lane::Cpu);
         applyInnerShadows(io, fx.innerShadows, sdShadow, alpha, rx0, ry0, rw, rh);
-    if (anyInnerGlow)
+    }
+    if (anyInnerGlow) {
+        MOSAIC_PERF_SCOPE("FX inner glow", common::Lane::Cpu);
         applyInnerGlow(io, fx.innerGlow, sdShadow, alpha, anchor, rx0, ry0, rw, rh, antialias,
                        bufferToLayer);
+    }
 
     // BEVEL (LE-f) -- after inner glow, before stroke. Shades the silhouette with a raked light over a
     // height field built from the alpha's SDF (single-pass Sobel normals, doc §5.5).
-    applyBevel(io, fx.bevel, alpha, rx0, ry0, rw, rh, anchor.x0, anchor.y0);
+    {
+        MOSAIC_PERF_SCOPE("FX bevel", common::Lane::Cpu);
+        applyBevel(io, fx.bevel, alpha, rx0, ry0, rw, rh, anchor.x0, anchor.y0);
+    }
 
     // ABOVE -- concentric strokes on top of everything.
     bool anyStroke = false;
