@@ -38,8 +38,12 @@ using common::ImageF;
 
 // How a source layer is blended onto the accumulator. Swappable so the tree walk is shared by
 // the CPU reference and the GPU compute path (S7-b): only this one hot, per-pixel step differs.
-using BlendFn =
-    std::function<void(ImageF& acc, const ImageF& src, core::BlendMode mode, float opacity)>;
+// `bounds` (nullptr = the whole buffer) is the target-space rect the source can possibly be
+// non-transparent in -- reported by whoever RENDERED it, never re-derived from geometry here. That
+// distinction is the safety property: a re-derived rect that under-estimates silently drops
+// pixels, while a producer reporting the window it actually wrote cannot.
+using BlendFn = std::function<void(ImageF& acc, const ImageF& src, core::BlendMode mode,
+                                   float opacity, const common::Rect* bounds)>;
 
 // A transform that maps every point to itself (the common case: a layer drawn 1:1).
 [[nodiscard]] bool isIdentity(const common::Affine2D& t) noexcept {
@@ -86,7 +90,15 @@ constexpr double kPi = 3.14159265358979323846;
 template <typename SrcImage>
 void rasteriseLayerInto(ImageF& dst, const SrcImage& src, const core::RasterMask* mask,
                         const common::Affine2D& t, std::uint32_t w, std::uint32_t h,
-                        ResampleFilter filter = ResampleFilter::Nearest) {
+                        ResampleFilter filter = ResampleFilter::Nearest,
+                        common::Rect* written = nullptr) {
+    // `written` is the target-space rect this pass actually touched. Every early return below
+    // leaves it EMPTY, and every path that draws sets it to its own destination window -- so the
+    // caller's blend can skip the rest of the buffer knowing it is still transparent. Reporting
+    // what was written beats re-deriving it from the layer's geometry, which would have to guess
+    // at stroke overhang, resample footprints and mask placement and would drop pixels when it
+    // guessed low.
+    if (written != nullptr) *written = common::Rect{};
     dst.width = w;
     dst.height = h;
     const std::size_t n = static_cast<std::size_t>(w) * h * 4;
@@ -142,6 +154,9 @@ void rasteriseLayerInto(ImageF& dst, const SrcImage& src, const core::RasterMask
         const long y0 = std::max<long>(0, -shiftY);
         const long y1 = std::min<long>(h, static_cast<long>(src.height) - shiftY);
         if (x1 <= x0 || y1 <= y0) return;
+        if (written != nullptr)
+            *written = common::Rect{static_cast<double>(x0), static_cast<double>(y0),
+                                    static_cast<double>(x1 - x0), static_cast<double>(y1 - y0)};
         parallelFor(static_cast<std::size_t>(y1 - y0), 64, [&](std::size_t b0, std::size_t b1) {
             for (long y = y0 + static_cast<long>(b0); y < y0 + static_cast<long>(b1); ++y) {
                 const auto sy = static_cast<std::uint32_t>(y + shiftY);
@@ -174,6 +189,15 @@ void rasteriseLayerInto(ImageF& dst, const SrcImage& src, const core::RasterMask
         // The extent is safe to hand over: `fetch` above returns {0,0,0,0} outside the source,
         // which is exactly convolveInto's clip precondition. This is what stops a headline-sized
         // text layer from paying a canvas-sized convolution.
+        if (written != nullptr) {
+            // The same projection resampleInto clips to, dilated by the kernel's reach and clamped
+            // -- conservative on purpose: a rect slightly too LARGE only costs a few blended
+            // texels, one slightly too small drops them.
+            const common::Rect reach{-kMaxFootprintRadius - 1.0, -kMaxFootprintRadius - 1.0,
+                                     static_cast<double>(src.width) + 2.0 * kMaxFootprintRadius + 2.0,
+                                     static_cast<double>(src.height) + 2.0 * kMaxFootprintRadius + 2.0};
+            *written = t.mapBounds(reach);
+        }
         resampleInto(dst, w, h, inv, filter, fetch, src.width, src.height);
         return;
     }
@@ -195,6 +219,9 @@ void rasteriseLayerInto(ImageF& dst, const SrcImage& src, const core::RasterMask
     const std::uint32_t dy1 = clampU(std::ceil(d.bottom()), h);
     if (dx1 <= dx0 || dy1 <= dy0)
         return; // the source projects entirely off the destination
+    if (written != nullptr)
+        *written = common::Rect{static_cast<double>(dx0), static_cast<double>(dy0),
+                                static_cast<double>(dx1 - dx0), static_cast<double>(dy1 - dy0)};
     parallelFor(dy1 - dy0, 64, [&](std::size_t band0, std::size_t band1) {
         for (std::uint32_t y = dy0 + static_cast<std::uint32_t>(band0),
                            yEnd = dy0 + static_cast<std::uint32_t>(band1);
@@ -215,9 +242,10 @@ void rasteriseLayerInto(ImageF& dst, const SrcImage& src, const core::RasterMask
 template <typename SrcImage>
 [[nodiscard]] ImageF rasteriseLayer(const SrcImage& src, const core::RasterMask* mask,
                                     const common::Affine2D& t, std::uint32_t w, std::uint32_t h,
-                                    ResampleFilter filter = ResampleFilter::Nearest) {
+                                    ResampleFilter filter = ResampleFilter::Nearest,
+                                    common::Rect* written = nullptr) {
     ImageF dst;
-    rasteriseLayerInto(dst, src, mask, t, w, h, filter);
+    rasteriseLayerInto(dst, src, mask, t, w, h, filter, written);
     return dst;
 }
 
@@ -300,7 +328,50 @@ void multiplyAlpha(ImageF& img, const std::vector<float>& coverage) {
 }
 
 // Blend `src` over `acc` in place, per texel, with the layer's blend mode and opacity.
-void compositeBufferOver(ImageF& acc, const ImageF& src, core::BlendMode mode, float opacity) {
+void compositeBufferOver(ImageF& acc, const ImageF& src, core::BlendMode mode, float opacity,
+                         const common::Rect* bounds = nullptr) {
+    // ⚠ Skipping outside `bounds` is EXACT, not an approximation, and it is worth stating why:
+    // outside its written window the source buffer is transparent, and a fully transparent source
+    // is the identity for EVERY separable blend mode (W3C Compositing L1: the result is
+    // (1 - as)*Cb + as*B(Cb, Cs), which is Cb at as == 0). So the bounded walk and the full walk
+    // produce byte-identical accumulators; the bound only decides how much memory gets read.
+    //
+    // Without it, a 300 px layer still costs one full pass over a canvas-sized alpha channel --
+    // 637 MB at 39.8 MP -- which is the whole of this row's cost on a large document.
+    if (bounds != nullptr && acc.width == src.width && acc.height == src.height && acc.width != 0) {
+        const auto lo = [](double v, std::uint32_t hi) {
+            return v <= 0.0 ? std::uint32_t{0}
+                            : static_cast<std::uint32_t>(std::min<double>(std::floor(v), hi));
+        };
+        const auto up = [](double v, std::uint32_t hi) {
+            return v <= 0.0 ? std::uint32_t{0}
+                            : static_cast<std::uint32_t>(std::min<double>(std::ceil(v), hi));
+        };
+        const std::uint32_t x0 = lo(bounds->x, acc.width), x1 = up(bounds->right(), acc.width);
+        const std::uint32_t y0 = lo(bounds->y, acc.height), y1 = up(bounds->bottom(), acc.height);
+        if (x1 <= x0 || y1 <= y0) return;  // nothing of the source lands on the target
+        const std::uint32_t stride = acc.width;
+        parallelFor(y1 - y0, 16, [&](std::size_t b0, std::size_t b1) {
+            for (std::uint32_t y = y0 + static_cast<std::uint32_t>(b0),
+                               yEnd = y0 + static_cast<std::uint32_t>(b1);
+                 y < yEnd; ++y) {
+                for (std::uint32_t x = x0; x < x1; ++x) {
+                    const std::size_t p = (static_cast<std::size_t>(y) * stride + x) * 4;
+                    if (src.rgba[p + 3] * opacity <= 0.0f) continue;
+                    const ColorF backdrop{acc.rgba[p], acc.rgba[p + 1], acc.rgba[p + 2],
+                                          acc.rgba[p + 3]};
+                    const ColorF source{src.rgba[p], src.rgba[p + 1], src.rgba[p + 2],
+                                        src.rgba[p + 3]};
+                    const ColorF out = compositeOver(mode, backdrop, source, opacity);
+                    acc.rgba[p] = out.r;
+                    acc.rgba[p + 1] = out.g;
+                    acc.rgba[p + 2] = out.b;
+                    acc.rgba[p + 3] = out.a;
+                }
+            }
+        });
+        return;
+    }
     const std::size_t n = std::min(acc.pixelCount(), src.pixelCount());
     parallelFor(n, std::size_t{1} << 15, [&](std::size_t i0, std::size_t i1) {
         for (std::size_t i = i0; i < i1; ++i) {
@@ -1827,12 +1898,15 @@ struct ResampleCtx {
 // renderLayer() is the thin public entry: it renders the layer's isolated RGBA (renderLayerRaw)
 // then applies its layer effects (LE-a) in the render seam, so EVERY caller -- the full walk,
 // compositeGroup, and the drag cache's below/above rasters -- gets effects identically.
+// `written` (optional) reports the target-space rect the render actually touched, so the caller's
+// blend can skip the rest of the buffer -- see compositeBufferOver. Every path leaves it at the
+// full buffer unless it can name something smaller.
 [[nodiscard]] ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre,
                                     std::uint32_t w, std::uint32_t h, const BlendFn& blend,
-                                    const ResampleCtx& rs);
+                                    const ResampleCtx& rs, common::Rect* written = nullptr);
 [[nodiscard]] ImageF renderLayer(const core::Layer& layer, const common::Affine2D& pre,
                                  std::uint32_t w, std::uint32_t h, const BlendFn& blend,
-                                 const ResampleCtx& rs);
+                                 const ResampleCtx& rs, common::Rect* written = nullptr);
 
 // A group's local-buffer rect, in the group's own coordinate space.
 struct LocalExtent {
@@ -1958,7 +2032,8 @@ const ImageF kNoSrc;
 // clip-to-below, maintaining the clip-base state. `src` is the layer's doc-space raster
 // (renderLayer output) — const so the drag cache can replay from cached buffers; the (rare)
 // clip multiply works on a copy. The caller filters invisible / zero-opacity layers.
-void walkStep(GroupWalk& st, const core::Layer& layer, const ImageF& src, const BlendFn& blend) {
+void walkStep(GroupWalk& st, const core::Layer& layer, const ImageF& src, const BlendFn& blend,
+              const common::Rect* srcBounds = nullptr) {
     const core::BlendMode mode = layer.blendMode();
     const float opacity = layer.opacity();
     if (const auto* adj = layer.as<core::AdjustmentLayer>()) {
@@ -1992,7 +2067,9 @@ void walkStep(GroupWalk& st, const core::Layer& layer, const ImageF& src, const 
         multiplyAlpha(clipped, st.clipBase);
         {
             MOSAIC_PERF_SCOPE("Layer blend", common::Lane::Cpu);
-            blend(st.acc, clipped, mode, opacity);
+            // multiplyAlpha only ever REDUCES alpha, so the clipped copy cannot be non-transparent
+            // anywhere the original was not: the reported window still bounds it.
+            blend(st.acc, clipped, mode, opacity, srcBounds);
         }
         return;  // a clipped layer never becomes the clip base itself
     }
@@ -2001,7 +2078,7 @@ void walkStep(GroupWalk& st, const core::Layer& layer, const ImageF& src, const 
         // WHOLE accumulator, because renderLayer hands back a canvas-sized buffer and blend() has
         // no notion of the layer's extent.
         MOSAIC_PERF_SCOPE("Layer blend", common::Lane::Cpu);
-        blend(st.acc, src, mode, opacity);
+        blend(st.acc, src, mode, opacity, srcBounds);
     }
 
     // A non-clipped layer becomes the clip base for any clipped layers stacked above it.
@@ -2043,14 +2120,23 @@ void walkStep(GroupWalk& st, const core::Layer& layer, const ImageF& src, const 
             // document -- an assertion that cannot hold is worse than no assertion.
             if (layer.as<core::GroupLayer>() == nullptr)
                 workCounters().layerRenders.fetch_add(1, std::memory_order_relaxed);
-            walkStep(st, layer, renderLayer(layer, pre, w, h, blend, rs), blend);
+            // The window renderLayer actually wrote, handed straight to the blend. Defaults to the
+            // whole buffer, so a path that cannot report one stays exactly as correct as before.
+            common::Rect written{0.0, 0.0, static_cast<double>(w), static_cast<double>(h)};
+            const ImageF placed = renderLayer(layer, pre, w, h, blend, rs, &written);
+            walkStep(st, layer, placed, blend, &written);
         }
     }
     return std::move(st.acc);
 }
 
 ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std::uint32_t w,
-                      std::uint32_t h, const BlendFn& blend, const ResampleCtx& rs) {
+                      std::uint32_t h, const BlendFn& blend, const ResampleCtx& rs,
+                      common::Rect* written) {
+    // Start at the whole buffer. Only the arms that KNOW their window narrow it; a kind that
+    // cannot report one is left conservative and costs exactly what it always did.
+    if (written != nullptr)
+        *written = common::Rect{0.0, 0.0, static_cast<double>(w), static_cast<double>(h)};
     if (const auto* group = layer.as<core::GroupLayer>()) {
         // Composite the group as a unit in its own space, then place it through its transform;
         // its mask, opacity and blend are applied by the caller (the mask right here). All groups
@@ -2130,6 +2216,12 @@ ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std
             out = transformImageF(local, place, w, h,
                                   resolveFilter(rs.filter, place, rs.liveDrag));
         }
+        if (written != nullptr) {
+            const common::Rect reach{-kMaxFootprintRadius - 1.0, -kMaxFootprintRadius - 1.0,
+                                     static_cast<double>(bw) + 2.0 * kMaxFootprintRadius + 2.0,
+                                     static_cast<double>(bh) + 2.0 * kMaxFootprintRadius + 2.0};
+            *written = place.mapBounds(reach);
+        }
         foldUnlinkedMask(out, layer, pre);
         return out;
     }
@@ -2183,7 +2275,7 @@ ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std
         {
             MOSAIC_PERF_SCOPE("Layer resample (text)", common::Lane::Cpu);
             tout = rasteriseLayer(*timg, linkedMask(layer), place, w, h,
-                                  resolveFilter(rs.filter, place, rs.liveDrag));
+                                  resolveFilter(rs.filter, place, rs.liveDrag), written);
         }
         foldUnlinkedMask(tout, layer, pre);
         return tout;
@@ -2196,12 +2288,12 @@ ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std
         ImageF xout;
         if (const common::ImageF* fimg = xlayer->cachedImageF()) {
             xout = rasteriseLayer(*fimg, linkedMask(layer), place, w, h,
-                                  resolveFilter(rs.filter, place, rs.liveDrag));
+                                  resolveFilter(rs.filter, place, rs.liveDrag), written);
         } else {
             const common::Image* ximg = xlayer->cachedImage();
             if (ximg == nullptr) return ImageF(w, h);
             xout = rasteriseLayer(*ximg, linkedMask(layer), place, w, h,
-                                  resolveFilter(rs.filter, place, rs.liveDrag));
+                                  resolveFilter(rs.filter, place, rs.liveDrag), written);
         }
         foldUnlinkedMask(xout, layer, pre);
         return xout;
@@ -2213,7 +2305,7 @@ ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std
     {
         MOSAIC_PERF_SCOPE("Layer resample (raster)", common::Lane::Cpu);
         out = rasteriseLayer(*src8, linkedMask(layer), place, w, h,
-                             resolveFilter(rs.filter, place, rs.liveDrag));
+                             resolveFilter(rs.filter, place, rs.liveDrag), written);
     }
     foldUnlinkedMask(out, layer, pre);
     return out;
@@ -2321,7 +2413,10 @@ void reconstructPartition(ImageF& img, const core::LivePartition& lp, const comm
 }
 
 ImageF renderLayer(const core::Layer& layer, const common::Affine2D& pre, std::uint32_t w,
-                   std::uint32_t h, const BlendFn& blend, const ResampleCtx& rs) {
+                   std::uint32_t h, const BlendFn& blend, const ResampleCtx& rs,
+                   common::Rect* written) {
+    if (written != nullptr)
+        *written = common::Rect{0.0, 0.0, static_cast<double>(w), static_cast<double>(h)};
     // The partition rewrite rides on top of whatever the layer otherwise renders as. A partition
     // requires an un-effected raster, so this can never race the effects path below.
     if (rs.reconstructPartitions) {
@@ -2332,7 +2427,7 @@ ImageF renderLayer(const core::Layer& layer, const common::Affine2D& pre, std::u
         }
     }
     if (!(layer.hasEffects() && !layer.effects().empty()))
-        return renderLayerRaw(layer, pre, w, h, blend, rs);
+        return renderLayerRaw(layer, pre, w, h, blend, rs, written);
 
     // 3D text consumes its overlays UPSTREAM (S30-e, docs/type-tool.md §12): the extrude
     // lanes evaluate colour/gradient/pattern overlays in glyph design space and bake them
@@ -2503,10 +2598,14 @@ void fillRect(common::Image& img, std::uint32_t x0, std::uint32_t y0, std::uint3
         if (gpu) {
             res.usedBackend = Backend::GpuCompute;
             GpuCompositor* g = gpu.get();
-            blend = [g](ImageF& acc, const ImageF& src, core::BlendMode mode, float opacity) {
+            // The GPU kernel blends whole buffers; it ignores the bound rather than growing a
+            // sub-rect dispatch for a demo-only path, and its CPU fallback is handed the bound so
+            // a refusal costs what the CPU lane would have cost anyway.
+            blend = [g](ImageF& acc, const ImageF& src, core::BlendMode mode, float opacity,
+                        const common::Rect* bounds) {
                 std::string e;
                 if (!g->blendOver(acc, src, mode, opacity, e)) {
-                    compositeBufferOver(acc, src, mode, opacity);  // resilient per-op fallback
+                    compositeBufferOver(acc, src, mode, opacity, bounds); // per-op fallback
                 }
             };
         } else if (backend != Backend::Auto) {
