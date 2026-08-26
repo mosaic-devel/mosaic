@@ -155,10 +155,22 @@ void gaussianPlane(std::vector<float>& plane, std::uint32_t W, std::uint32_t H, 
     const int maxY = static_cast<int>(H) - 1;
     const std::size_t n = static_cast<std::size_t>(W) * H;
     std::vector<float> tmp(n);
+    { MOSAIC_PERF_SCOPE("FX gaussian plane (horiz)", mosaic::common::Lane::Cpu);
     parallelFor(H, 64, [&](std::size_t row0, std::size_t row1) {  // horizontal
+        // ⚠ BORDER / INTERIOR SPLIT. Clamping is only ever needed within `half` texels of an
+        // edge, but the single loop paid TWO std::clamp calls -- four comparisons -- on every tap
+        // of every texel. At 43 taps over 39.8 MP that is ~3.4 billion comparisons per pass to
+        // serve a few thousand edge texels. The interior loop below indexes directly.
+        //
+        // Byte-identical: in the interior the clamps are the identity by construction, so the same
+        // taps are summed with the same weights in the same order. The borders keep the clamped
+        // form verbatim.
+        const std::uint32_t xLo = std::min<std::uint32_t>(static_cast<std::uint32_t>(half), W);
+        const std::uint32_t xHi =
+            W > static_cast<std::uint32_t>(half) ? W - static_cast<std::uint32_t>(half) : xLo;
         for (std::uint32_t y = static_cast<std::uint32_t>(row0); y < row1; ++y) {
             const std::size_t row = static_cast<std::size_t>(y) * W;
-            for (std::uint32_t x = 0; x < W; ++x) {
+            const auto edge = [&](std::uint32_t x) {
                 float acc = plane[row + x] * k[0];
                 for (int i = 1; i <= half; ++i) {
                     const int l = std::clamp(static_cast<int>(x) - i, 0, maxX);
@@ -168,22 +180,62 @@ void gaussianPlane(std::vector<float>& plane, std::uint32_t W, std::uint32_t H, 
                            k[static_cast<std::size_t>(i)];
                 }
                 tmp[row + x] = acc;
+            };
+            for (std::uint32_t x = 0; x < xLo; ++x) edge(x);
+            for (std::uint32_t x = xLo; x < xHi; ++x) {
+                const float* c = plane.data() + row + x;
+                float acc = *c * k[0];
+                for (int i = 1; i <= half; ++i)
+                    acc += (c[-i] + c[i]) * k[static_cast<std::size_t>(i)];
+                tmp[row + x] = acc;
             }
+            for (std::uint32_t x = std::max(xHi, xLo); x < W; ++x) edge(x);
         }
-    });
+    }); }
+    MOSAIC_PERF_SCOPE("FX gaussian plane (vert)", mosaic::common::Lane::Cpu);
+    // ⚠ STRIP-MINED, and the strip is the whole optimisation. The vertical pass gathers 2*half+1
+    // taps that are W floats apart -- 20 KB at this document's width -- so walking a full row at a
+    // time gives each thread a working set of (band + 2*half) x W floats, about 2.2 MB for a 64-row
+    // band at 5152 wide. That does not fit L2, so every tap missed and the pass ran at memory
+    // speed while the horizontal pass beside it (contiguous, same arithmetic) ran at cache speed.
+    //
+    // Iterating a column STRIP at a time cuts the working set to (band + 2*half) x kStrip floats --
+    // ~106 KB, comfortably resident -- and the window then slides down the strip in cache.
+    //
+    // Byte-identical: each output texel still sums the same taps, in the same order, with the same
+    // weights. Only the ORDER IN WHICH OUTPUTS ARE VISITED changes, and they are independent.
+    constexpr std::uint32_t kStrip = 256;
     parallelFor(H, 64, [&](std::size_t row0, std::size_t row1) {  // vertical
-        for (std::uint32_t y = static_cast<std::uint32_t>(row0); y < row1; ++y) {
-            const std::size_t row = static_cast<std::size_t>(y) * W;
-            for (std::uint32_t x = 0; x < W; ++x) {
-                float acc = tmp[row + x] * k[0];
-                for (int i = 1; i <= half; ++i) {
-                    const int u = std::clamp(static_cast<int>(y) - i, 0, maxY);
-                    const int d = std::clamp(static_cast<int>(y) + i, 0, maxY);
-                    acc += (tmp[static_cast<std::size_t>(u) * W + x] +
-                            tmp[static_cast<std::size_t>(d) * W + x]) *
-                           k[static_cast<std::size_t>(i)];
+        for (std::uint32_t xs = 0; xs < W; xs += kStrip) {
+            const std::uint32_t xe = std::min(W, xs + kStrip);
+            const std::uint32_t yLo = std::min<std::uint32_t>(static_cast<std::uint32_t>(half), H);
+            const std::uint32_t yHi =
+                H > static_cast<std::uint32_t>(half) ? H - static_cast<std::uint32_t>(half) : yLo;
+            for (std::uint32_t y = static_cast<std::uint32_t>(row0); y < row1; ++y) {
+                const std::size_t row = static_cast<std::size_t>(y) * W;
+                if (y >= yLo && y < yHi) { // interior rows: no vertical clamping anywhere
+                    for (std::uint32_t x = xs; x < xe; ++x) {
+                        const float* c = tmp.data() + row + x;
+                        float acc = *c * k[0];
+                        for (int i = 1; i <= half; ++i)
+                            acc += (c[-static_cast<std::ptrdiff_t>(i) * W] +
+                                    c[static_cast<std::ptrdiff_t>(i) * W]) *
+                                   k[static_cast<std::size_t>(i)];
+                        plane[row + x] = acc;
+                    }
+                    continue;
                 }
-                plane[row + x] = acc;
+                for (std::uint32_t x = xs; x < xe; ++x) {
+                    float acc = tmp[row + x] * k[0];
+                    for (int i = 1; i <= half; ++i) {
+                        const int u = std::clamp(static_cast<int>(y) - i, 0, maxY);
+                        const int d = std::clamp(static_cast<int>(y) + i, 0, maxY);
+                        acc += (tmp[static_cast<std::size_t>(u) * W + x] +
+                                tmp[static_cast<std::size_t>(d) * W + x]) *
+                               k[static_cast<std::size_t>(i)];
+                    }
+                    plane[row + x] = acc;
+                }
             }
         }
     });
