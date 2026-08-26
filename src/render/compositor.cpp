@@ -2020,8 +2020,12 @@ ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std
         const common::Affine2D place =
             localToTarget * common::Affine2D::translation(static_cast<double>(ext.ox),
                                                           static_cast<double>(ext.oy));
-        ImageF out = transformImageF(local, place, w, h,
-                                     resolveFilter(rs.filter, place, rs.liveDrag));
+        ImageF out;
+        {
+            MOSAIC_PERF_SCOPE("Group place (resample)", common::Lane::Cpu);
+            out = transformImageF(local, place, w, h,
+                                  resolveFilter(rs.filter, place, rs.liveDrag));
+        }
         foldUnlinkedMask(out, layer, pre);
         return out;
     }
@@ -2047,7 +2051,15 @@ ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std
         // The AA combo governs vector edges too (S26): an explicit Nearest filter hardens coverage
         // to crisp/aliased edges; Auto + every other kernel keep the analytic smooth AA.
         const bool antialias = rs.filter != ResampleFilter::Nearest;
-        ImageF vout = core::vec::rasterizeObjectF(*vlayer->object(), w, h, vplace, 0.25, antialias);
+        // Scoped because this is re-run at TARGET resolution on EVERY composite -- there is no
+        // rasterised cache for a vector layer, and a live BooleanCompound re-flattens and
+        // re-resolves its operands each time. Cheap for a rounded rect, not obviously cheap for a
+        // 41-lobe rosette or a three-operand Exclude on a large canvas, and nothing measured it.
+        ImageF vout;
+        {
+            MOSAIC_PERF_SCOPE("Vector rasterise", common::Lane::Cpu);
+            vout = core::vec::rasterizeObjectF(*vlayer->object(), w, h, vplace, 0.25, antialias);
+        }
         if (const core::RasterMask* m = layer.mask();
             m != nullptr && m->enabled && !m->empty() && m->linked) {
             if (const std::optional<common::Affine2D> inv =
@@ -2063,8 +2075,12 @@ ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std
         const common::Image* timg = tlayer->cachedImage();
         if (timg == nullptr) return ImageF(w, h);
         const common::Affine2D place = pre * layer.transform() * tlayer->cacheImageToLayer();
-        ImageF tout = rasteriseLayer(*timg, linkedMask(layer), place, w, h,
-                                     resolveFilter(rs.filter, place, rs.liveDrag));
+        ImageF tout;
+        {
+            MOSAIC_PERF_SCOPE("Layer resample (text)", common::Lane::Cpu);
+            tout = rasteriseLayer(*timg, linkedMask(layer), place, w, h,
+                                  resolveFilter(rs.filter, place, rs.liveDrag));
+        }
         foldUnlinkedMask(tout, layer, pre);
         return tout;
     } else if (const auto* xlayer = layer.as<core::TextureLayer>()) {
@@ -2089,8 +2105,12 @@ ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std
         return ImageF(w, h);  // Adjustment/Magic handled elsewhere
     }
     const common::Affine2D place = pre * layer.transform();
-    ImageF out = rasteriseLayer(*src8, linkedMask(layer), place, w, h,
-                                resolveFilter(rs.filter, place, rs.liveDrag));
+    ImageF out;
+    {
+        MOSAIC_PERF_SCOPE("Layer resample (raster)", common::Lane::Cpu);
+        out = rasteriseLayer(*src8, linkedMask(layer), place, w, h,
+                             resolveFilter(rs.filter, place, rs.liveDrag));
+    }
     foldUnlinkedMask(out, layer, pre);
     return out;
 }
@@ -2282,8 +2302,18 @@ ImageF renderLayer(const core::Layer& layer, const common::Affine2D& pre, std::u
             bufferToLayer = common::Affine2D::translation(-cb->x, -cb->y) * *bufferToLayer;
     // The S60-e GPU lane, offered the seam before the CPU reference runs (compositor.hpp).
     const bool fxAntialias = rs.filter != ResampleFilter::Nearest;
-    if (!(g_layerEffectsOverride && g_layerEffectsOverride(out, fx, fxAntialias, bufferToLayer)))
-        applyEffects(out, fx, fxAntialias, bufferToLayer);
+    // The effect stack had NO profiler row at all, which made a nine-effect headline invisible in
+    // a table that was otherwise complete -- the same blind spot the adjustment branch had before
+    // S60-a. Scoped HERE, past the fx.empty() short-circuit above, so an un-effected layer (the
+    // overwhelming majority) still contributes no sample and cannot bury the one layer that costs.
+    // The GPU override is inside the scope on purpose: it is the same seam doing the same job, and
+    // reading Gpu against Cpu for one name is how the lane earns its keep.
+    {
+        MOSAIC_PERF_SCOPE("Layer effects", g_layerEffectsOverride ? common::Lane::Gpu
+                                                                 : common::Lane::Cpu);
+        if (!(g_layerEffectsOverride && g_layerEffectsOverride(out, fx, fxAntialias, bufferToLayer)))
+            applyEffects(out, fx, fxAntialias, bufferToLayer);
+    }
     if (!windowed) return out;
 
     ImageF window(w, h);
