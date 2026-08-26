@@ -5,6 +5,7 @@
 #include "core/command.hpp"
 #include "core/commands.hpp"
 #include "core/document.hpp"
+#include "common/profiler.hpp"
 #include "core/vector/raster.hpp"  // rasterizeObjectF: vector-layer thumbnails (S26)
 #include "render/compositor.hpp" // compositeGroup: group thumbnails + group pixel selection
 #include "ui/channels_panel.hpp" // the dock's Channels tab (per-channel histogram)
@@ -1504,6 +1505,13 @@ const common::Image& LayerPanel::cachedThumbnail(const core::Layer& layer, bool*
                        e.textCache != cache.ptr || e.textCacheW != cache.w ||
                        e.textCacheH != cache.h || e.docW != docW || e.docH != docH;
     if (stale) {
+        // Scoped because this 34x34 px thumbnail is built by rendering the layer at DOCUMENT
+        // resolution first: a group goes through render::compositeGroup(group, docW, docH) -- a
+        // full composite of the whole subtree -- and a vector layer through
+        // rasterizeObjectF(obj, docW, docH). On a 39.8 MP canvas that is a ~34,000:1 ratio between
+        // what is computed and what is drawn, and it is why the per-kind walk rows overshoot the
+        // composite rows they should nest inside.
+        MOSAIC_PERF_SCOPE("Layer panel thumbnail", mosaic::common::Lane::Cpu);
         e.image = layerThumbnail(layer, kThumb, docW, docH);
         e.contentRev = rev;
         e.transform = world;
