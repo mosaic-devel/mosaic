@@ -4,12 +4,31 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <vector>
+
+#include "common/thread_pool.hpp"
+
+// ⚠ PARALLELISM NOTE (S60). Every loop in this file walks INDEPENDENT rows, columns or pixels:
+// each iteration writes one output slot and reads only inputs no other iteration writes. There is
+// no reduction anywhere, so banding through common::parallelFor is BIT-IDENTICAL for any band
+// split and any thread count -- which is the compositor's determinism rule, and what lets the
+// layer-effects goldens stand unchanged across this change.
+//
+// It matters because this file is the whole of the effects lane's arithmetic (SDF, both blurs) and
+// it ran ENTIRELY ON ONE THREAD while the rest of the compositor banded through the shared pool.
+// On the S60 fixture that was ~69 s of an ~180 s open, spread evenly across eight stages with no
+// hotspot -- the even spread WAS the symptom.
+//
+// The band minimums below are rows/columns, not pixels: a band has to be worth a task, and these
+// planes are effect ROIs (thousands of px on a side), not thumbnails.
 
 namespace mosaic::render::fx {
 
 std::vector<float> extractAlpha(const common::ImageF& img) {
     std::vector<float> a(img.pixelCount());
-    for (std::size_t i = 0; i < a.size(); ++i) a[i] = img.rgba[i * 4 + 3];
+    common::parallelFor(a.size(), std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
+        for (std::size_t i = i0; i < i1; ++i) a[i] = img.rgba[i * 4 + 3];
+    });
     return a;
 }
 
@@ -53,13 +72,17 @@ void gaussianBlur(std::vector<float>& plane, int w, int h, float sigma) {
     for (float& k : kernel) k /= sum;
 
     std::vector<float> tmp(plane.size());
-    // Horizontal: each row (stride 1), plane -> tmp.
-    for (int y = 0; y < h; ++y)
-        gaussPass(plane.data() + static_cast<std::size_t>(y) * w, tmp.data() + static_cast<std::size_t>(y) * w,
-                  w, 1, kernel.data(), r);
-    // Vertical: each column (stride w), tmp -> plane.
-    for (int x = 0; x < w; ++x)
-        gaussPass(tmp.data() + x, plane.data() + x, h, w, kernel.data(), r);
+    // Horizontal: each row (stride 1), plane -> tmp. Rows are disjoint in both operands.
+    common::parallelFor(static_cast<std::size_t>(h), 16, [&](std::size_t y0, std::size_t y1) {
+        for (std::size_t y = y0; y < y1; ++y)
+            gaussPass(plane.data() + y * static_cast<std::size_t>(w),
+                      tmp.data() + y * static_cast<std::size_t>(w), w, 1, kernel.data(), r);
+    });
+    // Vertical: each column (stride w), tmp -> plane. Columns are likewise disjoint.
+    common::parallelFor(static_cast<std::size_t>(w), 16, [&](std::size_t x0, std::size_t x1) {
+        for (std::size_t x = x0; x < x1; ++x)
+            gaussPass(tmp.data() + x, plane.data() + x, h, w, kernel.data(), r);
+    });
 }
 
 namespace {
@@ -112,10 +135,15 @@ void boxBlurApprox(std::vector<float>& plane, int w, int h, float sigma) {
     for (const int r : radii) {
         if (r <= 0) continue;
         // Horizontal (plane -> tmp) then vertical (tmp -> plane).
-        for (int y = 0; y < h; ++y)
-            boxPass(plane.data() + static_cast<std::size_t>(y) * w,
-                    tmp.data() + static_cast<std::size_t>(y) * w, w, 1, r);
-        for (int x = 0; x < w; ++x) boxPass(tmp.data() + x, plane.data() + x, h, w, r);
+        common::parallelFor(static_cast<std::size_t>(h), 16, [&](std::size_t y0, std::size_t y1) {
+            for (std::size_t y = y0; y < y1; ++y)
+                boxPass(plane.data() + y * static_cast<std::size_t>(w),
+                        tmp.data() + y * static_cast<std::size_t>(w), w, 1, r);
+        });
+        common::parallelFor(static_cast<std::size_t>(w), 16, [&](std::size_t x0, std::size_t x1) {
+            for (std::size_t x = x0; x < x1; ++x)
+                boxPass(tmp.data() + x, plane.data() + x, h, w, r);
+        });
     }
 }
 
@@ -156,19 +184,29 @@ void edt1d(const float* f, float* d, int n, int* v, float* z) {
 // 2D squared EDT of `grid` (seeded 0 at seed pixels / +inf elsewhere), in place: columns then rows.
 void edt2d(std::vector<float>& grid, int w, int h) {
     const int maxdim = std::max(w, h);
-    std::vector<float> f(maxdim), d(maxdim), z(maxdim + 1);
-    std::vector<int> v(maxdim);
-    for (int x = 0; x < w; ++x) {  // columns (vary y)
-        for (int y = 0; y < h; ++y) f[y] = grid[static_cast<std::size_t>(y) * w + x];
-        edt1d(f.data(), d.data(), h, v.data(), z.data());
-        for (int y = 0; y < h; ++y) grid[static_cast<std::size_t>(y) * w + x] = d[y];
-    }
-    for (int y = 0; y < h; ++y) {  // rows (vary x)
-        const std::size_t row = static_cast<std::size_t>(y) * w;
-        for (int x = 0; x < w; ++x) f[x] = grid[row + x];
-        edt1d(f.data(), d.data(), w, v.data(), z.data());
-        for (int x = 0; x < w; ++x) grid[row + x] = d[x];
-    }
+    // ⚠ The four scratch buffers are PER BAND, not shared: edt1d writes all of them, so hoisting
+    // them out (as the serial version could) would have every worker stomping one parabola-site
+    // list. They are allocated inside the band body for that reason, and the allocation is
+    // amortised over `maxdim` samples per line times however many lines the band owns.
+    common::parallelFor(static_cast<std::size_t>(w), 16, [&](std::size_t x0, std::size_t x1) {
+        std::vector<float> f(maxdim), d(maxdim), z(maxdim + 1);
+        std::vector<int> v(maxdim);
+        for (std::size_t x = x0; x < x1; ++x) {  // columns (vary y)
+            for (int y = 0; y < h; ++y) f[y] = grid[static_cast<std::size_t>(y) * w + x];
+            edt1d(f.data(), d.data(), h, v.data(), z.data());
+            for (int y = 0; y < h; ++y) grid[static_cast<std::size_t>(y) * w + x] = d[y];
+        }
+    });
+    common::parallelFor(static_cast<std::size_t>(h), 16, [&](std::size_t y0, std::size_t y1) {
+        std::vector<float> f(maxdim), d(maxdim), z(maxdim + 1);
+        std::vector<int> v(maxdim);
+        for (std::size_t y = y0; y < y1; ++y) {  // rows (vary x)
+            const std::size_t row = y * static_cast<std::size_t>(w);
+            for (int x = 0; x < w; ++x) f[x] = grid[row + x];
+            edt1d(f.data(), d.data(), w, v.data(), z.data());
+            for (int x = 0; x < w; ++x) grid[row + x] = d[x];
+        }
+    });
 }
 
 }  // namespace
@@ -176,18 +214,22 @@ void edt2d(std::vector<float>& grid, int w, int h) {
 std::vector<float> signedDistanceField(const std::vector<float>& alpha, int w, int h) {
     const std::size_t n = static_cast<std::size_t>(w) * h;
     std::vector<float> distToOutside(n), distToInside(n);
-    for (std::size_t i = 0; i < n; ++i) {
-        const bool inside = alpha[i] >= 0.5f;
-        distToOutside[i] = inside ? kInf : 0.0f;  // seeds = outside pixels
-        distToInside[i] = inside ? 0.0f : kInf;   // seeds = inside pixels
-    }
+    common::parallelFor(n, std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
+        for (std::size_t i = i0; i < i1; ++i) {
+            const bool inside = alpha[i] >= 0.5f;
+            distToOutside[i] = inside ? kInf : 0.0f;  // seeds = outside pixels
+            distToInside[i] = inside ? 0.0f : kInf;   // seeds = inside pixels
+        }
+    });
     edt2d(distToOutside, w, h);
     edt2d(distToInside, w, h);
     std::vector<float> sd(n);
-    for (std::size_t i = 0; i < n; ++i) {
-        const bool inside = alpha[i] >= 0.5f;
-        sd[i] = inside ? -std::sqrt(distToOutside[i]) : std::sqrt(distToInside[i]);
-    }
+    common::parallelFor(n, std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
+        for (std::size_t i = i0; i < i1; ++i) {
+            const bool inside = alpha[i] >= 0.5f;
+            sd[i] = inside ? -std::sqrt(distToOutside[i]) : std::sqrt(distToInside[i]);
+        }
+    });
     return sd;
 }
 
@@ -195,7 +237,8 @@ std::vector<float> signedDistanceFieldAA(const std::vector<float>& alpha, int w,
     if (ss <= 1 || w <= 0 || h <= 0) return signedDistanceField(alpha, w, h);
     const int W = w * ss, H = h * ss;
     std::vector<float> up(static_cast<std::size_t>(W) * H);
-    for (int Y = 0; Y < H; ++Y) {
+    common::parallelFor(static_cast<std::size_t>(H), 16, [&](std::size_t Y0, std::size_t Y1) {
+    for (int Y = static_cast<int>(Y0); Y < static_cast<int>(Y1); ++Y) {
         const float fy = (static_cast<float>(Y) + 0.5f) / static_cast<float>(ss) - 0.5f;
         const int iy = static_cast<int>(std::floor(fy));
         const float ty = fy - static_cast<float>(iy);
@@ -213,18 +256,21 @@ std::vector<float> signedDistanceFieldAA(const std::vector<float>& alpha, int w,
                 (a00 * (1.0f - tx) + a10 * tx) * (1.0f - ty) + (a01 * (1.0f - tx) + a11 * tx) * ty;
         }
     }
+    });
     const std::vector<float> sdUp = signedDistanceField(up, W, H);  // distances in ss-subpixels
     std::vector<float> sd(static_cast<std::size_t>(w) * h);
     const float norm = 1.0f / static_cast<float>(ss * ss * ss);  // block average, ss-subpixels -> px
-    for (int y = 0; y < h; ++y) {
-        for (int x = 0; x < w; ++x) {
-            float acc = 0.0f;
-            for (int sy = 0; sy < ss; ++sy)
-                for (int sx = 0; sx < ss; ++sx)
-                    acc += sdUp[static_cast<std::size_t>(y * ss + sy) * W + (x * ss + sx)];
-            sd[static_cast<std::size_t>(y) * w + x] = acc * norm;
+    common::parallelFor(static_cast<std::size_t>(h), 16, [&](std::size_t y0, std::size_t y1) {
+        for (int y = static_cast<int>(y0); y < static_cast<int>(y1); ++y) {
+            for (int x = 0; x < w; ++x) {
+                float acc = 0.0f;
+                for (int sy = 0; sy < ss; ++sy)
+                    for (int sx = 0; sx < ss; ++sx)
+                        acc += sdUp[static_cast<std::size_t>(y * ss + sy) * W + (x * ss + sx)];
+                sd[static_cast<std::size_t>(y) * w + x] = acc * norm;
+            }
         }
-    }
+    });
     return sd;
 }
 
