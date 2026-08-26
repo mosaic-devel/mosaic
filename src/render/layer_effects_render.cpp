@@ -33,6 +33,25 @@ struct Box {
     [[nodiscard]] bool empty() const noexcept { return x1 <= x0 || y1 <= y0; }
 };
 
+// Band one ROI row loop through the shared pool.
+//
+// Every effect stage below walks INDEPENDENT rows: each iteration writes exactly one output slot
+// per (x,y) -- `io.set(rx0+x, ry0+y)`, `below[y*rw+x]`, `alpha[y*rw+x]` -- and reads only inputs
+// that no row writes (the coverage plane, the signed-distance field, an already-blurred field,
+// the paint). There is no reduction and no carried state, so the band split cannot change a
+// result for any thread count. That is the same argument effect_primitives.cpp carries, and it is
+// what lets the layer-effects goldens stand unchanged.
+//
+// ⚠ Note what is NOT banded: the loops OVER EFFECTS (each concentric ring, each stacked shadow)
+// stay sequential, because those composite over one another and the order IS the z-order. Only
+// the pixel walk inside one effect is parallel.
+template <class Fn>
+void forEachRow(int rh, Fn&& body) {
+    common::parallelFor(static_cast<std::size_t>(rh), 16, [&](std::size_t y0, std::size_t y1) {
+        for (int y = static_cast<int>(y0); y < static_cast<int>(y1); ++y) body(y);
+    });
+}
+
 // Both coverage boxes of `io`, in ONE PARALLEL PASS.
 //
 // These are the first thing applyEffects does, and they used to be two SERIAL full-buffer scans.
@@ -197,7 +216,7 @@ void applyStrokes(ImageF& io, const std::vector<core::StrokeEffect>& strokes,
         for (int k = static_cast<int>(outside.size()) - 1; k >= 0; --k) {
             const Ring& r = outside[static_cast<std::size_t>(k)];
             const float innerEdge = r.lo - (k == 0 ? kInnerBack : kAa);
-            for (int y = 0; y < rh; ++y) {
+            forEachRow(rh, [&](int y) {
                 for (int x = 0; x < rw; ++x) {
                     const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
                     const float d = sd[idx];
@@ -209,9 +228,9 @@ void applyStrokes(ImageF& io, const std::vector<core::StrokeEffect>& strokes,
                     src.a *= cov;
                     below[idx] = compositeOver(r.blend, below[idx], src, r.opacity);
                 }
-            }
+            });
         }
-        for (int y = 0; y < rh; ++y) {
+        forEachRow(rh, [&](int y) {
             for (int x = 0; x < rw; ++x) {
                 const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
                 if (below[idx].a <= 0.0f) continue;
@@ -220,13 +239,13 @@ void applyStrokes(ImageF& io, const std::vector<core::StrokeEffect>& strokes,
                 io.set(px, py,
                        compositeOver(core::BlendMode::Normal, below[idx], io.at(px, py), 1.0f));
             }
-        }
+        });
     }
 
     // OVER: inside + centre strokes on top of the content.
     for (const Ring& r : over) {
         const bool inside = r.align == Align::Inside;
-        for (int y = 0; y < rh; ++y) {
+        forEachRow(rh, [&](int y) {
             for (int x = 0; x < rw; ++x) {
                 const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
                 const float d = sd[idx];
@@ -252,7 +271,7 @@ void applyStrokes(ImageF& io, const std::vector<core::StrokeEffect>& strokes,
                 if (inside) res.a = std::min(res.a, alpha[idx]);  // never extend past the silhouette
                 io.set(px, py, res);
             }
-        }
+        });
     }
 }
 
@@ -265,7 +284,7 @@ void applyOverlay(ImageF& io, const core::OverlayEffect& ov, const std::vector<f
                   const Box& content, int rx0, int ry0, int rw, int rh, bool antialias,
                   const std::optional<common::Affine2D>& bufferToLayer) {
     if (!ov.enabled || std::holds_alternative<core::vec::NoPaint>(ov.paint)) return;
-    for (int y = 0; y < rh; ++y) {
+    forEachRow(rh, [&](int y) {
         for (int x = 0; x < rw; ++x) {
             const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
             const float cov = alpha[idx];
@@ -282,7 +301,7 @@ void applyOverlay(ImageF& io, const core::OverlayEffect& ov, const std::vector<f
             res.a = std::min(res.a, cov);  // never paint outside the silhouette
             io.set(px, py, res);
         }
-    }
+    });
 }
 
 // ---- LE-e: shadows & glows (doc §5.2, §5.4) -------------------------------------------------
@@ -358,7 +377,7 @@ void applyDropShadows(std::vector<ColorF>& below, const std::vector<core::Shadow
         for (std::size_t i = 0; i < sd.size(); ++i) field[i] = dilatedCov(sd[i], sh.spread);
         blurCoverage(field, rw, rh, sigmaForSize(sh.size));
         const Offset o = shadowOffset(sh.angleDeg, sh.distance);
-        for (int y = 0; y < rh; ++y) {
+        forEachRow(rh, [&](int y) {
             for (int x = 0; x < rw; ++x) {
                 const float f = sampleField(field, rw, rh, static_cast<float>(x) - o.dx,
                                             static_cast<float>(y) - o.dy);
@@ -367,7 +386,7 @@ void applyDropShadows(std::vector<ColorF>& below, const std::vector<core::Shadow
                 ColorF src{sh.color.r, sh.color.g, sh.color.b, sh.color.a * f};
                 below[idx] = compositeOver(sh.blend, below[idx], src, sh.opacity);
             }
-        }
+        });
     }
 }
 
@@ -382,7 +401,7 @@ void applyOuterGlow(std::vector<ColorF>& below, const core::GlowEffect& glow,
     std::vector<float> field(sd.size());
     for (std::size_t i = 0; i < sd.size(); ++i) field[i] = dilatedCov(sd[i], glow.choke);
     blurCoverage(field, rw, rh, sigmaForSize(glow.size));
-    for (int y = 0; y < rh; ++y) {
+    forEachRow(rh, [&](int y) {
         for (int x = 0; x < rw; ++x) {
             const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
             const float f = field[idx];
@@ -392,7 +411,7 @@ void applyOuterGlow(std::vector<ColorF>& below, const core::GlowEffect& glow,
             src.a *= f;
             below[idx] = compositeOver(glow.blend, below[idx], src, glow.opacity);
         }
-    }
+    });
 }
 
 // Inner shadows: composite OVER io, CLIPPED to the captured `alpha` (exactly the applyOverlay clamp),
@@ -408,7 +427,7 @@ void applyInnerShadows(ImageF& io, const std::vector<core::ShadowEffect>& shadow
         for (std::size_t i = 0; i < sd.size(); ++i) field[i] = 1.0f - dilatedCov(sd[i], -sh.spread);
         blurCoverage(field, rw, rh, sigmaForSize(sh.size));
         const Offset o = shadowOffset(sh.angleDeg, sh.distance);
-        for (int y = 0; y < rh; ++y) {
+        forEachRow(rh, [&](int y) {
             for (int x = 0; x < rw; ++x) {
                 const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
                 const float cov = alpha[idx];
@@ -423,7 +442,7 @@ void applyInnerShadows(ImageF& io, const std::vector<core::ShadowEffect>& shadow
                 res.a = std::min(res.a, cov);
                 io.set(px, py, res);
             }
-        }
+        });
     }
 }
 
@@ -443,7 +462,7 @@ void applyInnerGlow(ImageF& io, const core::GlowEffect& glow, const std::vector<
         for (std::size_t i = 0; i < sd.size(); ++i)
             field[i] = std::clamp((-sd[i] - glow.choke) * inv, 0.0f, 1.0f);
     }
-    for (int y = 0; y < rh; ++y) {
+    forEachRow(rh, [&](int y) {
         for (int x = 0; x < rw; ++x) {
             const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
             const float cov = alpha[idx];
@@ -459,7 +478,7 @@ void applyInnerGlow(ImageF& io, const core::GlowEffect& glow, const std::vector<
             res.a = std::min(res.a, cov);
             io.set(px, py, res);
         }
-    }
+    });
 }
 
 // ============================================================================================= LE-f
@@ -512,7 +531,7 @@ void applySatin(ImageF& io, const core::SatinEffect& sa, const std::vector<float
         const float a01 = at(x0, y0 + 1), a11 = at(x0 + 1, y0 + 1);
         return (a00 * (1.0f - tx) + a10 * tx) * (1.0f - ty) + (a01 * (1.0f - tx) + a11 * tx) * ty;
     };
-    for (int y = 0; y < rh; ++y) {
+    forEachRow(rh, [&](int y) {
         for (int x = 0; x < rw; ++x) {
             const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
             const float cov = alpha[idx];
@@ -530,7 +549,7 @@ void applySatin(ImageF& io, const core::SatinEffect& sa, const std::vector<float
             res.a = std::min(res.a, cov);  // never paint outside the silhouette
             io.set(px, py, res);
         }
-    }
+    });
 }
 
 // The per-style bevel HEIGHT profile from the signed distance `sd` (px; NEGATIVE inside, 0 at the
@@ -601,7 +620,7 @@ void applyBevel(ImageF& io, const core::BevelEffect& bv, const std::vector<float
         y = std::clamp(y, 0, rh - 1);
         return hgt[static_cast<std::size_t>(y) * rw + x];
     };
-    for (int y = 0; y < rh; ++y) {
+    forEachRow(rh, [&](int y) {
         for (int x = 0; x < rw; ++x) {
             const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
             const float cov = alpha[idx];
@@ -649,7 +668,7 @@ void applyBevel(ImageF& io, const core::BevelEffect& bv, const std::vector<float
             res.a = std::min(res.a, cov);  // never paint outside the silhouette
             io.set(px, py, res);
         }
-    }
+    });
 }
 
 }  // namespace
@@ -697,22 +716,28 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
     // Capture the ORIGINAL coverage before fill-opacity dims it, so effects key off the full
     // shape (a dimmed fill must not shrink the stroke/shadow edge).
     std::vector<float> alpha(static_cast<std::size_t>(rw) * rh);
-    for (int y = 0; y < rh; ++y)
+    forEachRow(rh, [&](int y) {
         for (int x = 0; x < rw; ++x)
             alpha[static_cast<std::size_t>(y) * rw + x] =
                 io.at(static_cast<std::uint32_t>(rx0 + x), static_cast<std::uint32_t>(ry0 + y)).a;
+    });
 
     // MID -- the layer's own pixels, dimmed by fill-opacity (straight alpha; colour intact).
     // Overlays / satin / inner shadow+glow / bevel (all clipped to the alpha) land here in LE-c..f.
     if (fx.fillOpacity < 1.0f) {
         const float s = std::clamp(fx.fillOpacity, 0.0f, 1.0f);
-        for (int y = content.y0; y < content.y1; ++y) {
-            for (int x = content.x0; x < content.x1; ++x) {
-                ColorF c = io.at(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
-                c.a *= s;
-                io.set(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y), c);
+        // Bounded by `content`, not the ROI, so it bands over its own row span.
+        common::parallelFor(static_cast<std::size_t>(content.y1 - content.y0), 16,
+                            [&](std::size_t b0, std::size_t b1) {
+            for (int y = content.y0 + static_cast<int>(b0), yEnd = content.y0 + static_cast<int>(b1);
+                 y < yEnd; ++y) {
+                for (int x = content.x0; x < content.x1; ++x) {
+                    ColorF c = io.at(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
+                    c.a *= s;
+                    io.set(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y), c);
+                }
             }
-        }
+        });
     }
 
     // Shadow/glow tier (LE-e): the four effects all key off ONE ROI signed-distance field of the
@@ -746,7 +771,7 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
             applyOuterGlow(below, fx.outerGlow, sdShadow, anchor, rx0, ry0, rw, rh, antialias,
                            bufferToLayer);
         }
-        for (int y = 0; y < rh; ++y) {
+        forEachRow(rh, [&](int y) {
             for (int x = 0; x < rw; ++x) {
                 const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
                 if (below[idx].a <= 0.0f) continue;  // nothing under this pixel -> io unchanged
@@ -755,7 +780,7 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
                 io.set(px, py,
                        compositeOver(core::BlendMode::Normal, below[idx], io.at(px, py), 1.0f));
             }
-        }
+        });
     }
 
     // MID overlays (doc §5.3): colour -> gradient -> pattern, in the fixed z-order, each clipped to
