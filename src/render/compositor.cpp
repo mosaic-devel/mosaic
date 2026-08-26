@@ -1936,6 +1936,22 @@ struct GroupWalk {
 // Adjustments carry no raster of their own; walkStep's adjustment branch never reads src.
 const ImageF kNoSrc;
 
+// "Adjustment: <Kind>" for the profiler, from a table built once on first use -- so naming a row
+// per kind costs no per-call allocation. Indexed by the enum, which is APPEND-ONLY (layer.hpp), so
+// a new kind lands at the end and simply gets its own row.
+[[nodiscard]] std::string_view adjustmentRowName(core::AdjustmentKind kind) {
+    static const std::vector<std::string> names = [] {
+        std::vector<std::string> v;
+        for (int i = 0; i <= static_cast<int>(core::AdjustmentKind::HighPass); ++i)
+            v.emplace_back("Adjustment: " +
+                           std::string(core::adjustmentKindName(
+                               static_cast<core::AdjustmentKind>(i))));
+        return v;
+    }();
+    const auto i = static_cast<std::size_t>(kind);
+    return i < names.size() ? std::string_view(names[i]) : std::string_view("Adjustment: ?");
+}
+
 // One step of the walk: apply `layer` onto the accumulator with its blend mode, opacity and
 // clip-to-below, maintaining the clip-base state. `src` is the layer's doc-space raster
 // (renderLayer output) — const so the drag cache can replay from cached buffers; the (rare)
@@ -1955,6 +1971,14 @@ void walkStep(GroupWalk& st, const core::Layer& layer, const ImageF& src, const 
         MOSAIC_PERF_SCOPE(core::adjustmentIsSpatial(*adj) ? "Adjustment layer (spatial)"
                                                           : "Adjustment layer (scalar)",
                           common::Lane::Cpu);
+        // ...and the same sample again, keyed by KIND. The aggregate row above is the one the plan
+        // documents and it stays, but it cannot answer "which kind owns this": it reported 26 calls
+        // averaging 1.4 s with a 17.1 s worst case, and the honest guesses about which adjustment
+        // that was were wrong twice. Per-kind, the answer was immediate -- Gaussian Blur, 30.3 s of
+        // it, while Shadows/Highlights (suspect #1) was reporting 0.00 ms. The name comes from a
+        // table built once, so a profiled run costs no allocation per adjustment and an unprofiled
+        // one costs the same relaxed load it always did.
+        MOSAIC_PERF_SCOPE(adjustmentRowName(adj->adjustmentKind()), common::Lane::Cpu);
         const std::vector<float>* cov =
             (adj->clipToBelow() && st.haveClipBase) ? &st.clipBase : nullptr;
         applyAdjustment(st.acc, *adj, cov, st.pre, st.maskDomain, st.liveDrag);

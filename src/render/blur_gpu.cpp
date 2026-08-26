@@ -39,10 +39,45 @@
 namespace mosaic::render {
 namespace {
 
-// Refuse absurd targets (per working buffer); the CPU lane handles them. 16.7 Mpx ~ a 5.8k x
-// 2.9k canvas -- DoF allocates seven such buffers, so allocation failure past this also just
-// falls back.
-constexpr VkDeviceSize kMaxImageBytes = 256ull << 20;
+// The per-working-buffer ceiling, below which this lane declines and the CPU reference serves.
+//
+// ⚠ THIS WAS A FLAT 256 MiB (16.7 Mpx of float RGBA, ~a 5.8k x 2.9k canvas), and that constant is
+// why a 39.8 MP document's Gaussian Blur adjustment cost 3.4 SECONDS of CPU per composite while a
+// perfectly capable device sat idle: the working buffer is 608 MiB, the lane refused on size, and
+// the golden CPU path served. A FIXED cap refuses exactly the documents whose blurs cost the most
+// -- the ceiling was pointed the wrong way round.
+//
+// Derive it from the device instead. `buffers` is how many image-sized working buffers the kind
+// needs -- raw + readback + work0 + work1, and for DoF four pyramid levels on top -- and the lane
+// may spend up to a THIRD of device-local memory on that working set. Not more: it shares the
+// device with the present path, the extrude lane and the tile compositor, so it may not simply
+// take the heap.
+//
+// The old constant stays as the FLOOR, so no device ends up with a smaller ceiling than it had,
+// and a device that reports no local heap behaves exactly as before. Every allocation past this
+// still falls back cleanly -- ensureBuf failure returns false and the CPU lane serves -- so the
+// cap is a policy, not a safety mechanism.
+constexpr VkDeviceSize kMinImageBytes = 256ull << 20;
+
+// Sum of the DEVICE_LOCAL heaps ("how much VRAM"). gpu_caps records this on DeviceInfo, which
+// VulkanContext does not carry, so ask the physical device directly -- the same loop, one call.
+[[nodiscard]] VkDeviceSize deviceLocalBytes(VkPhysicalDevice pd) {
+    if (pd == VK_NULL_HANDLE) return 0;
+    VkPhysicalDeviceMemoryProperties mem{};
+    vkGetPhysicalDeviceMemoryProperties(pd, &mem);
+    VkDeviceSize total = 0;
+    for (std::uint32_t i = 0; i < mem.memoryHeapCount; ++i)
+        if ((mem.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0)
+            total += mem.memoryHeaps[i].size;
+    return total;
+}
+
+[[nodiscard]] VkDeviceSize maxImageBytes(VkPhysicalDevice pd, int buffers) {
+    const VkDeviceSize vram = deviceLocalBytes(pd);
+    if (vram == 0 || buffers <= 0)
+        return kMinImageBytes;
+    return std::max(kMinImageBytes, (vram / 3) / static_cast<VkDeviceSize>(buffers));
+}
 
 // The longest dispatch chain is DoF-soft: 1 convert + 4 x (2 separable + 1 convert) + 1
 // interpolation = 14 steps; one descriptor set each.
@@ -404,10 +439,14 @@ bool BlurGpu::render(common::ImageF& img, const BlurOp& op) {
     const std::int32_t h = static_cast<std::int32_t>(img.height);
     const VkDeviceSize bytes =
         static_cast<VkDeviceSize>(img.pixelCount()) * 4 * sizeof(float);
-    // Two caps, and they mean different things: kMaxImageBytes is OUR policy ("an absurd buffer
-    // is the CPU lane's problem"), fitsStorageBufferRange is the DEVICE's (Vulkan 1.0 guarantees
-    // only 128 MiB, half our policy cap). Both must hold. (S60-alpha)
-    if (bytes > kMaxImageBytes || !im.ctx->caps().fitsStorageBufferRange(bytes)) return false;
+    // Two caps, and they mean different things: maxImageBytes is OUR policy (how much of the
+    // device this lane may spend), fitsStorageBufferRange is the DEVICE's own limit (Vulkan 1.0
+    // guarantees only 128 MiB). Both must hold. (S60-alpha; the policy half derived since S60.)
+    // DoF stacks a four-level pyramid on the four buffers every kind ensures.
+    const int workingBuffers = isDof ? 8 : 4;
+    if (bytes > maxImageBytes(im.ctx->physicalDevice(), workingBuffers) ||
+        !im.ctx->caps().fitsStorageBufferRange(bytes))
+        return false;
 
     // ---- buffers (grow-only; handles are stable once ensured) -------------------------------
     constexpr VkBufferUsageFlags kWork =
