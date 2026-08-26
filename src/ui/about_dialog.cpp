@@ -137,7 +137,7 @@ const std::string& wordmark() {
 const std::vector<std::string>& contributors() {
     static const std::vector<std::string> kNames = {
         "mosaic-devel",
-        "Claude (Opus 4.8 & Fable 5)",
+        "Claude (Opus 4.8, Opus 5 & Fable 5)",
     };
     return kNames;
 }
