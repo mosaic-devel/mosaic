@@ -90,6 +90,8 @@ void rasteriseLayerInto(ImageF& dst, const SrcImage& src, const core::RasterMask
     dst.width = w;
     dst.height = h;
     const std::size_t n = static_cast<std::size_t>(w) * h * 4;
+    workCounters().clearedTexels.fetch_add(static_cast<std::uint64_t>(w) * h,
+                                           std::memory_order_relaxed);
     {
         MOSAIC_PERF_SCOPE("Layer buffer clear", common::Lane::Cpu);
         if (dst.rgba.size() == n) {
@@ -2035,8 +2037,14 @@ void walkStep(GroupWalk& st, const core::Layer& layer, const ImageF& src, const 
         if (rs.skip != core::kInvalidLayerId && layer.id() == rs.skip) continue;
         if (layer.as<core::AdjustmentLayer>() != nullptr)
             walkStep(st, layer, kNoSrc, blend);
-        else
+        else {
+            // LEAF renders only: a group's cost is its own row (groupBuffers/groupBufferTexels),
+            // and counting it here too would make "renders == leaf count" untrue for any nested
+            // document -- an assertion that cannot hold is worse than no assertion.
+            if (layer.as<core::GroupLayer>() == nullptr)
+                workCounters().layerRenders.fetch_add(1, std::memory_order_relaxed);
             walkStep(st, layer, renderLayer(layer, pre, w, h, blend, rs), blend);
+        }
     }
     return std::move(st.acc);
 }
@@ -2094,6 +2102,9 @@ ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std
                                           static_cast<double>(ext.oy)) *
             common::Affine2D::scaling(static_cast<double>(ext.w) / bw,
                                       static_cast<double>(ext.h) / bh);
+        workCounters().groupBuffers.fetch_add(1, std::memory_order_relaxed);
+        workCounters().groupBufferTexels.fetch_add(static_cast<std::uint64_t>(bw) * bh,
+                                                   std::memory_order_relaxed);
         ImageF local = compositeChildren(
             *group,
             common::Affine2D::scaling(static_cast<double>(bw) / ext.w,
@@ -2536,6 +2547,7 @@ CompositeResult composite(const core::Document& doc, const CompositeOptions& opt
         return res;
     }
     static const auto log = common::log::category("render");
+    workCounters().composites.fetch_add(1, std::memory_order_relaxed);
     log->debug("compositing {}x{} ({} layers)", w, h, doc.layerCount());
     return compositeBuffer(doc, common::Affine2D::identity(), w, h, opts, backend);
 }
@@ -2559,6 +2571,7 @@ CompositeResult compositeScaled(const core::Document& doc, std::uint32_t outW, s
     if (outW == w && outH == h)
         return compositeBuffer(doc, common::Affine2D::identity(), w, h, opts, backend);
     static const auto log = common::log::category("render");
+    workCounters().composites.fetch_add(1, std::memory_order_relaxed);
     log->debug("compositing {}x{} into {}x{} ({} layers)", w, h, outW, outH, doc.layerCount());
     // Document -> buffer. Per axis, so a caller that rounded each dimension independently still
     // maps the document's own corners onto the buffer's.
@@ -2707,6 +2720,11 @@ common::Image rasterizeLayer(const core::Layer& layer, std::uint32_t docW, std::
     // kernel even if a gesture happens to be in flight.
     return common::toImage8(renderLayer(layer, common::Affine2D::identity(), docW, docH,
                                         compositeBufferOver, ResampleCtx{filter, false}));
+}
+
+WorkCounters& workCounters() noexcept {
+    static WorkCounters c;
+    return c;
 }
 
 common::Image compositeGroupInto(const core::GroupLayer& group,

@@ -24,6 +24,7 @@ add_executable(mosaic_tests
     test_window_title.cpp
     test_compositor.cpp
     test_composite_scaled.cpp
+    test_composite_budget.cpp
     test_device_select.cpp
     test_layer_effects_gpu.cpp
     test_histogram_gpu.cpp

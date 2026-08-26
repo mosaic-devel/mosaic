@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -228,6 +229,42 @@ void setLayerEffectsRenderOverride(LayerEffectsRenderOverride fn);
 // own transform applied, its opacity/blend ignored — they style its compositing into the
 // parent, not its content). Powers the layer panel's group thumbnails and the Shift-click
 // "select the group's pixels" gesture. CPU path, deterministic.
+// ---- Work counters -----------------------------------------------------------------------------
+//
+// Deterministic COUNTS of what a composite did, as opposed to how long it took, and the distinction
+// is the entire point. A wall-clock budget is machine-dependent and flaky; "this walk rendered 57
+// layers and cleared 2.3 gigatexels" is the same number on every machine, every build type and
+// every thread count, so it can be asserted.
+//
+// They exist because the suite could not see cost AT ALL. Every defect the S60 arc found -- a
+// canvas-sized convolution for a 300 px layer, a 34x34 thumbnail building a 36.7 MP buffer, a
+// reduced composite rebuilding groups at full resolution, one file open compositing the canvas
+// three times -- was CORRECT, passed 3040 test cases, and was found by opening a real document and
+// watching a clock. Counting the work is what makes that class assertable
+// (tests/test_composite_budget.cpp).
+//
+// ⚠ Incremented once per OPERATION, never per pixel: a relaxed atomic add per layer, against a
+// walk that then touches millions of texels. That is why they are always on rather than gated --
+// a counter you have to enable is a counter that is off when the regression lands.
+struct WorkCounters {
+    std::atomic<std::uint64_t> composites{0};        // composite() / compositeScaled() entries
+    std::atomic<std::uint64_t> layerRenders{0};      // renderLayerRaw calls for a LEAF layer
+    std::atomic<std::uint64_t> groupBuffers{0};      // group isolated buffers built
+    std::atomic<std::uint64_t> groupBufferTexels{0}; // ...and their total area
+    std::atomic<std::uint64_t> clearedTexels{0};     // texels zeroed into per-layer leaf buffers
+
+    void reset() noexcept {
+        composites.store(0, std::memory_order_relaxed);
+        layerRenders.store(0, std::memory_order_relaxed);
+        groupBuffers.store(0, std::memory_order_relaxed);
+        groupBufferTexels.store(0, std::memory_order_relaxed);
+        clearedTexels.store(0, std::memory_order_relaxed);
+    }
+};
+
+// The process-wide counters. A test resets them, runs one composite, and reads them.
+[[nodiscard]] WorkCounters& workCounters() noexcept;
+
 [[nodiscard]] common::Image compositeGroup(const core::GroupLayer& group, std::uint32_t docW,
                                            std::uint32_t docH);
 
