@@ -2,7 +2,6 @@
 
 #include "common/image_svg.hpp"
 #include "platform/system_sound.hpp"
-#include "ui/window_hints.hpp"
 
 #include <FL/Fl.H>
 #include <FL/Fl_Box.H>
@@ -231,10 +230,6 @@ void AskOrTellDialog::present(const Stage& stage, Fl_Window* host) {
             hide();
         centerWindowOver(*this, host); // over the host; multi-monitor-correct without one
         show();
-        // Inside the mapping branch on purpose: a staged flow re-enters present() two or three
-        // times on the SAME window, and only this branch is an actual show() -- i.e. a new
-        // xdg_toplevel to give the icon and the "I am a modal dialog" hint to.
-        applyToplevelHints(this);
         // The host's own alert sound, on the hidden -> shown transition ONLY. present() is also the
         // in-place restyle path, and a staged flow (confirm -> progress -> summary) drives it two or
         // three times on the SAME window; the sound announces "the app is interrupting you", which

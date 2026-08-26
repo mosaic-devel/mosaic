@@ -123,7 +123,7 @@
 #include "ui/type_panel.hpp"
 #include "ui/vulkan_canvas.hpp"
 #include "ui/widgets.hpp"      // Dropdown, and the shared widget toolkit
-#include "ui/window_hints.hpp" // applyToplevelHints -- Wayland icon + dialog hints, after show()
+#include "ui/window_hints.hpp" // installToplevelHintWatcher -- Wayland icon + dialog hints
 
 #include <FL/Fl.H>
 #include <FL/Fl_Copy_Surface.H>
@@ -1328,7 +1328,6 @@ public:
                                                 s.eraserPresetFollowsBrush);
             ui::centerWindowOver(*m_brushEditorDialog, this);
             m_brushEditorDialog->show();
-            applyToplevelHints(m_brushEditorDialog.get()); // Wayland icon + dialog hint (S59-a)
         });
         // A History-tab jump (S16-b) is a multi-undo/redo: re-sync everything once, exactly
         // like the Edit-menu undo path. The history LIST itself refreshes via the command
@@ -2615,14 +2614,8 @@ public:
         // because the guard subclasses the native window and show() is what creates it. A no-op on
         // Linux and macOS, so no platform conditional -- see the header.
         platform::installSessionEndGuard(
-            this, [this] { return anySessionDirty(); },
-            [this] { syncJournalsForSessionEnd(); },
+            this, [this] { return anySessionDirty(); }, [this] { syncJournalsForSessionEnd(); },
             _("Mosaic has unsaved changes. They will be offered back the next time you open it."));
-        // The compositor's side of the same "after show()" story: on Wayland a client must hand
-        // over its icon through xdg-toplevel-icon-v1, because there is no _NET_WM_ICON and the
-        // Fl_Window::icon() set in the constructor reaches nothing on that backend (S59-a). A
-        // no-op on X11, macOS and Windows -- see ui/window_hints.hpp.
-        applyToplevelHints(this);
         // --profile / MOSAIC_PROFILE=1 asked for measurement, so give it a face: open the Timing
         // Profiler straight away rather than making the user find a menu item (S60-alpha). It is
         // non-modal and hides with the main window, so it never keeps Fl::run() alive on quit.
@@ -6762,7 +6755,6 @@ public:
         m_settingsDialog->position(x() + (w() - m_settingsDialog->w()) / 2,
                                    y() + (h() - m_settingsDialog->h()) / 2);
         m_settingsDialog->show();
-        applyToplevelHints(m_settingsDialog.get()); // Wayland icon + dialog hint (S59-a)
     }
 
     // Edit→Fill… (S39): a transactional modal that fills the current selection (whole active layer
@@ -6804,7 +6796,6 @@ public:
         m_fillDialog->position(x() + (w() - m_fillDialog->w()) / 2,
                                y() + (h() - m_fillDialog->h()) / 2);
         m_fillDialog->show();
-        applyToplevelHints(m_fillDialog.get()); // Wayland icon + dialog hint (S59-a)
     }
 
     // Layer ▸ Layer Effects… (LE-b): open the transactional effects modal for the active layer. The
@@ -6862,7 +6853,6 @@ public:
         m_layerEffectsDialog->position(x() + (w() - m_layerEffectsDialog->w()) / 2,
                                        y() + (h() - m_layerEffectsDialog->h()) / 2);
         m_layerEffectsDialog->show();
-        applyToplevelHints(m_layerEffectsDialog.get()); // Wayland icon + dialog hint (S59-a)
     }
 
     // Filter ▸ Adjustments ▸ … (S32): insert a non-destructive adjustment layer ABOVE the active
@@ -7212,7 +7202,6 @@ public:
         if (m_timingGraph == nullptr)
             m_timingGraph = std::make_unique<TimingGraphWindow>();
         m_timingGraph->show();
-        applyToplevelHints(m_timingGraph.get()); // Wayland icon + dialog hint (S59-a)
     }
 
     // Layer ▸ Texture Generator… (S55-f): the transactional generator modal. Create mode inserts a
@@ -7350,7 +7339,6 @@ public:
         m_textureGenDialog->position(x() + (w() - m_textureGenDialog->w()) / 2,
                                      y() + (h() - m_textureGenDialog->h()) / 2);
         m_textureGenDialog->show();
-        applyToplevelHints(m_textureGenDialog.get()); // Wayland icon + dialog hint (S59-a)
     }
 
     // Capture the current fill target for the dialog: the layer-local region a solid fill will
@@ -14693,6 +14681,13 @@ int runApp(const RunOptions& options) {
     // basename data/desktop/mosaic.desktop installs under -- the StartupWMClass it already declares.
     // Must precede the first window, which is why it sits next to the backend pin (S59-a).
     Fl_Window::default_xclass("mosaic");
+    // The other half of the same chain, for the case the .desktop cannot cover (an AppImage is
+    // never installed, so app_id resolves to nothing): hand the compositor the icon directly, and
+    // tell it which toplevels are modal dialogs. Installed HERE, before the first window, so it
+    // catches every toplevel the app will ever open -- including the ones opened from inside a
+    // modal dialog's own nested event loop. See ui/window_hints.hpp for why this is not a line
+    // after each show().
+    installToplevelHintWatcher();
     Fl_Shared_Image::add_handler(clipboardSharedImageHandler); // external image paste (S55)
     platform::initNativeFileDialog(); // Phase 0: sharpen the native-chooser fallback on KDE
     Fl::event_dispatch(fileDialogInputGuard); // make "modal behind a native dialog" actually modal

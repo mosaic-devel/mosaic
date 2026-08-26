@@ -48,7 +48,43 @@ void sweepClosedDialogs() {
     }
 }
 
+// Every toplevel the watcher has already handled. Same pointer-only discipline as the sweep above:
+// never dereferenced, only compared, because a dialog rebuilt per open leaves a dangling key.
+std::unordered_set<Fl_Window*>& handledToplevels() {
+    static std::unordered_set<Fl_Window*> set;
+    return set;
+}
+
+// Fl::first_window()/next_window() enumerate exactly the SHOWN windows, which is what makes this
+// work: a window that closes drops off the list and is forgotten, so if it is shown again it counts
+// as new -- and it genuinely is, since FLTK builds it a fresh xdg_toplevel.
+void hintWatcher(void* /*unused*/) {
+    std::unordered_set<Fl_Window*> live;
+    for (Fl_Window* w = Fl::first_window(); w != nullptr; w = Fl::next_window(w))
+        live.insert(w);
+    std::erase_if(handledToplevels(), [&live](Fl_Window* w) { return !live.contains(w); });
+
+    for (Fl_Window* w : live) {
+        // Sub-windows (the Vulkan canvas, the rulers, popovers) are subsurfaces with no
+        // xdg_toplevel of their own. applyToplevelHints would no-op on them anyway; skipping is
+        // just cheaper on a callback that runs every pass of the event loop.
+        if (w->parent() != nullptr)
+            continue;
+        if (!handledToplevels().insert(w).second)
+            continue; // already done
+        applyToplevelHints(w);
+    }
+}
+
 } // namespace
+
+void installToplevelHintWatcher() {
+    static bool installed = false;
+    if (installed)
+        return;
+    installed = true;
+    Fl::add_check(hintWatcher);
+}
 
 void applyToplevelHints(Fl_Window* win) {
     if (win == nullptr || win->shown() == 0)

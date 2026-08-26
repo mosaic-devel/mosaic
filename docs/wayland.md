@@ -263,8 +263,16 @@ perfectly correct on X11. That asymmetry is the whole story:
 `xdg-toplevel-icon-v1` is the protocol that gives the pixels back, and `src/platform/
 wayland_toplevel_icon.cpp` speaks it: one icon object, `set_name("mosaic")` for compositors that can
 resolve the theme name plus real ARGB8888 buffers in a sealed `memfd` pool for those that cannot,
-built once and reused for every toplevel (`ui::applyToplevelHints`, called right after each
-`show()`). Sizes come from the compositor's own `icon_size` events when it sends any.
+built once and reused for every toplevel. Sizes come from the compositor's own `icon_size` events
+when it sends any.
+
+Both hints are applied by **one** `Fl::add_check` watcher (`ui::installToplevelHintWatcher`,
+installed next to the `app_id` pin before the first window), not by a line after each `show()`.
+That is a correction, not a preference: the per-site version shipped with seven dialogs wired and
+four — New Document, Export, About, Select ▸ Modify — missed, so they showed a placeholder icon and
+no modal dim while Settings looked right. A rule every future dialog has to remember, whose failure
+is silent, is the wrong mechanism. The watcher also fires inside the nested `Fl::wait()` loops the
+modal dialogs spin, which is the only way a dialog opened from within one gets hinted at all.
 
 **Coverage is partial and that is upstream's doing, not ours.** KWin implements the protocol;
 **Mutter does not yet** ([GNOME/mutter#4100][m4100]), so GNOME sessions fall through to the
