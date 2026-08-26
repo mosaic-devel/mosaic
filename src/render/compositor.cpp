@@ -1988,10 +1988,19 @@ void walkStep(GroupWalk& st, const core::Layer& layer, const ImageF& src, const 
     if (layer.clipToBelow() && st.haveClipBase) {
         ImageF clipped = src;
         multiplyAlpha(clipped, st.clipBase);
-        blend(st.acc, clipped, mode, opacity);
+        {
+            MOSAIC_PERF_SCOPE("Layer blend", common::Lane::Cpu);
+            blend(st.acc, clipped, mode, opacity);
+        }
         return;  // a clipped layer never becomes the clip base itself
     }
-    blend(st.acc, src, mode, opacity);
+    {
+        // The one leaf cost with no row. Every layer -- a 300 px shape included -- blends over the
+        // WHOLE accumulator, because renderLayer hands back a canvas-sized buffer and blend() has
+        // no notion of the layer's extent.
+        MOSAIC_PERF_SCOPE("Layer blend", common::Lane::Cpu);
+        blend(st.acc, src, mode, opacity);
+    }
 
     // A non-clipped layer becomes the clip base for any clipped layers stacked above it.
     if (st.anyClips) {

@@ -13470,6 +13470,27 @@ private:
                 openDocumentAtPath(path);
         }
 #endif
+        // ---- Pre-drain settle -------------------------------------------------------------
+        //
+        // These two used to run AFTER the recomposite drain below, which cost a whole extra
+        // full-canvas composite: each one invalidates the picture, so the frame that had just
+        // composited was immediately out of date and a second composite had to follow. Opening the
+        // S60 fixture paid 2 x 23.6 s for that. Running them FIRST lets the same frame's drain
+        // absorb their work, and one composite serves.
+        //
+        // ⚠ ensureTextCaches() is why they could not simply be moved. It is otherwise called only
+        // from recompositeNow, so before the drain the text pixel caches may not exist yet --
+        // buildBelowComposite would then mirror a document with no text in it, and the path re-bake
+        // would measure an unshaped block. Calling it explicitly here removes that dependency; the
+        // drain's own call then finds the caches current and costs a revision check per layer.
+        //
+        // Path fits BEFORE the reflection env, which is also the correct order rather than merely
+        // the cheap one: the mirror should see settled path text. The old arrangement built the
+        // snapshot first and re-flowed the text after it, leaving the mirror a frame stale.
+        ensureTextCaches();
+        updateTextPathFits();  // fit-to-path (§9): re-bake + re-flow path text when its path moved
+        updateReflectionEnv(); // 3D reflect-canvas: build the below-composite snapshot when needed
+
         // S60-a item 13: build the resident lane on the first frame that has a renderer to adopt,
         // and roll the readback budget. Both are no-ops without MOSAIC_TILE_COMPOSITOR=1 -- the
         // first is one null check, the second does not happen at all.
@@ -13572,8 +13593,6 @@ private:
         updateSpellCheck();    // (deferred §2) rescan the edited block when it settles; apply the
                                // result
         updateJournal();       // (S48) autosave the recovery journal once editing settles
-        updateReflectionEnv(); // 3D reflect-canvas: build the below-composite snapshot when needed
-        updateTextPathFits();  // fit-to-path (§9): re-bake + re-flow path text when its path moved
         updateAdjustmentPanel(); // S32: the editor follows the active adjustment layer
         updateSelectMorph();     // drop the morphology preview once its panel closes (Esc / clear)
         updateImageOps();        // S53: stage the Image-op overlay, and drop it when its panel goes
