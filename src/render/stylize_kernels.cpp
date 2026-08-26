@@ -1,4 +1,5 @@
 #include "render/stylize_kernels.hpp"
+#include "common/profiler.hpp"
 
 #include <algorithm>
 #include <array>
@@ -44,6 +45,7 @@ struct Planes {
 };
 
 [[nodiscard]] Planes premultiply(const common::ImageF& img) {
+    MOSAIC_PERF_SCOPE("FX planes (premultiply)", mosaic::common::Lane::Cpu);
     Planes pl;
     pl.w = img.width;
     pl.h = img.height;
@@ -137,6 +139,7 @@ void release(std::vector<float>& v) {
 // planes layer effects blur, wrong for content here, exactly the divergence blur.hpp documents.)
 void gaussianPlane(std::vector<float>& plane, std::uint32_t W, std::uint32_t H, float sigma,
                    int half) {
+    MOSAIC_PERF_SCOPE("FX gaussian plane", mosaic::common::Lane::Cpu);
     if (sigma <= 0.0f || half < 1) return;
     std::vector<float> k(static_cast<std::size_t>(half) + 1);
     const float denom = 2.0f * sigma * sigma;
