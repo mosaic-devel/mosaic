@@ -111,3 +111,29 @@ if(MOSAIC_BUILD_CORRUPT_CORPUS)
     mosaic_apply_warnings(corrupt_corpus)
     mosaic_apply_sanitizers(corrupt_corpus)
 endif()
+
+# torture_doc emits the S60 measurement fixture: ONE deliberately punishing .mosaic document (a
+# 40 MP photograph under ~70 layers of 3D type, layer effects, live vector booleans, spatial
+# adjustments and real appended history). See the file header. ON by default and cheap to build --
+# it is the fixture the performance work is measured against, and a fixture nobody can regenerate
+# is a fixture that rots.
+option(MOSAIC_BUILD_TORTURE_DOC "Build the .mosaic performance-fixture generator" ON)
+
+if(MOSAIC_BUILD_TORTURE_DOC)
+    add_executable(torture_doc torture_doc.cpp)
+    target_link_libraries(torture_doc PRIVATE mosaic::core mosaic::common mosaic::io)
+    mosaic_apply_warnings(torture_doc)
+    mosaic_apply_sanitizers(torture_doc)
+endif()
+
+# mosaic_stats answers "where did the bytes go" for one .mosaic file: per chunk type, per layer
+# kind, per layer, checkpoint vs history. The companion to torture_doc -- a fixture whose size
+# cannot be explained is a fixture that teaches the wrong lesson.
+option(MOSAIC_BUILD_MOSAIC_STATS "Build the .mosaic byte-census tool" ON)
+
+if(MOSAIC_BUILD_MOSAIC_STATS)
+    add_executable(mosaic_stats mosaic_stats.cpp)
+    target_link_libraries(mosaic_stats PRIVATE mosaic::core mosaic::common mosaic::io)
+    mosaic_apply_warnings(mosaic_stats)
+    mosaic_apply_sanitizers(mosaic_stats)
+endif()
