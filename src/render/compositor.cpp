@@ -166,7 +166,10 @@ void rasteriseLayerInto(ImageF& dst, const SrcImage& src, const core::RasterMask
             out[3] = src.rgba[sp + 3] * kSrcScale *
                      maskCov(static_cast<std::uint32_t>(sx), static_cast<std::uint32_t>(sy));
         };
-        resampleInto(dst, w, h, inv, filter, fetch);
+        // The extent is safe to hand over: `fetch` above returns {0,0,0,0} outside the source,
+        // which is exactly convolveInto's clip precondition. This is what stops a headline-sized
+        // text layer from paying a canvas-sized convolution.
+        resampleInto(dst, w, h, inv, filter, fetch, src.width, src.height);
         return;
     }
     parallelFor(h, 64, [&](std::size_t row0, std::size_t row1) {

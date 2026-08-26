@@ -179,7 +179,10 @@ common::ImageF transformImageF(const common::ImageF& src, const common::Affine2D
             out[2] = src.rgba[sp + 2];
             out[3] = src.rgba[sp + 3];
         };
-        resampleInto(dst, w, h, inv, filter, fetch);
+        // Clamp-to-edge deliberately paints border texels outside the source's projection, so
+        // it must decline the destination clip; the zero-fill edge mode satisfies its precondition.
+        resampleInto(dst, w, h, inv, filter, fetch, clamp ? 0 : src.width,
+                     clamp ? 0 : src.height);
         return dst;
     }
     parallelFor(h, 64, [&](std::size_t row0, std::size_t row1) {

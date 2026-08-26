@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <utility>
 
 #include "common/geometry.hpp"
@@ -111,9 +112,18 @@ void bilinearPremul(Fetch&& fetch, double px, double py, double out[4]) {
 // Convolve `filter`'s separable kernel over the source described by `fetch` into `dst` (assumed
 // pre-zeroed, straight-alpha), mapping each of the w x h destination texels through `inv`
 // (document -> source). Premultiplication + footprint widening + normalisation happen here.
+//
+// `srcW`/`srcH` (0 = "unknown", the default) declare the source extent, and passing them is a
+// PROMISE about `fetch`: that it yields FULLY TRANSPARENT outside [0,srcW) x [0,srcH). Given that
+// promise, every destination texel whose entire footprint misses the source contributes nothing,
+// so the walk can skip it outright -- which is the difference between a small layer costing its
+// own area and costing the whole canvas. A CLAMP-TO-EDGE fetch must NOT pass them: its
+// out-of-bounds taps are opaque border texels, so its destination is legitimately non-empty out
+// there and clipping would erase real pixels (transformImageF's EdgeMode::Clamp -- see its call).
 template <typename Fetch>
 void convolveInto(common::ImageF& dst, std::uint32_t w, std::uint32_t h,
-                  const common::Affine2D& inv, ResampleFilter filter, Fetch&& fetch) {
+                  const common::Affine2D& inv, ResampleFilter filter, Fetch&& fetch,
+                  std::uint32_t srcW = 0, std::uint32_t srcH = 0) {
     // Source texels per destination texel along each source axis = the inverse-map column lengths.
     const double sclX = std::max(1.0, std::hypot(inv.m00, inv.m10));
     const double sclY = std::max(1.0, std::hypot(inv.m01, inv.m11));
@@ -121,24 +131,76 @@ void convolveInto(common::ImageF& dst, std::uint32_t w, std::uint32_t h,
     const double rx = std::min(kernelRadius(filter) * sclX, kMaxFootprintRadius);
     const double ry = std::min(kernelRadius(filter) * sclY, kMaxFootprintRadius);
     const double invSclX = 1.0 / sclX, invSclY = 1.0 / sclY;
-    common::parallelFor(h, 32, [&](std::size_t row0, std::size_t row1) {
-        for (std::uint32_t y = static_cast<std::uint32_t>(row0); y < row1; ++y) {
-            common::Vec2 p = inv.apply({0.5, y + 0.5});
-            std::size_t dp = static_cast<std::size_t>(y) * w * 4;
-            for (std::uint32_t x = 0; x < w; ++x, p.x += inv.m00, p.y += inv.m10, dp += 4) {
+
+    // The destination window worth walking. Without the source extent this is the whole buffer,
+    // exactly as before. With it: dilate the source rect by the footprint (rx/ry are in SOURCE
+    // texels, which is the space the taps step in), map it forward through inv^-1, and take the
+    // axis-aligned bound -- conservative by construction, so no covered texel is ever dropped.
+    std::uint32_t bx0 = 0, bx1 = w, by0 = 0, by1 = h;
+    if (srcW != 0 && srcH != 0) {
+        if (const std::optional<common::Affine2D> fwd = inv.inverse()) {
+            const common::Rect reach{-rx - 1.0, -ry - 1.0,
+                                     static_cast<double>(srcW) + 2.0 * rx + 2.0,
+                                     static_cast<double>(srcH) + 2.0 * ry + 2.0};
+            const common::Rect d = fwd->mapBounds(reach);
+            const auto lo = [](double v, std::uint32_t hi) {
+                return v <= 0.0 ? std::uint32_t{0}
+                                : static_cast<std::uint32_t>(std::min<double>(std::floor(v), hi));
+            };
+            const auto up = [](double v, std::uint32_t hi) {
+                return v <= 0.0 ? std::uint32_t{0}
+                                : static_cast<std::uint32_t>(std::min<double>(std::ceil(v), hi));
+            };
+            bx0 = lo(d.x, w);
+            bx1 = up(d.right(), w);
+            by0 = lo(d.y, h);
+            by1 = up(d.bottom(), h);
+        }
+    }
+    if (bx1 <= bx0 || by1 <= by0)
+        return;  // the source projects entirely off the destination
+
+    // Scratch for one pixel's x-weights. rx is capped at kMaxFootprintRadius, so the tap span is
+    // at most 2*kMaxFootprintRadius + 1; +1 more for the ceil/floor straddle.
+    constexpr int kMaxTapsPerAxis = static_cast<int>(2.0 * kMaxFootprintRadius) + 2;
+
+    common::parallelFor(by1 - by0, 32, [&](std::size_t band0, std::size_t band1) {
+        double wxs[kMaxTapsPerAxis];
+        for (std::uint32_t y = by0 + static_cast<std::uint32_t>(band0),
+                           yEnd = by0 + static_cast<std::uint32_t>(band1);
+             y < yEnd; ++y) {
+            common::Vec2 p = inv.apply({bx0 + 0.5, y + 0.5});
+            std::size_t dp = (static_cast<std::size_t>(y) * w + bx0) * 4;
+            for (std::uint32_t x = bx0; x < bx1; ++x, p.x += inv.m00, p.y += inv.m10, dp += 4) {
                 const long sx0 = static_cast<long>(std::ceil(p.x - 0.5 - rx));
                 const long sx1 = static_cast<long>(std::floor(p.x - 0.5 + rx));
                 const long sy0 = static_cast<long>(std::ceil(p.y - 0.5 - ry));
                 const long sy1 = static_cast<long>(std::floor(p.y - 0.5 + ry));
+                // ⚠ The x-weights depend only on p.x, so they are IDENTICAL for every source row
+                // in this pixel's footprint. Evaluating them in the sy loop recomputed each one
+                // (2*ry + 1) times -- and for Lanczos3 one evaluation is two `sin` calls, so a
+                // 7x7 footprint spent ~98 transcendentals per destination texel, per layer, on a
+                // canvas-sized buffer. Hoisting is a pure motion: the same values multiply in the
+                // same order, so the accumulation is bit-identical to the pre-hoist loop.
+                const int nx = static_cast<int>(std::min<long>(sx1 - sx0, kMaxTapsPerAxis - 1)) + 1;
+                if (nx <= 0)
+                    continue;
+                bool anyX = false;
+                for (int i = 0; i < nx; ++i) {
+                    wxs[i] = kernelWeight(filter, ((sx0 + i + 0.5) - p.x) * invSclX);
+                    anyX = anyX || wxs[i] != 0.0;
+                }
+                if (!anyX)
+                    continue;  // every x tap is a kernel zero: nothing this pixel can accumulate
                 double pr = 0, pg = 0, pb = 0, pa = 0, wsum = 0;
                 for (long sy = sy0; sy <= sy1; ++sy) {
                     const double wy = kernelWeight(filter, ((sy + 0.5) - p.y) * invSclY);
                     if (wy == 0.0) continue;
-                    for (long sx = sx0; sx <= sx1; ++sx) {
-                        const double wgt = wy * kernelWeight(filter, ((sx + 0.5) - p.x) * invSclX);
+                    for (int i = 0; i < nx; ++i) {
+                        const double wgt = wy * wxs[i];
                         if (wgt == 0.0) continue;
                         float c[4];
-                        fetch(sx, sy, c);
+                        fetch(sx0 + i, sy, c);
                         const double aw = static_cast<double>(c[3]) * wgt;
                         pr += static_cast<double>(c[0]) * aw;  // premultiplied accumulation
                         pg += static_cast<double>(c[1]) * aw;
@@ -199,13 +261,17 @@ void supersampleInto(common::ImageF& dst, std::uint32_t w, std::uint32_t h,
 }
 
 // Dispatch a non-Nearest, non-fast-path resample of `fetch` into the pre-zeroed `dst` through `inv`.
+// `srcW`/`srcH` carry convolveInto's destination-clip promise (see it); 0/0 declines the clip, and
+// the Supersample path ignores them -- it has the same waste, but its own gather shape, so folding
+// it in is a separate change rather than a copied constant.
 template <typename Fetch>
 void resampleInto(common::ImageF& dst, std::uint32_t w, std::uint32_t h,
-                  const common::Affine2D& inv, ResampleFilter filter, Fetch&& fetch) {
+                  const common::Affine2D& inv, ResampleFilter filter, Fetch&& fetch,
+                  std::uint32_t srcW = 0, std::uint32_t srcH = 0) {
     if (filter == ResampleFilter::Supersample)
         supersampleInto(dst, w, h, inv, std::forward<Fetch>(fetch));
     else
-        convolveInto(dst, w, h, inv, filter, std::forward<Fetch>(fetch));
+        convolveInto(dst, w, h, inv, filter, std::forward<Fetch>(fetch), srcW, srcH);
 }
 
 // ---- Whole-image entry points ----------------------------------------------------------------
