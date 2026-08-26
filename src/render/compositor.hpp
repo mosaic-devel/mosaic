@@ -231,6 +231,18 @@ void setLayerEffectsRenderOverride(LayerEffectsRenderOverride fn);
 [[nodiscard]] common::Image compositeGroup(const core::GroupLayer& group, std::uint32_t docW,
                                            std::uint32_t docH);
 
+// The same subtree composite, rendered DIRECTLY into an outW x outH buffer through `docToOut`
+// (document space -> that buffer). The walk rasterises every descendant at the output resolution,
+// so the cost is bounded by outW x outH rather than by the canvas -- the property adjustmentPreview
+// already relies on, offered to the other thumbnail arms.
+//
+// It is also BETTER FILTERED than compositing at canvas size and sampling down: each layer's kernel
+// is resolved from its composed placement, so a reduction resolves Auto to a real box filter applied
+// per layer before blending, instead of one point-sample taken afterwards.
+[[nodiscard]] common::Image compositeGroupInto(const core::GroupLayer& group,
+                                               const common::Affine2D& docToOut, std::uint32_t outW,
+                                               std::uint32_t outH);
+
 // An adjustment layer's dock-thumbnail preview (S32): the layers it AFFECTS — its parent group's
 // children below it (globally downward at the root), i.e. the accumulated backdrop exactly as the
 // compositor walk hands it to the adjustment — WITH the adjustment applied, composited into an

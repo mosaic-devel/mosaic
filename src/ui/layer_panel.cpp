@@ -199,6 +199,33 @@ common::Rect mapRectAabb(const common::Affine2D& t, const common::Rect& r) {
     return {x0, y0, x1 - x0, y1 - y0};
 }
 
+// The doc-space square a thumbnail frames, from the content box it is a portrait of (nullopt =>
+// the document rect). Extracted so the arms that RENDER their source can size that render to the
+// view instead of to the canvas -- they need the view before they draw, and the sampling loop
+// re-derives the identical rect afterwards.
+[[nodiscard]] common::Rect thumbView(const std::optional<common::Rect>& frame, int box,
+                                     std::uint32_t docW, std::uint32_t docH) {
+    common::Rect view = frame.value_or(
+        common::Rect{0.0, 0.0, static_cast<double>(docW), static_cast<double>(docH)});
+    // Never magnify past 4x: a one-pixel layer should read as a dot, not as a full-bleed slab.
+    const double minExtent = box / 4.0;
+    if (view.w < minExtent) {
+        view.x -= (minExtent - view.w) * 0.5;
+        view.w = minExtent;
+    }
+    if (view.h < minExtent) {
+        view.y -= (minExtent - view.h) * 0.5;
+        view.h = minExtent;
+    }
+    // Square it up (the box is square) and add a hair of padding so the content never bleeds off.
+    const double side = std::max(view.w, view.h) * (1.0 + 2.0 / box);
+    view.x -= (side - view.w) * 0.5;
+    view.y -= (side - view.h) * 0.5;
+    view.w = side;
+    view.h = side;
+    return view;
+}
+
 } // namespace
 
 // ---- thumbnail (pure; unit-tested) ---------------------------------------------------------
@@ -230,20 +257,46 @@ common::Image layerThumbnail(const core::Layer& layer, int box, std::uint32_t do
             frame = mapRectAabb(world, *cb);
     } else if (const auto* group = layer.as<core::GroupLayer>();
                group != nullptr && docW > 0 && docH > 0) {
-        groupFlat = render::compositeGroup(*group, docW, docH);
-        src = &groupFlat;
-        t = common::Affine2D::identity(); // compositeGroup already applied the group transform
+        // Frame FIRST, then render the framed square at thumbnail resolution. This used to
+        // composite the whole subtree at docW x docH -- 39.8 MP to draw 34x34 on a 5k canvas --
+        // and then POINT-sample it, so the old path was both ~1000x the work and worse filtered
+        // (see compositeGroupInto). contentBounds is cached geometry, so framing costs nothing.
         if (const auto cb = group->contentBounds(); cb && !cb->empty())
             frame = mapRectAabb(world, *cb); // group-local children bbox -> doc
+        const common::Rect v = thumbView(frame, box, docW, docH);
+        const auto side = static_cast<std::uint32_t>(box);
+        // doc -> the box x box buffer. One buffer texel per thumbnail texel, so the sampling loop
+        // below reads it 1:1 and the anti-aliasing is the compositor's own reduction filter.
+        const common::Affine2D docToBuf =
+            common::Affine2D::scaling(side / v.w, side / v.h) *
+            common::Affine2D::translation(-v.x, -v.y);
+        groupFlat = render::compositeGroupInto(*group, docToBuf, side, side);
+        src = &groupFlat;
+        if (const auto invBuf = docToBuf.inverse())
+            t = *invBuf; // buffer px -> doc
+        else
+            src = nullptr;
     } else if (const auto* vlayer = layer.as<core::VectorLayer>();
                vlayer != nullptr && vlayer->hasObject() && docW > 0 && docH > 0) {
         // Rasterize fill+stroke into doc space through the layer's world transform (bbox-bounded,
         // so it only touches the shape's pixels), then sample it like the group flat.
-        vectorFlat = common::toImage8(core::vec::rasterizeObjectF(*vlayer->object(), docW, docH, t));
-        src = &vectorFlat;
-        t = common::Affine2D::identity();
+        // Same story as the group arm: rasterise the FRAMED square at thumbnail resolution
+        // rather than allocating a docW x docH float buffer (637 MB on this canvas) to fill a
+        // few hundred pixels of it. The rasteriser's own analytic AA does the filtering.
         if (const auto cb = vlayer->contentBounds(); cb && !cb->empty())
             frame = mapRectAabb(world, *cb);
+        const common::Rect v = thumbView(frame, box, docW, docH);
+        const auto side = static_cast<std::uint32_t>(box);
+        const common::Affine2D docToBuf =
+            common::Affine2D::scaling(side / v.w, side / v.h) *
+            common::Affine2D::translation(-v.x, -v.y);
+        vectorFlat = common::toImage8(
+            core::vec::rasterizeObjectF(*vlayer->object(), side, side, docToBuf * t));
+        src = &vectorFlat;
+        if (const auto invBuf = docToBuf.inverse())
+            t = *invBuf;
+        else
+            src = nullptr;
     } else if (const auto* tlayer = layer.as<core::TextLayer>();
                tlayer != nullptr && tlayer->cachedImage() != nullptr) {
         // Text: sample the renderer-populated base-res pixel cache (the compositor stays font-free).
@@ -299,24 +352,7 @@ common::Image layerThumbnail(const core::Layer& layer, int box, std::uint32_t do
     // the object it holds: a small shape in the corner of a 5k canvas used to be an invisible
     // speck, because the box framed the whole document. Falling back to the document rect keeps a
     // contentless-but-pixel-bearing layer (an all-transparent raster) showing its checkerboard.
-    common::Rect view = frame.value_or(common::Rect{0.0, 0.0, static_cast<double>(docW),
-                                                    static_cast<double>(docH)});
-    // Never magnify past 4x: a one-pixel layer should read as a dot, not as a full-bleed slab.
-    const double minExtent = box / 4.0;
-    if (view.w < minExtent) {
-        view.x -= (minExtent - view.w) * 0.5;
-        view.w = minExtent;
-    }
-    if (view.h < minExtent) {
-        view.y -= (minExtent - view.h) * 0.5;
-        view.h = minExtent;
-    }
-    // Square it up (the box is square) and add a hair of padding so the content never bleeds off.
-    const double side = std::max(view.w, view.h) * (1.0 + 2.0 / box);
-    view.x -= (side - view.w) * 0.5;
-    view.y -= (side - view.h) * 0.5;
-    view.w = side;
-    view.h = side;
+    const common::Rect view = thumbView(frame, box, docW, docH);
 
     // Sampling only inside `view` IS the culling: the loop never touches a source pixel outside the
     // framed content. (compositeGroup above still flattens the whole document -- an extent-aware

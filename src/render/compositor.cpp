@@ -2001,25 +2001,62 @@ ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std
         LocalExtent ext;
         if (!groupLocalExtent(*group, localToTarget, w, h, ext))
             return ImageF(w, h); // singular / nothing visible
+        // ⚠ THE RESOLUTION OF THE ISOLATED BUFFER. `ext` is the group's content extent in
+        // GROUP-LOCAL units, and one texel per local unit is the right buffer only when the group
+        // lands on the target at roughly 1:1. Under a reduction it is catastrophic, because the
+        // extent does not shrink with the target:
+        //
+        //     layer-panel thumbnail   target 34x34    -> local buffer 6956x5271   (31,717:1)
+        //     3D reflect-env snapshot target 468x702  -> local buffer 5055x5271   (81:1)
+        //
+        // Both then discarded ~99.99% of that buffer in the placement resample below. The reflect
+        // snapshot is the sharper indictment: it composites at 468x702 PRECISELY to be cheap, and
+        // every group inside it quietly went back to full resolution anyway.
+        //
+        // Size the buffer to what the target can actually RESOLVE. `s` is the larger per-axis
+        // scale of localToTarget, clamped to 1 so magnification never inflates the buffer (the
+        // placement resample interpolates, as it always did).
+        //
+        // ⚠ s == 1 for any composite at or above document scale, which makes bw/bh exactly ext.w/
+        // ext.h and every transform below reduce to its previous form -- so the full-canvas walk
+        // is byte-identical and the goldens do not move. Only reductions change, and they change
+        // toward a properly pre-filtered result instead of a point-sampled one.
+        const double sAxisX = std::hypot(localToTarget.m00, localToTarget.m10);
+        const double sAxisY = std::hypot(localToTarget.m01, localToTarget.m11);
+        const double s = std::min(1.0, std::max(sAxisX, sAxisY));
+        const std::uint32_t bw =
+            s < 1.0 ? std::max<std::uint32_t>(
+                          1, static_cast<std::uint32_t>(std::lround(ext.w * s)))
+                    : ext.w;
+        const std::uint32_t bh =
+            s < 1.0 ? std::max<std::uint32_t>(
+                          1, static_cast<std::uint32_t>(std::lround(ext.h * s)))
+                    : ext.h;
+        // buffer px -> group-local: undo the reduction, then the extent offset.
+        const common::Affine2D bufToLocal =
+            common::Affine2D::translation(static_cast<double>(ext.ox),
+                                          static_cast<double>(ext.oy)) *
+            common::Affine2D::scaling(static_cast<double>(ext.w) / bw,
+                                      static_cast<double>(ext.h) / bh);
         ImageF local = compositeChildren(
             *group,
-            common::Affine2D::translation(-static_cast<double>(ext.ox),
-                                          -static_cast<double>(ext.oy)),
-            ext.w, ext.h, blend, rs,
+            common::Affine2D::scaling(static_cast<double>(bw) / ext.w,
+                                      static_cast<double>(bh) / ext.h) *
+                common::Affine2D::translation(-static_cast<double>(ext.ox),
+                                              -static_cast<double>(ext.oy)),
+            bw, bh, blend, rs,
+            // The mask domain stays in LOCAL units: it is the rect an adjustment's mask spans in
+            // the space the children are addressed in, which the buffer's resolution does not move.
             common::Rect{static_cast<double>(ext.ox), static_cast<double>(ext.oy),
                          static_cast<double>(ext.w), static_cast<double>(ext.h)});
         if (mk != nullptr && mk->linked) {
-            // buffer -> group-local (the extent offset) -> mask px (the sheet's placement).
+            // buffer -> group-local (the reduction + the extent offset) -> mask px (the sheet's
+            // placement).
             if (const std::optional<common::Affine2D> mInv =
                     core::maskPlacement(*group, *mk).inverse())
-                foldMaskThrough(local, *mk,
-                                *mInv * common::Affine2D::translation(
-                                            static_cast<double>(ext.ox),
-                                            static_cast<double>(ext.oy)));
+                foldMaskThrough(local, *mk, *mInv * bufToLocal);
         }
-        const common::Affine2D place =
-            localToTarget * common::Affine2D::translation(static_cast<double>(ext.ox),
-                                                          static_cast<double>(ext.oy));
+        const common::Affine2D place = localToTarget * bufToLocal;
         ImageF out;
         {
             MOSAIC_PERF_SCOPE("Group place (resample)", common::Lane::Cpu);
@@ -2614,6 +2651,18 @@ common::Image rasterizeLayer(const core::Layer& layer, std::uint32_t docW, std::
     // kernel even if a gesture happens to be in flight.
     return common::toImage8(renderLayer(layer, common::Affine2D::identity(), docW, docH,
                                         compositeBufferOver, ResampleCtx{filter, false}));
+}
+
+common::Image compositeGroupInto(const core::GroupLayer& group,
+                                 const common::Affine2D& docToOut, std::uint32_t outW,
+                                 std::uint32_t outH) {
+    if (outW == 0 || outH == 0)
+        return {};
+    // Identical to compositeGroup below, except that the group's world placement is composed with
+    // the caller's document->output map, so the whole walk happens at output resolution.
+    return common::toImage8(renderLayer(group, docToOut * core::parentWorldTransform(group), outW,
+                                        outH, compositeBufferOver,
+                                        ResampleCtx{ResampleFilter::Auto, false}));
 }
 
 common::Image compositeGroup(const core::GroupLayer& group, std::uint32_t docW,
