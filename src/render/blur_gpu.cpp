@@ -62,7 +62,8 @@ constexpr VkDeviceSize kMinImageBytes = 256ull << 20;
 // Sum of the DEVICE_LOCAL heaps ("how much VRAM"). gpu_caps records this on DeviceInfo, which
 // VulkanContext does not carry, so ask the physical device directly -- the same loop, one call.
 [[nodiscard]] VkDeviceSize deviceLocalBytes(VkPhysicalDevice pd) {
-    if (pd == VK_NULL_HANDLE) return 0;
+    if (pd == VK_NULL_HANDLE)
+        return 0;
     VkPhysicalDeviceMemoryProperties mem{};
     vkGetPhysicalDeviceMemoryProperties(pd, &mem);
     VkDeviceSize total = 0;

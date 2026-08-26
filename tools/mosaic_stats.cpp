@@ -72,13 +72,20 @@ void rule(int n = 78) {
 
 const char* kindName(core::LayerKind k) {
     switch (k) {
-    case core::LayerKind::Group: return "group";
-    case core::LayerKind::Raster: return "raster";
-    case core::LayerKind::Vector: return "vector";
-    case core::LayerKind::Text: return "text";
-    case core::LayerKind::Adjustment: return "adjustment";
-    case core::LayerKind::Magic: return "magic";
-    case core::LayerKind::Texture: return "texture";
+    case core::LayerKind::Group:
+        return "group";
+    case core::LayerKind::Raster:
+        return "raster";
+    case core::LayerKind::Vector:
+        return "vector";
+    case core::LayerKind::Text:
+        return "text";
+    case core::LayerKind::Adjustment:
+        return "adjustment";
+    case core::LayerKind::Magic:
+        return "magic";
+    case core::LayerKind::Texture:
+        return "texture";
     }
     return "?";
 }
@@ -87,9 +94,9 @@ const char* kindName(core::LayerKind k) {
 
 struct Bucket {
     std::uintmax_t frames = 0;
-    std::uintmax_t onDisk = 0;        // sum of `consumed`: what the file actually spends
-    std::uintmax_t compressed = 0;    // payload bytes
-    std::uintmax_t uncompressed = 0;  // what those payloads expand to
+    std::uintmax_t onDisk = 0;       // sum of `consumed`: what the file actually spends
+    std::uintmax_t compressed = 0;   // payload bytes
+    std::uintmax_t uncompressed = 0; // what those payloads expand to
 
     void add(const io::ChunkRecord& r) {
         ++frames;
@@ -103,8 +110,8 @@ struct LayerStat {
     std::string name = "(not in the current tree)";
     core::LayerKind kind = core::LayerKind::Group;
     bool known = false;
-    Bucket content;  // TILE + VECT for the layer itself
-    Bucket mask;     // TILE for its mask surface
+    Bucket content; // TILE + VECT for the layer itself
+    Bucket mask;    // TILE for its mask surface
     std::uintmax_t tiles = 0;
 
     [[nodiscard]] std::uintmax_t total() const { return content.onDisk + mask.onDisk; }
@@ -135,7 +142,7 @@ void indexTree(const core::GroupLayer& g, std::map<std::uint64_t, LayerStat>& ou
     }
 }
 
-}  // namespace
+} // namespace
 
 int main(int argc, char** argv) {
     std::string path;
@@ -247,9 +254,8 @@ int main(int argc, char** argv) {
     std::sort(types.begin(), types.end(),
               [](const auto& a, const auto& b) { return a.second.onDisk > b.second.onDisk; });
     for (const auto& [tag, b] : types) {
-        const double ratio = b.compressed == 0
-                                 ? 0.0
-                                 : static_cast<double>(b.uncompressed) / b.compressed;
+        const double ratio =
+            b.compressed == 0 ? 0.0 : static_cast<double>(b.uncompressed) / b.compressed;
         std::printf("  %-6s %8llu %12s %7.1f%% %12s  %5.2fx\n", tag.c_str(),
                     static_cast<unsigned long long>(b.frames), bytesHuman(b.onDisk).c_str(),
                     pct(b.onDisk, fileSize), bytesHuman(b.uncompressed).c_str(), ratio);
@@ -259,8 +265,8 @@ int main(int argc, char** argv) {
     // Per layer kind.
     std::printf("LAYER KIND\n");
     rule();
-    std::printf("  %-12s %7s %12s %8s %12s %9s\n", "kind", "layers", "on disk", "share", "avg/layer",
-                "tiles");
+    std::printf("  %-12s %7s %12s %8s %12s %9s\n", "kind", "layers", "on disk", "share",
+                "avg/layer", "tiles");
     std::map<core::LayerKind, Bucket> byKind;
     std::map<core::LayerKind, std::uintmax_t> tilesByKind;
     for (const auto& [id, s] : layers) {
@@ -280,8 +286,9 @@ int main(int argc, char** argv) {
                     bytesHuman(count ? b.onDisk / count : 0).c_str(),
                     static_cast<unsigned long long>(tilesByKind[kind]));
     }
-    std::printf("\n  (adjustment and group layers carry no pixel or geometry payload of their own;\n"
-                "   their whole cost is a few lines of the shared MFST manifest)\n\n");
+    std::printf(
+        "\n  (adjustment and group layers carry no pixel or geometry payload of their own;\n"
+        "   their whole cost is a few lines of the shared MFST manifest)\n\n");
 
     // Per layer, heaviest first.
     std::printf("HEAVIEST LAYERS\n");
@@ -310,7 +317,7 @@ int main(int argc, char** argv) {
     }
     if (shown > top)
         std::printf("  %-28s %-11s %12s %7.1f%%\n",
-                    ("+ " + std::to_string(shown - top) + " more").c_str(), "", 
+                    ("+ " + std::to_string(shown - top) + " more").c_str(), "",
                     bytesHuman(restBytes).c_str(), pct(restBytes, fileSize));
     std::printf("\n");
     return 0;

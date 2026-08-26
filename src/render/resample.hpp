@@ -1,16 +1,16 @@
 #pragma once
 
+#include "common/geometry.hpp"
+#include "common/image.hpp"
+#include "common/thread_pool.hpp" // common::parallelFor -- the band split the passes below run on
+#include "render/render.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <utility>
-
-#include "common/geometry.hpp"
-#include "common/image.hpp"
-#include "common/thread_pool.hpp"  // common::parallelFor -- the band split the passes below run on
-#include "render/render.hpp"
 
 // The resampler: the kernel bank plus the sampling passes that place one pixel grid into another
 // through an affine (the "Transform Anti-aliasing" feature, S7). It lived in compositor.cpp's
@@ -158,7 +158,7 @@ void convolveInto(common::ImageF& dst, std::uint32_t w, std::uint32_t h,
         }
     }
     if (bx1 <= bx0 || by1 <= by0)
-        return;  // the source projects entirely off the destination
+        return; // the source projects entirely off the destination
 
     // Scratch for one pixel's x-weights. rx is capped at kMaxFootprintRadius, so the tap span is
     // at most 2*kMaxFootprintRadius + 1; +1 more for the ceil/floor straddle.
@@ -191,14 +191,16 @@ void convolveInto(common::ImageF& dst, std::uint32_t w, std::uint32_t h,
                     anyX = anyX || wxs[i] != 0.0;
                 }
                 if (!anyX)
-                    continue;  // every x tap is a kernel zero: nothing this pixel can accumulate
+                    continue; // every x tap is a kernel zero: nothing this pixel can accumulate
                 double pr = 0, pg = 0, pb = 0, pa = 0, wsum = 0;
                 for (long sy = sy0; sy <= sy1; ++sy) {
                     const double wy = kernelWeight(filter, ((sy + 0.5) - p.y) * invSclY);
-                    if (wy == 0.0) continue;
+                    if (wy == 0.0)
+                        continue;
                     for (int i = 0; i < nx; ++i) {
                         const double wgt = wy * wxs[i];
-                        if (wgt == 0.0) continue;
+                        if (wgt == 0.0)
+                            continue;
                         float c[4];
                         fetch(sx0 + i, sy, c);
                         const double aw = static_cast<double>(c[3]) * wgt;
@@ -209,7 +211,8 @@ void convolveInto(common::ImageF& dst, std::uint32_t w, std::uint32_t h,
                         wsum += wgt;
                     }
                 }
-                if (wsum <= 0.0) continue;  // nothing covered -> leave transparent
+                if (wsum <= 0.0)
+                    continue; // nothing covered -> leave transparent
                 dst.rgba[dp + 3] = static_cast<float>(std::clamp(pa / wsum, 0.0, 1.0));
                 if (pa > 1e-8) {  // un-premultiply (rgb is meaningless at ~zero coverage)
                     dst.rgba[dp + 0] = static_cast<float>(pr / pa);
@@ -260,10 +263,10 @@ void supersampleInto(common::ImageF& dst, std::uint32_t w, std::uint32_t h,
     });
 }
 
-// Dispatch a non-Nearest, non-fast-path resample of `fetch` into the pre-zeroed `dst` through `inv`.
-// `srcW`/`srcH` carry convolveInto's destination-clip promise (see it); 0/0 declines the clip, and
-// the Supersample path ignores them -- it has the same waste, but its own gather shape, so folding
-// it in is a separate change rather than a copied constant.
+// Dispatch a non-Nearest, non-fast-path resample of `fetch` into the pre-zeroed `dst` through
+// `inv`. `srcW`/`srcH` carry convolveInto's destination-clip promise (see it); 0/0 declines the
+// clip, and the Supersample path ignores them -- it has the same waste, but its own gather shape,
+// so folding it in is a separate change rather than a copied constant.
 template <typename Fetch>
 void resampleInto(common::ImageF& dst, std::uint32_t w, std::uint32_t h,
                   const common::Affine2D& inv, ResampleFilter filter, Fetch&& fetch,

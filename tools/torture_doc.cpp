@@ -88,8 +88,9 @@ public:
         std::fflush(stdout);
     }
     ~Stage() {
-        const double ms = std::chrono::duration<double, std::milli>(
-                              std::chrono::steady_clock::now() - m_start).count();
+        const double ms =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - m_start)
+                .count();
         std::printf("%8.0f ms\n", ms);
         std::fflush(stdout);
     }
@@ -113,8 +114,8 @@ std::uint8_t* pixel(common::Image& img, int x, int y) {
 // A cheap deterministic hash -- the noise/stipple layers want texture that survives compression
 // rather than a flat fill the tile store would collapse to nothing.
 std::uint32_t hash2(int x, int y) {
-    std::uint32_t h = static_cast<std::uint32_t>(x) * 0x9E3779B1u ^
-                      static_cast<std::uint32_t>(y) * 0x85EBCA77u;
+    std::uint32_t h =
+        static_cast<std::uint32_t>(x) * 0x9E3779B1u ^ static_cast<std::uint32_t>(y) * 0x85EBCA77u;
     h ^= h >> 15;
     h *= 0xC2B2AE3Du;
     h ^= h >> 13;
@@ -134,9 +135,12 @@ void paintDisc(common::Image& img, int cx, int cy, int radius, ColorF c, float f
             const double t = feather > 0.0f ? std::clamp((r - d) / (r * feather), 0.0, 1.0) : 1.0;
             std::uint8_t* px = pixel(img, x, y);
             const double a = c.a * t;
-            px[0] = static_cast<std::uint8_t>(std::clamp(px[0] * (1 - a) + c.r * 255.0 * a, 0.0, 255.0));
-            px[1] = static_cast<std::uint8_t>(std::clamp(px[1] * (1 - a) + c.g * 255.0 * a, 0.0, 255.0));
-            px[2] = static_cast<std::uint8_t>(std::clamp(px[2] * (1 - a) + c.b * 255.0 * a, 0.0, 255.0));
+            px[0] = static_cast<std::uint8_t>(
+                std::clamp(px[0] * (1 - a) + c.r * 255.0 * a, 0.0, 255.0));
+            px[1] = static_cast<std::uint8_t>(
+                std::clamp(px[1] * (1 - a) + c.g * 255.0 * a, 0.0, 255.0));
+            px[2] = static_cast<std::uint8_t>(
+                std::clamp(px[2] * (1 - a) + c.b * 255.0 * a, 0.0, 255.0));
             px[3] = static_cast<std::uint8_t>(std::clamp(px[3] + 255.0 * a, 0.0, 255.0));
         }
 }
@@ -153,14 +157,14 @@ vec::Gradient ramp(vec::GradientType type, std::initializer_list<ColorF> colors,
                    vec::DitherKind dither = vec::DitherKind::BlueNoise) {
     vec::Gradient g;
     g.type = type;
-    g.dither = dither;  // a ramp this wide bands hard at 8 bit; dithering is the real-world setting
+    g.dither = dither; // a ramp this wide bands hard at 8 bit; dithering is the real-world setting
     const std::size_t n = colors.size();
     std::size_t i = 0;
     for (const ColorF& c : colors) {
         vec::GradientStop s;
         s.offset = n > 1 ? static_cast<double>(i) / (n - 1) : 0.0;
         s.color = c;
-        s.midpoint = (i % 2 == 0) ? 0.42 : 0.61;  // off-centre: the non-linear per-segment path
+        s.midpoint = (i % 2 == 0) ? 0.42 : 0.61; // off-centre: the non-linear per-segment path
         g.stops.push_back(s);
         ++i;
     }
@@ -177,9 +181,9 @@ text::TextBlock headlineBlock(const std::string& words, float sizePx, float dept
     base.font.family = "Inter";
     base.font.weight = 900.0f;
     base.sizePx = sizePx;
-    base.tracking = -18.0f;  // tight display tracking: real kerning work, not a monospace grid
+    base.tracking = -18.0f; // tight display tracking: real kerning work, not a monospace grid
     base.features = {"liga", "kern", "ss01"};
-    base.kerning = text::Kerning::Optical;  // the shape-derived path, not the font's own pairs
+    base.kerning = text::Kerning::Optical; // the shape-derived path, not the font's own pairs
     base.setSolidFill(ColorF{0.96f, 0.93f, 0.86f, 1.0f});
 
     text::TextBlock b = text::makeBlock(words, base);
@@ -188,7 +192,7 @@ text::TextBlock headlineBlock(const std::string& words, float sizePx, float dept
     ex.depth = depth;
     ex.bevelFront.profile = text::Bevel::Profile::Round;
     ex.bevelFront.size = depth * 0.28f;
-    ex.bevelFront.segments = 12;  // 12 rings per cap, both caps: the mesher's inner loop
+    ex.bevelFront.segments = 12; // 12 rings per cap, both caps: the mesher's inner loop
     ex.bevelBack.profile = text::Bevel::Profile::Concave;
     ex.bevelBack.size = depth * 0.18f;
     ex.bevelBack.segments = 10;
@@ -201,9 +205,9 @@ text::TextBlock headlineBlock(const std::string& words, float sizePx, float dept
                  text::Light{{-0.6, 0.2, -0.75}, {0.55f, 0.72f, 1.0f, 1.0f}, 0.7f},
                  text::Light{{0.1, -0.9, -0.4}, {1.0f, 0.82f, 0.55f, 1.0f}, 0.45f}};
     ex.ambient = {0.18f, 0.19f, 0.24f, 1.0f};
-    ex.reflectCanvas = true;      // needs the composite-below snapshot every time it re-renders
-    ex.reflectSidesOnly = false;  // ...on the caps too, which is the expensive half
-    ex.overlayWrapSides = true;   // the S30-e overlay map wraps onto every wall and bevel texel
+    ex.reflectCanvas = true;     // needs the composite-below snapshot every time it re-renders
+    ex.reflectSidesOnly = false; // ...on the caps too, which is the expensive half
+    ex.overlayWrapSides = true;  // the S30-e overlay map wraps onto every wall and bevel texel
     // Per-run materials partition the mesh into index ranges -- one draw per material.
     ex.runMaterials[0] = text::Material{{0.92f, 0.35f, 0.28f, 1.0f}, 0.4f, 0.35f};
     b.extrude = ex;
@@ -224,7 +228,7 @@ core::LayerEffects headlineEffects() {
         sh.blend = core::BlendMode::Multiply;
         sh.angleDeg = 118.0f + 24.0f * i;
         sh.distance = 18.0f + 34.0f * i;
-        sh.size = 26.0f + 46.0f * i;  // the outermost reaches ~250 px past the glyphs
+        sh.size = 26.0f + 46.0f * i; // the outermost reaches ~250 px past the glyphs
         sh.spread = 4.0f * i;
         fx.dropShadows.push_back(sh);
     }
@@ -238,8 +242,9 @@ core::LayerEffects headlineEffects() {
 
     fx.gradientOverlay.enabled = true;
     fx.gradientOverlay.paint =
-        ramp(vec::GradientType::Conic, {ColorF{1.0f, 0.95f, 0.7f, 1.0f}, ColorF{0.55f, 0.3f, 0.9f, 1.0f},
-                                        ColorF{0.2f, 0.8f, 0.85f, 1.0f}, ColorF{1.0f, 0.95f, 0.7f, 1.0f}});
+        ramp(vec::GradientType::Conic,
+             {ColorF{1.0f, 0.95f, 0.7f, 1.0f}, ColorF{0.55f, 0.3f, 0.9f, 1.0f},
+              ColorF{0.2f, 0.8f, 0.85f, 1.0f}, ColorF{1.0f, 0.95f, 0.7f, 1.0f}});
     fx.gradientOverlay.blend = core::BlendMode::Overlay;
     fx.gradientOverlay.opacity = 0.65f;
 
@@ -277,8 +282,8 @@ core::LayerEffects headlineEffects() {
     fx.bevel.soften = 6.0f;
 
     // Three concentric strokes -- reach is the SUM of the outward widths (effectsOutwardReach).
-    const ColorF ring[3] = {{0.05f, 0.04f, 0.08f, 1.0f}, {0.95f, 0.9f, 0.8f, 1.0f},
-                            {0.85f, 0.25f, 0.35f, 1.0f}};
+    const ColorF ring[3] = {
+        {0.05f, 0.04f, 0.08f, 1.0f}, {0.95f, 0.9f, 0.8f, 1.0f}, {0.85f, 0.25f, 0.35f, 1.0f}};
     for (int i = 0; i < 3; ++i) {
         core::StrokeEffect s;
         s.enabled = true;
@@ -382,7 +387,7 @@ vec::Object booleanBadge() {
     host.stroke.align = vec::StrokeAlign::Outside;
     host.stroke.join = vec::LineJoin::Round;
     host.stroke.cap = vec::LineCap::Round;
-    host.stroke.dashArray = {48.0, 22.0, 8.0, 22.0};  // a dashed OUTSIDE stroke: the slow one
+    host.stroke.dashArray = {48.0, 22.0, 8.0, 22.0}; // a dashed OUTSIDE stroke: the slow one
     host.stroke.paint = vec::SolidPaint{ColorF{0.06f, 0.05f, 0.1f, 1.0f}};
     return host;
 }
@@ -399,16 +404,14 @@ core::RasterMask radialMask(std::uint32_t w, std::uint32_t h, double cxN, double
             const double dx = x - cx, dy = y - cy;
             const double d = std::sqrt(dx * dx + dy * dy) / r;
             const double v = std::clamp(1.0 - d * d, 0.0, 1.0);
-            m.coverage[static_cast<std::size_t>(y) * w + x] =
-                static_cast<std::uint8_t>(v * 255.0);
+            m.coverage[static_cast<std::size_t>(y) * w + x] = static_cast<std::uint8_t>(v * 255.0);
         }
     return m;
 }
 
 // ---- the document ------------------------------------------------------------------------------
 
-template <class L>
-L* findLayer(core::Document& doc, const std::string& name) {
+template <class L> L* findLayer(core::Document& doc, const std::string& name) {
     // Depth-first: the tree is nested, and the history edits address layers inside groups.
     struct Walk {
         static core::Layer* go(core::GroupLayer& g, const std::string& want) {
@@ -473,15 +476,15 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
             }
         }
         base->invalidateContentBounds();
-        base->setLocked(true);  // a locked backplate, as a real job would have it
+        base->setLocked(true); // a locked backplate, as a real job would have it
         doc->root().addOnTop(std::move(base));
     }
 
     // ---- 2. the grade: adjustment layers, two of them SPATIAL -----------------------------------
     //
     // ⚠ AT THE ROOT, NOT IN A GROUP, and that is load-bearing rather than tidy. Mosaic's groups are
-    // ISOLATED: renderLayerRaw composites a group's children into a fresh transparent buffer, and an
-    // adjustment grades the accumulator it sits in. So an adjustment inside a group grades that
+    // ISOLATED: renderLayerRaw composites a group's children into a fresh transparent buffer, and
+    // an adjustment grades the accumulator it sits in. So an adjustment inside a group grades that
     // group's content and nothing below the group -- and a group holding ONLY adjustments has an
     // empty accumulator (GroupLayer::contentBounds unions its children's, and AdjustmentLayer has
     // none), so it grades nothing at all and renders transparent.
@@ -495,8 +498,11 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
         core::GroupLayer& grade = doc->root();
 
         auto lift = doc->makeAdjustment("Levels", core::AdjustmentKind::Levels);
-        lift->params() = {{"inBlack", 6.0}, {"inWhite", 246.0}, {"gamma", 1.12},
-                          {"outBlack", 4.0}, {"outWhite", 252.0}};
+        lift->params() = {{"inBlack", 6.0},
+                          {"inWhite", 246.0},
+                          {"gamma", 1.12},
+                          {"outBlack", 4.0},
+                          {"outWhite", 252.0}};
         grade.addOnTop(std::move(lift));
 
         auto curves = doc->makeAdjustment("Curves", core::AdjustmentKind::Curves);
@@ -508,9 +514,12 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
         grade.addOnTop(std::move(hsl));
 
         // SPATIAL: reads the backdrop's neighbourhood over the whole canvas.
-        auto sh = doc->makeAdjustment("Shadows/Highlights", core::AdjustmentKind::ShadowsHighlights);
-        sh->params() = {{"shadowAmount", 38.0}, {"shadowRadius", 180.0},
-                        {"highlightAmount", 24.0}, {"highlightRadius", 140.0}};
+        auto sh =
+            doc->makeAdjustment("Shadows/Highlights", core::AdjustmentKind::ShadowsHighlights);
+        sh->params() = {{"shadowAmount", 38.0},
+                        {"shadowRadius", 180.0},
+                        {"highlightAmount", 24.0},
+                        {"highlightRadius", 140.0}};
         grade.addOnTop(std::move(sh));
 
         // SPATIAL, masked: a large-radius blur confined to a soft ellipse -- the region machinery
@@ -525,7 +534,6 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
         auto vib = doc->makeAdjustment("Vibrance", core::AdjustmentKind::Vibrance);
         vib->params() = {{"vibrance", 26.0}, {"saturation", -4.0}};
         grade.addOnTop(std::move(vib));
-
     }
 
     // ---- 3. texture: full-canvas raster passes with blend modes and masks ----------------------
@@ -552,16 +560,16 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
         tex->addOnTop(std::move(grain));
 
         // Light leaks: several mid-size layers, each a feathered disc, each on its own blend mode.
-        const core::BlendMode leakBlends[] = {core::BlendMode::Screen, core::BlendMode::ColorDodge,
-                                              core::BlendMode::Lighten, core::BlendMode::SoftLight,
-                                              core::BlendMode::HardLight, core::BlendMode::Overlay};
+        const core::BlendMode leakBlends[] = {
+            core::BlendMode::Screen,    core::BlendMode::ColorDodge, core::BlendMode::Lighten,
+            core::BlendMode::SoftLight, core::BlendMode::HardLight,  core::BlendMode::Overlay};
         for (int i = 0; i < 6; ++i) {
             const std::uint32_t lw = static_cast<std::uint32_t>(W / 2);
             const std::uint32_t lh = static_cast<std::uint32_t>(H / 4);
             auto leak = doc->makeRaster("Light leak " + std::to_string(i + 1), lw, lh);
             auto& img = leak->image();
-            const ColorF tint{0.5f + 0.08f * i, 0.35f + 0.1f * ((i + 2) % 5),
-                              0.9f - 0.09f * i, 0.7f};
+            const ColorF tint{0.5f + 0.08f * i, 0.35f + 0.1f * ((i + 2) % 5), 0.9f - 0.09f * i,
+                              0.7f};
             paintDisc(img, static_cast<int>(lw) / 2, static_cast<int>(lh) / 2,
                       static_cast<int>(lh) / 2 - 4, tint, 0.9f);
             leak->invalidateContentBounds();
@@ -647,8 +655,8 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
             o.stroke.enabled = true;
             o.stroke.width = 9.0;
             o.stroke.align = vec::StrokeAlign::Inside;
-            o.stroke.paint = ramp(vec::GradientType::Linear,
-                                  {ColorF{1, 1, 1, 0.9f}, ColorF{0, 0, 0, 0.5f}});
+            o.stroke.paint =
+                ramp(vec::GradientType::Linear, {ColorF{1, 1, 1, 0.9f}, ColorF{0, 0, 0, 0.5f}});
             o.paintOrder = vec::Object::PaintOrder::StrokeThenFill;
             rose->setObject(std::move(o));
         }
@@ -699,8 +707,8 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
                 break;
             }
             default: {
-                vec::RectShape r = vec::RectShape::uniform({320, 220}, 40,
-                                                           vec::CornerStyle::Inverse);
+                vec::RectShape r =
+                    vec::RectShape::uniform({320, 220}, 40, vec::CornerStyle::Inverse);
                 o.geometry = vec::ParametricShape{r};
                 break;
             }
@@ -713,9 +721,9 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
             o.stroke.paint = vec::SolidPaint{ColorF{0.05f, 0.05f, 0.08f, 0.9f}};
             o.stroke.dashArray = (i % 4 == 0) ? std::vector<double>{18, 10} : std::vector<double>{};
             sh->setObject(std::move(o));
-            sh->setTransform(Affine2D::trs({W * (0.10 + 0.06 * (i % 13)),
-                                            H * (0.40 + 0.035 * (i % 15))},
-                                           0.15 * i, {1.0 + 0.05 * i, 1.0 + 0.05 * i}));
+            sh->setTransform(
+                Affine2D::trs({W * (0.10 + 0.06 * (i % 13)), H * (0.40 + 0.035 * (i % 15))},
+                              0.15 * i, {1.0 + 0.05 * i, 1.0 + 0.05 * i}));
             sh->setOpacity(0.55f + 0.03f * (i % 8));
             sh->setBlendMode(i % 5 == 0 ? core::BlendMode::Multiply : core::BlendMode::Normal);
             if (i % 4 == 1) {
@@ -732,7 +740,8 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
         doc->root().addOnTop(std::move(vg));
     }
 
-    // ---- 5. typography ---------------------------------------------------------------------------
+    // ---- 5. typography
+    // ---------------------------------------------------------------------------
     {
         Stage s("typography group");
         auto tg = doc->makeGroup("Typography");
@@ -870,8 +879,9 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
             cs.sizePx = static_cast<float>(H) * (0.006f + 0.0006f * (i % 5));
             cs.tracking = 20.0f + 8.0f * (i % 4);
             cs.setSolidFill(ColorF{0.9f, 0.9f, 0.92f, 0.85f});
-            cap->setBlock(text::makeBlock(
-                "plate " + std::to_string(i + 1) + " — 39.8 megapixels, and every one of them", cs));
+            cap->setBlock(text::makeBlock("plate " + std::to_string(i + 1) +
+                                              " — 39.8 megapixels, and every one of them",
+                                          cs));
             cap->setTransform(Affine2D::trs({W * 0.10, H * (0.72 + 0.018 * i)}, 0.0, {1, 1}));
             cap->setOpacity(0.8f);
             tg->addOnTop(std::move(cap));
@@ -883,7 +893,7 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
     // ---- 6. the top of the stack: document-wide adjustments ------------------------------------
     {
         Stage s("finishing adjustments");
-        auto hp = doc->makeAdjustment("High pass", core::AdjustmentKind::HighPass);  // SPATIAL
+        auto hp = doc->makeAdjustment("High pass", core::AdjustmentKind::HighPass); // SPATIAL
         hp->params() = {{"radius", 14.0}};
         hp->setBlendMode(core::BlendMode::Overlay);
         hp->setOpacity(0.45f);
@@ -945,8 +955,8 @@ void applyEdit(core::Document& doc, int index) {
         if (auto* l = findLayer<core::RasterLayer>(doc, "Light leak 3")) {
             paintDisc(l->image(), static_cast<int>(l->image().width) / 3,
                       static_cast<int>(l->image().height) / 2,
-                      static_cast<int>(l->image().height) / 3,
-                      ColorF{0.4f, 0.85f, 1.0f, 0.6f}, 0.7f);
+                      static_cast<int>(l->image().height) / 3, ColorF{0.4f, 0.85f, 1.0f, 0.6f},
+                      0.7f);
             l->invalidateContentBounds();
         }
         break;
@@ -995,7 +1005,7 @@ bool tipFor(const fs::path& p, io::CommitTip& tip) {
     return io::stampTipIdentity(p.string(), tip, &err);
 }
 
-}  // namespace
+} // namespace
 
 int main(int argc, char** argv) {
     std::string outPath;
@@ -1067,7 +1077,7 @@ int main(int argc, char** argv) {
         st.chunks = io::diffDocumentStates(*baseline, *after);
         if (st.chunks.empty()) {
             baseline = std::move(after);
-            continue;  // the edit serialised identically: nothing to commit
+            continue; // the edit serialised identically: nothing to commit
         }
         if (io::appendSaveToFile(outPath, tip, {&st, 1}, &err) != io::SaveStatus::Ok) {
             fail("appendSaveToFile state " + std::to_string(s) + ": " + err);

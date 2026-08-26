@@ -181,8 +181,7 @@ common::ImageF transformImageF(const common::ImageF& src, const common::Affine2D
         };
         // Clamp-to-edge deliberately paints border texels outside the source's projection, so
         // it must decline the destination clip; the zero-fill edge mode satisfies its precondition.
-        resampleInto(dst, w, h, inv, filter, fetch, clamp ? 0 : src.width,
-                     clamp ? 0 : src.height);
+        resampleInto(dst, w, h, inv, filter, fetch, clamp ? 0 : src.width, clamp ? 0 : src.height);
         return dst;
     }
     parallelFor(h, 64, [&](std::size_t row0, std::size_t row1) {

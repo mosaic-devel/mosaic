@@ -25,8 +25,6 @@
 // the compositor twice as slow will not fail these, and should not -- that is what the profiler is
 // for. A change that reintroduces a 31,717:1 ratio fails them immediately.
 
-#include <doctest/doctest.h>
-
 #include "core/document.hpp"
 #include "core/layer.hpp"
 #include "core/layer_effects.hpp"
@@ -36,6 +34,7 @@
 #include "render/compositor.hpp"
 
 #include <cstdint>
+#include <doctest/doctest.h>
 #include <memory>
 
 namespace {
@@ -113,8 +112,7 @@ TEST_CASE("every visible leaf layer is rendered exactly once per composite") {
     REQUIRE(leaves == 4); // 1 backdrop + 3 shapes
 
     render::workCounters().reset();
-    const render::CompositeResult r =
-        render::composite(*f.doc, plainOpts(), render::Backend::Cpu);
+    const render::CompositeResult r = render::composite(*f.doc, plainOpts(), render::Backend::Cpu);
     REQUIRE(r.ok);
 
     CHECK(render::workCounters().composites.load() == 1);
@@ -134,9 +132,8 @@ TEST_CASE("a group's isolated buffer is sized by the OUTPUT, not by the canvas")
     const std::uint64_t fullTexels = render::workCounters().groupBufferTexels.load();
 
     render::workCounters().reset();
-    REQUIRE(render::compositeScaled(*f.doc, f.w / 10, f.h / 10, plainOpts(),
-                                    render::Backend::Cpu)
-                .ok);
+    REQUIRE(
+        render::compositeScaled(*f.doc, f.w / 10, f.h / 10, plainOpts(), render::Backend::Cpu).ok);
     const std::uint64_t smallTexels = render::workCounters().groupBufferTexels.load();
 
     REQUIRE(fullTexels > 0);
@@ -187,7 +184,8 @@ TEST_CASE("layer effects do not enlarge the walk's buffer budget") {
     Fixture fx = makeFixture(2048, 2048);
     for (const auto& child : fx.doc->root().children()) {
         auto* g = child->as<core::GroupLayer>();
-        if (g == nullptr) continue;
+        if (g == nullptr)
+            continue;
         for (const auto& shape : g->children()) {
             core::LayerEffects e;
             core::ShadowEffect sh;

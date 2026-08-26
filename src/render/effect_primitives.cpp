@@ -1,12 +1,12 @@
 #include "render/effect_primitives.hpp"
 
+#include "common/thread_pool.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <vector>
-
-#include "common/thread_pool.hpp"
 
 // ⚠ PARALLELISM NOTE (S60). Every loop in this file walks INDEPENDENT rows, columns or pixels:
 // each iteration writes one output slot and reads only inputs no other iteration writes. There is
@@ -27,7 +27,8 @@ namespace mosaic::render::fx {
 std::vector<float> extractAlpha(const common::ImageF& img) {
     std::vector<float> a(img.pixelCount());
     common::parallelFor(a.size(), std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
-        for (std::size_t i = i0; i < i1; ++i) a[i] = img.rgba[i * 4 + 3];
+        for (std::size_t i = i0; i < i1; ++i)
+            a[i] = img.rgba[i * 4 + 3];
     });
     return a;
 }
@@ -57,11 +58,12 @@ void gaussPass(const float* src, float* dst, int len, int stride, const float* k
     const auto edge = [&](int i) {
         float acc = src[i * stride] * kernel[0];
         for (int k = 1; k <= r; ++k)
-            acc += (src[reflect(i - k, len) * stride] + src[reflect(i + k, len) * stride]) *
-                   kernel[k];
+            acc +=
+                (src[reflect(i - k, len) * stride] + src[reflect(i + k, len) * stride]) * kernel[k];
         dst[i * stride] = acc;
     };
-    for (int i = 0; i < lo; ++i) edge(i);
+    for (int i = 0; i < lo; ++i)
+        edge(i);
     for (int i = lo; i < hi; ++i) {
         const float* c = src + static_cast<std::ptrdiff_t>(i) * stride;
         float acc = *c * kernel[0];
@@ -71,7 +73,8 @@ void gaussPass(const float* src, float* dst, int len, int stride, const float* k
                    kernel[k];
         dst[i * stride] = acc;
     }
-    for (int i = std::max(hi, lo); i < len; ++i) edge(i);
+    for (int i = std::max(hi, lo); i < len; ++i)
+        edge(i);
 }
 
 }  // namespace
@@ -208,20 +211,24 @@ void edt2d(std::vector<float>& grid, int w, int h) {
     common::parallelFor(static_cast<std::size_t>(w), 16, [&](std::size_t x0, std::size_t x1) {
         std::vector<float> f(maxdim), d(maxdim), z(maxdim + 1);
         std::vector<int> v(maxdim);
-        for (std::size_t x = x0; x < x1; ++x) {  // columns (vary y)
-            for (int y = 0; y < h; ++y) f[y] = grid[static_cast<std::size_t>(y) * w + x];
+        for (std::size_t x = x0; x < x1; ++x) { // columns (vary y)
+            for (int y = 0; y < h; ++y)
+                f[y] = grid[static_cast<std::size_t>(y) * w + x];
             edt1d(f.data(), d.data(), h, v.data(), z.data());
-            for (int y = 0; y < h; ++y) grid[static_cast<std::size_t>(y) * w + x] = d[y];
+            for (int y = 0; y < h; ++y)
+                grid[static_cast<std::size_t>(y) * w + x] = d[y];
         }
     });
     common::parallelFor(static_cast<std::size_t>(h), 16, [&](std::size_t y0, std::size_t y1) {
         std::vector<float> f(maxdim), d(maxdim), z(maxdim + 1);
         std::vector<int> v(maxdim);
-        for (std::size_t y = y0; y < y1; ++y) {  // rows (vary x)
+        for (std::size_t y = y0; y < y1; ++y) { // rows (vary x)
             const std::size_t row = y * static_cast<std::size_t>(w);
-            for (int x = 0; x < w; ++x) f[x] = grid[row + x];
+            for (int x = 0; x < w; ++x)
+                f[x] = grid[row + x];
             edt1d(f.data(), d.data(), w, v.data(), z.data());
-            for (int x = 0; x < w; ++x) grid[row + x] = d[x];
+            for (int x = 0; x < w; ++x)
+                grid[row + x] = d[x];
         }
     });
 }
@@ -234,8 +241,8 @@ std::vector<float> signedDistanceField(const std::vector<float>& alpha, int w, i
     common::parallelFor(n, std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
         for (std::size_t i = i0; i < i1; ++i) {
             const bool inside = alpha[i] >= 0.5f;
-            distToOutside[i] = inside ? kInf : 0.0f;  // seeds = outside pixels
-            distToInside[i] = inside ? 0.0f : kInf;   // seeds = inside pixels
+            distToOutside[i] = inside ? kInf : 0.0f; // seeds = outside pixels
+            distToInside[i] = inside ? 0.0f : kInf;  // seeds = inside pixels
         }
     });
     edt2d(distToOutside, w, h);
@@ -255,24 +262,25 @@ std::vector<float> signedDistanceFieldAA(const std::vector<float>& alpha, int w,
     const int W = w * ss, H = h * ss;
     std::vector<float> up(static_cast<std::size_t>(W) * H);
     common::parallelFor(static_cast<std::size_t>(H), 16, [&](std::size_t Y0, std::size_t Y1) {
-    for (int Y = static_cast<int>(Y0); Y < static_cast<int>(Y1); ++Y) {
-        const float fy = (static_cast<float>(Y) + 0.5f) / static_cast<float>(ss) - 0.5f;
-        const int iy = static_cast<int>(std::floor(fy));
-        const float ty = fy - static_cast<float>(iy);
-        const int y0 = std::clamp(iy, 0, h - 1), y1 = std::clamp(iy + 1, 0, h - 1);
-        for (int X = 0; X < W; ++X) {
-            const float fx = (static_cast<float>(X) + 0.5f) / static_cast<float>(ss) - 0.5f;
-            const int ix = static_cast<int>(std::floor(fx));
-            const float tx = fx - static_cast<float>(ix);
-            const int x0 = std::clamp(ix, 0, w - 1), x1 = std::clamp(ix + 1, 0, w - 1);
-            const float a00 = alpha[static_cast<std::size_t>(y0) * w + x0];
-            const float a10 = alpha[static_cast<std::size_t>(y0) * w + x1];
-            const float a01 = alpha[static_cast<std::size_t>(y1) * w + x0];
-            const float a11 = alpha[static_cast<std::size_t>(y1) * w + x1];
-            up[static_cast<std::size_t>(Y) * W + X] =
-                (a00 * (1.0f - tx) + a10 * tx) * (1.0f - ty) + (a01 * (1.0f - tx) + a11 * tx) * ty;
+        for (int Y = static_cast<int>(Y0); Y < static_cast<int>(Y1); ++Y) {
+            const float fy = (static_cast<float>(Y) + 0.5f) / static_cast<float>(ss) - 0.5f;
+            const int iy = static_cast<int>(std::floor(fy));
+            const float ty = fy - static_cast<float>(iy);
+            const int y0 = std::clamp(iy, 0, h - 1), y1 = std::clamp(iy + 1, 0, h - 1);
+            for (int X = 0; X < W; ++X) {
+                const float fx = (static_cast<float>(X) + 0.5f) / static_cast<float>(ss) - 0.5f;
+                const int ix = static_cast<int>(std::floor(fx));
+                const float tx = fx - static_cast<float>(ix);
+                const int x0 = std::clamp(ix, 0, w - 1), x1 = std::clamp(ix + 1, 0, w - 1);
+                const float a00 = alpha[static_cast<std::size_t>(y0) * w + x0];
+                const float a10 = alpha[static_cast<std::size_t>(y0) * w + x1];
+                const float a01 = alpha[static_cast<std::size_t>(y1) * w + x0];
+                const float a11 = alpha[static_cast<std::size_t>(y1) * w + x1];
+                up[static_cast<std::size_t>(Y) * W + X] =
+                    (a00 * (1.0f - tx) + a10 * tx) * (1.0f - ty) +
+                    (a01 * (1.0f - tx) + a11 * tx) * ty;
+            }
         }
-    }
     });
     const std::vector<float> sdUp = signedDistanceField(up, W, H);  // distances in ss-subpixels
     std::vector<float> sd(static_cast<std::size_t>(w) * h);

@@ -2,15 +2,15 @@
 
 #include "common/i18n.hpp"
 #include "common/log.hpp"
+#include "common/profiler.hpp"
 #include "core/command.hpp"
 #include "core/commands.hpp"
 #include "core/document.hpp"
-#include "common/profiler.hpp"
-#include "core/vector/raster.hpp"  // rasterizeObjectF: vector-layer thumbnails (S26)
-#include "render/compositor.hpp" // compositeGroup: group thumbnails + group pixel selection
-#include "ui/channels_panel.hpp" // the dock's Channels tab (per-channel histogram)
-#include "ui/history_panel.hpp"  // the dock's History tab (S16-b)
-#include "ui/icons.hpp"          // drawIcon / IconButton (the panel-chrome icon set, S16-g)
+#include "core/vector/raster.hpp" // rasterizeObjectF: vector-layer thumbnails (S26)
+#include "render/compositor.hpp"  // compositeGroup: group thumbnails + group pixel selection
+#include "ui/channels_panel.hpp"  // the dock's Channels tab (per-channel histogram)
+#include "ui/history_panel.hpp"   // the dock's History tab (S16-b)
+#include "ui/icons.hpp"           // drawIcon / IconButton (the panel-chrome icon set, S16-g)
 #include "ui/theme.hpp"
 
 #include <FL/Enumerations.H>
@@ -19,7 +19,6 @@
 #include <FL/Fl_RGB_Image.H>
 #include <FL/Fl_Scroll.H>
 #include <FL/fl_draw.H>
-
 #include <algorithm>
 #include <bit>
 #include <cctype>
@@ -267,9 +266,8 @@ common::Image layerThumbnail(const core::Layer& layer, int box, std::uint32_t do
         const auto side = static_cast<std::uint32_t>(box);
         // doc -> the box x box buffer. One buffer texel per thumbnail texel, so the sampling loop
         // below reads it 1:1 and the anti-aliasing is the compositor's own reduction filter.
-        const common::Affine2D docToBuf =
-            common::Affine2D::scaling(side / v.w, side / v.h) *
-            common::Affine2D::translation(-v.x, -v.y);
+        const common::Affine2D docToBuf = common::Affine2D::scaling(side / v.w, side / v.h) *
+                                          common::Affine2D::translation(-v.x, -v.y);
         groupFlat = render::compositeGroupInto(*group, docToBuf, side, side);
         src = &groupFlat;
         if (const auto invBuf = docToBuf.inverse())
@@ -287,9 +285,8 @@ common::Image layerThumbnail(const core::Layer& layer, int box, std::uint32_t do
             frame = mapRectAabb(world, *cb);
         const common::Rect v = thumbView(frame, box, docW, docH);
         const auto side = static_cast<std::uint32_t>(box);
-        const common::Affine2D docToBuf =
-            common::Affine2D::scaling(side / v.w, side / v.h) *
-            common::Affine2D::translation(-v.x, -v.y);
+        const common::Affine2D docToBuf = common::Affine2D::scaling(side / v.w, side / v.h) *
+                                          common::Affine2D::translation(-v.x, -v.y);
         vectorFlat = common::toImage8(
             core::vec::rasterizeObjectF(*vlayer->object(), side, side, docToBuf * t));
         src = &vectorFlat;

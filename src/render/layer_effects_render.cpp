@@ -6,19 +6,19 @@
 
 #include "render/layer_effects_render.hpp"
 
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <mutex>
-#include <variant>
-#include <vector>
-
 #include "common/dither.hpp"
 #include "common/profiler.hpp"
 #include "common/thread_pool.hpp"
 #include "core/layer_effects.hpp"
 #include "render/blend.hpp"
 #include "render/effect_primitives.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <mutex>
+#include <variant>
+#include <vector>
 
 namespace mosaic::render {
 
@@ -45,10 +45,10 @@ struct Box {
 // ⚠ Note what is NOT banded: the loops OVER EFFECTS (each concentric ring, each stacked shadow)
 // stay sequential, because those composite over one another and the order IS the z-order. Only
 // the pixel walk inside one effect is parallel.
-template <class Fn>
-void forEachRow(int rh, Fn&& body) {
+template <class Fn> void forEachRow(int rh, Fn&& body) {
     common::parallelFor(static_cast<std::size_t>(rh), 16, [&](std::size_t y0, std::size_t y1) {
-        for (int y = static_cast<int>(y0); y < static_cast<int>(y1); ++y) body(y);
+        for (int y = static_cast<int>(y0); y < static_cast<int>(y1); ++y)
+            body(y);
     });
 }
 
@@ -77,7 +77,8 @@ struct AlphaBoxes {
 
 [[nodiscard]] AlphaBoxes alphaBoxes(const ImageF& io) {
     const int w = static_cast<int>(io.width), h = static_cast<int>(io.height);
-    if (w <= 0 || h <= 0) return {};
+    if (w <= 0 || h <= 0)
+        return {};
     struct Acc {
         int minx, miny, maxx, maxy;
         void hit(int x, int y) noexcept {
@@ -106,9 +107,11 @@ struct AlphaBoxes {
             const int yi = static_cast<int>(y);
             for (int x = 0; x < w; ++x) {
                 const float a = io.rgba[row + static_cast<std::size_t>(x) * 4 + 3];
-                if (a <= 0.0f) continue;
+                if (a <= 0.0f)
+                    continue;
                 la.hit(x, yi);
-                if (a > 0.5f) ls.hit(x, yi);
+                if (a > 0.5f)
+                    ls.hit(x, yi);
             }
         }
         const std::lock_guard<std::mutex> lock(merge);
@@ -220,10 +223,12 @@ void applyStrokes(ImageF& io, const std::vector<core::StrokeEffect>& strokes,
                 for (int x = 0; x < rw; ++x) {
                     const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
                     const float d = sd[idx];
-                    if (d < innerEdge - kAa || d > r.hi + kAa) continue;
+                    if (d < innerEdge - kAa || d > r.hi + kAa)
+                        continue;
                     const float cov = std::clamp((d - innerEdge) / kAa + 0.5f, 0.0f, 1.0f) *
                                       std::clamp((r.hi - d) / kAa + 0.5f, 0.0f, 1.0f);
-                    if (cov <= 0.0f) continue;
+                    if (cov <= 0.0f)
+                        continue;
                     ColorF src = ringColor(r, rx0 + x, ry0 + y);
                     src.a *= cov;
                     below[idx] = compositeOver(r.blend, below[idx], src, r.opacity);
@@ -233,7 +238,8 @@ void applyStrokes(ImageF& io, const std::vector<core::StrokeEffect>& strokes,
         forEachRow(rh, [&](int y) {
             for (int x = 0; x < rw; ++x) {
                 const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
-                if (below[idx].a <= 0.0f) continue;
+                if (below[idx].a <= 0.0f)
+                    continue;
                 const std::uint32_t px = static_cast<std::uint32_t>(rx0 + x);
                 const std::uint32_t py = static_cast<std::uint32_t>(ry0 + y);
                 io.set(px, py,
@@ -255,20 +261,24 @@ void applyStrokes(ImageF& io, const std::vector<core::StrokeEffect>& strokes,
                     // and is then clipped to the shape's own coverage below, so the shape's
                     // anti-aliased rim becomes the stroke's outer edge -- the stroke colour reaches
                     // the silhouette instead of leaving a content-coloured rim.
-                    if (d < r.lo - kAa || alpha[idx] <= 0.0f) continue;
+                    if (d < r.lo - kAa || alpha[idx] <= 0.0f)
+                        continue;
                     cov = std::clamp((d - r.lo) / kAa + 0.5f, 0.0f, 1.0f);
                 } else {  // centre: a plain band (it covers both sides of the edge, so no rim)
-                    if (d < r.lo - kAa || d > r.hi + kAa) continue;
+                    if (d < r.lo - kAa || d > r.hi + kAa)
+                        continue;
                     cov = std::clamp((d - r.lo) / kAa + 0.5f, 0.0f, 1.0f) *
                           std::clamp((r.hi - d) / kAa + 0.5f, 0.0f, 1.0f);
                 }
-                if (cov <= 0.0f) continue;
+                if (cov <= 0.0f)
+                    continue;
                 const std::uint32_t px = static_cast<std::uint32_t>(rx0 + x);
                 const std::uint32_t py = static_cast<std::uint32_t>(ry0 + y);
                 ColorF src = ringColor(r, rx0 + x, ry0 + y);
                 src.a *= cov;
                 ColorF res = compositeOver(r.blend, io.at(px, py), src, r.opacity);
-                if (inside) res.a = std::min(res.a, alpha[idx]);  // never extend past the silhouette
+                if (inside)
+                    res.a = std::min(res.a, alpha[idx]); // never extend past the silhouette
                 io.set(px, py, res);
             }
         });
@@ -288,13 +298,15 @@ void applyOverlay(ImageF& io, const core::OverlayEffect& ov, const std::vector<f
         for (int x = 0; x < rw; ++x) {
             const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
             const float cov = alpha[idx];
-            if (cov <= 0.0f) continue;  // outside the shape
+            if (cov <= 0.0f)
+                continue; // outside the shape
             ColorF src = paintAtNorm(ov.paint, rx0 + x, ry0 + y, content, antialias, bufferToLayer);
             // Do NOT fade the overlay by coverage here: composite it over the layer at its OWN alpha,
             // then clamp the RESULT to the coverage below. Fading src by cov let the layer colour bleed
             // through the shape's AA rim, so the anti-aliased edge read in the LAYER's colour instead of
             // the pattern/overlay's (user-reported). The result-clamp still keeps it inside the shape.
-            if (src.a <= 0.0f) continue;  // a transparent overlay pixel (e.g. a pattern's bg) skips
+            if (src.a <= 0.0f)
+                continue; // a transparent overlay pixel (e.g. a pattern's bg) skips
             const auto px = static_cast<std::uint32_t>(rx0 + x);
             const auto py = static_cast<std::uint32_t>(ry0 + y);
             ColorF res = compositeOver(ov.blend, io.at(px, py), src, ov.opacity);
@@ -381,7 +393,8 @@ void applyDropShadows(std::vector<ColorF>& below, const std::vector<core::Shadow
             for (int x = 0; x < rw; ++x) {
                 const float f = sampleField(field, rw, rh, static_cast<float>(x) - o.dx,
                                             static_cast<float>(y) - o.dy);
-                if (f <= 0.0f) continue;
+                if (f <= 0.0f)
+                    continue;
                 const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
                 ColorF src{sh.color.r, sh.color.g, sh.color.b, sh.color.a * f};
                 below[idx] = compositeOver(sh.blend, below[idx], src, sh.opacity);
@@ -405,9 +418,11 @@ void applyOuterGlow(std::vector<ColorF>& below, const core::GlowEffect& glow,
         for (int x = 0; x < rw; ++x) {
             const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
             const float f = field[idx];
-            if (f <= 0.0f) continue;
+            if (f <= 0.0f)
+                continue;
             ColorF src = paintAtNorm(glow.paint, rx0 + x, ry0 + y, anchor, antialias, bufferToLayer);
-            if (src.a <= 0.0f) continue;
+            if (src.a <= 0.0f)
+                continue;
             src.a *= f;
             below[idx] = compositeOver(glow.blend, below[idx], src, glow.opacity);
         }
@@ -431,10 +446,12 @@ void applyInnerShadows(ImageF& io, const std::vector<core::ShadowEffect>& shadow
             for (int x = 0; x < rw; ++x) {
                 const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
                 const float cov = alpha[idx];
-                if (cov <= 0.0f) continue;  // clipped to the shape
+                if (cov <= 0.0f)
+                    continue; // clipped to the shape
                 const float f = sampleField(field, rw, rh, static_cast<float>(x) - o.dx,
                                             static_cast<float>(y) - o.dy);
-                if (f <= 0.0f) continue;
+                if (f <= 0.0f)
+                    continue;
                 const auto px = static_cast<std::uint32_t>(rx0 + x);
                 const auto py = static_cast<std::uint32_t>(ry0 + y);
                 ColorF src{sh.color.r, sh.color.g, sh.color.b, sh.color.a * f};
@@ -466,11 +483,14 @@ void applyInnerGlow(ImageF& io, const core::GlowEffect& glow, const std::vector<
         for (int x = 0; x < rw; ++x) {
             const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
             const float cov = alpha[idx];
-            if (cov <= 0.0f) continue;  // clipped to the shape
+            if (cov <= 0.0f)
+                continue; // clipped to the shape
             const float f = field[idx];
-            if (f <= 0.0f) continue;
+            if (f <= 0.0f)
+                continue;
             ColorF src = paintAtNorm(glow.paint, rx0 + x, ry0 + y, anchor, antialias, bufferToLayer);
-            if (src.a <= 0.0f) continue;
+            if (src.a <= 0.0f)
+                continue;
             src.a *= f;
             const auto px = static_cast<std::uint32_t>(rx0 + x);
             const auto py = static_cast<std::uint32_t>(ry0 + y);
@@ -535,14 +555,17 @@ void applySatin(ImageF& io, const core::SatinEffect& sa, const std::vector<float
         for (int x = 0; x < rw; ++x) {
             const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
             const float cov = alpha[idx];
-            if (cov <= 0.0f) continue;  // clip to the silhouette
+            if (cov <= 0.0f)
+                continue; // clip to the silhouette
             const float a1 = sample(static_cast<float>(x) - ox, static_cast<float>(y) - oy);
             const float a2 = sample(static_cast<float>(x) + ox, static_cast<float>(y) + oy);
             const float s = sa.invert ? std::fabs(a1 - a2) : std::min(1.0f, a1 + a2);
-            if (s <= 0.0f) continue;
+            if (s <= 0.0f)
+                continue;
             ColorF src = sa.color;
             src.a = sa.color.a * s;  // the sheen coverage modulates the satin colour's own alpha
-            if (src.a <= 0.0f) continue;
+            if (src.a <= 0.0f)
+                continue;
             const auto px = static_cast<std::uint32_t>(rx0 + x);
             const auto py = static_cast<std::uint32_t>(ry0 + y);
             ColorF res = compositeOver(sa.blend, io.at(px, py), src, sa.opacity);
@@ -624,7 +647,8 @@ void applyBevel(ImageF& io, const core::BevelEffect& bv, const std::vector<float
         for (int x = 0; x < rw; ++x) {
             const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
             const float cov = alpha[idx];
-            if (cov <= 0.0f) continue;  // clip to the silhouette
+            if (cov <= 0.0f)
+                continue; // clip to the silhouette
             // SINGLE-PASS 3x3 Sobel of the height field (the ONLY normal-from-height allowed here).
             const float gx = (H(x + 1, y - 1) + 2.0f * H(x + 1, y) + H(x + 1, y + 1)) -
                              (H(x - 1, y - 1) + 2.0f * H(x - 1, y) + H(x - 1, y + 1));
@@ -638,7 +662,8 @@ void applyBevel(ImageF& io, const core::BevelEffect& bv, const std::vector<float
             nz *= inv;
             const float lambert = std::clamp(nx * Lx + ny * Ly + nz * Lz, 0.0f, 1.0f);
             const float d = lambert - base;  // deviation from the flat-surface response
-            if (d == 0.0f) continue;         // plateau (gradient 0) -> neutral, leave the pixel be
+            if (d == 0.0f)
+                continue; // plateau (gradient 0) -> neutral, leave the pixel be
             ColorF src;
             if (d > 0.0f) {  // tilted toward the light -> highlight
                 src = bv.highlight;
@@ -647,7 +672,8 @@ void applyBevel(ImageF& io, const core::BevelEffect& bv, const std::vector<float
                 src = bv.shadow;
                 src.a = bv.shadow.a * std::clamp(-d, 0.0f, 1.0f) * bv.shadowOpacity;
             }
-            if (src.a <= 0.0f) continue;
+            if (src.a <= 0.0f)
+                continue;
             const auto px = static_cast<std::uint32_t>(rx0 + x);
             const auto py = static_cast<std::uint32_t>(ry0 + y);
             // The strength is folded into src.a; composite Normal (the model carries no bevel blend).
@@ -681,7 +707,7 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
     // Every effect attaches to the layer's coverage; nothing to do without any. One pass yields
     // both the extent and the phase anchor (see alphaBoxes).
     const AlphaBoxes boxes = alphaBoxes(io);
-    const Box content = boxes.any;  // full extent: drives the ROI + the fill-opacity dim
+    const Box content = boxes.any; // full extent: drives the ROI + the fill-opacity dim
     if (content.empty()) return;
 
     // The paint PHASE anchor (gradient box origin / pattern tile origin). Anchoring to `content`
@@ -727,17 +753,20 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
     if (fx.fillOpacity < 1.0f) {
         const float s = std::clamp(fx.fillOpacity, 0.0f, 1.0f);
         // Bounded by `content`, not the ROI, so it bands over its own row span.
-        common::parallelFor(static_cast<std::size_t>(content.y1 - content.y0), 16,
-                            [&](std::size_t b0, std::size_t b1) {
-            for (int y = content.y0 + static_cast<int>(b0), yEnd = content.y0 + static_cast<int>(b1);
-                 y < yEnd; ++y) {
-                for (int x = content.x0; x < content.x1; ++x) {
-                    ColorF c = io.at(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
-                    c.a *= s;
-                    io.set(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y), c);
+        common::parallelFor(
+            static_cast<std::size_t>(content.y1 - content.y0), 16,
+            [&](std::size_t b0, std::size_t b1) {
+                for (int y = content.y0 + static_cast<int>(b0),
+                         yEnd = content.y0 + static_cast<int>(b1);
+                     y < yEnd; ++y) {
+                    for (int x = content.x0; x < content.x1; ++x) {
+                        ColorF c =
+                            io.at(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
+                        c.a *= s;
+                        io.set(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y), c);
+                    }
                 }
-            }
-        });
+            });
     }
 
     // Shadow/glow tier (LE-e): the four effects all key off ONE ROI signed-distance field of the
@@ -774,7 +803,8 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
         forEachRow(rh, [&](int y) {
             for (int x = 0; x < rw; ++x) {
                 const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
-                if (below[idx].a <= 0.0f) continue;  // nothing under this pixel -> io unchanged
+                if (below[idx].a <= 0.0f)
+                    continue; // nothing under this pixel -> io unchanged
                 const auto px = static_cast<std::uint32_t>(rx0 + x);
                 const auto py = static_cast<std::uint32_t>(ry0 + y);
                 io.set(px, py,
@@ -788,7 +818,8 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
     // (fill-dimmed) pixels. Independent -- all three can coexist (the PS/Affinity composable model).
     {
         MOSAIC_PERF_SCOPE("FX overlays", common::Lane::Cpu);
-        applyOverlay(io, fx.colorOverlay, alpha, anchor, rx0, ry0, rw, rh, antialias, bufferToLayer);
+        applyOverlay(io, fx.colorOverlay, alpha, anchor, rx0, ry0, rw, rh, antialias,
+                     bufferToLayer);
         applyOverlay(io, fx.gradientOverlay, alpha, anchor, rx0, ry0, rw, rh, antialias,
                      bufferToLayer);
         applyOverlay(io, fx.patternOverlay, alpha, anchor, rx0, ry0, rw, rh, antialias,

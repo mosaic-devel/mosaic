@@ -1,5 +1,11 @@
 #pragma once
 
+#include "common/geometry.hpp" // common::Affine2D (the placement transforms below)
+#include "common/image.hpp"
+#include "core/layer.hpp" // core::LayerId (the drag cache's key, S15-b)
+#include "render/render.hpp"
+#include "render/resample.hpp" // the kernel bank + samplers (moved out of compositor.cpp, S53-a)
+
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -8,12 +14,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include "common/geometry.hpp"  // common::Affine2D (the placement transforms below)
-#include "common/image.hpp"
-#include "core/layer.hpp"  // core::LayerId (the drag cache's key, S15-b)
-#include "render/render.hpp"
-#include "render/resample.hpp"  // the kernel bank + samplers (moved out of compositor.cpp, S53-a)
 
 // The compositor turns a `core::Document`'s layer tree into a flat image (PLAN §3.7, §4). It
 // walks each group bottom(0)->top, blending every layer onto an accumulated working buffer with
@@ -274,8 +274,8 @@ struct WorkCounters {
 // already relies on, offered to the other thumbnail arms.
 //
 // It is also BETTER FILTERED than compositing at canvas size and sampling down: each layer's kernel
-// is resolved from its composed placement, so a reduction resolves Auto to a real box filter applied
-// per layer before blending, instead of one point-sample taken afterwards.
+// is resolved from its composed placement, so a reduction resolves Auto to a real box filter
+// applied per layer before blending, instead of one point-sample taken afterwards.
 [[nodiscard]] common::Image compositeGroupInto(const core::GroupLayer& group,
                                                const common::Affine2D& docToOut, std::uint32_t outW,
                                                std::uint32_t outH);

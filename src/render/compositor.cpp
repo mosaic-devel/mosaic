@@ -98,7 +98,8 @@ void rasteriseLayerInto(ImageF& dst, const SrcImage& src, const core::RasterMask
     // what was written beats re-deriving it from the layer's geometry, which would have to guess
     // at stroke overhang, resample footprints and mask placement and would drop pixels when it
     // guessed low.
-    if (written != nullptr) *written = common::Rect{};
+    if (written != nullptr)
+        *written = common::Rect{};
     dst.width = w;
     dst.height = h;
     const std::size_t n = static_cast<std::size_t>(w) * h * 4;
@@ -193,9 +194,10 @@ void rasteriseLayerInto(ImageF& dst, const SrcImage& src, const core::RasterMask
             // The same projection resampleInto clips to, dilated by the kernel's reach and clamped
             // -- conservative on purpose: a rect slightly too LARGE only costs a few blended
             // texels, one slightly too small drops them.
-            const common::Rect reach{-kMaxFootprintRadius - 1.0, -kMaxFootprintRadius - 1.0,
-                                     static_cast<double>(src.width) + 2.0 * kMaxFootprintRadius + 2.0,
-                                     static_cast<double>(src.height) + 2.0 * kMaxFootprintRadius + 2.0};
+            const common::Rect reach{
+                -kMaxFootprintRadius - 1.0, -kMaxFootprintRadius - 1.0,
+                static_cast<double>(src.width) + 2.0 * kMaxFootprintRadius + 2.0,
+                static_cast<double>(src.height) + 2.0 * kMaxFootprintRadius + 2.0};
             *written = t.mapBounds(reach);
         }
         resampleInto(dst, w, h, inv, filter, fetch, src.width, src.height);
@@ -210,8 +212,7 @@ void rasteriseLayerInto(ImageF& dst, const SrcImage& src, const core::RasterMask
                                static_cast<double>(src.height) + 2.0};
     const common::Rect d = t.mapBounds(srcRect);
     const auto clampU = [](double v, std::uint32_t hi) {
-        return v <= 0.0 ? std::uint32_t{0}
-                        : static_cast<std::uint32_t>(std::min<double>(v, hi));
+        return v <= 0.0 ? std::uint32_t{0} : static_cast<std::uint32_t>(std::min<double>(v, hi));
     };
     const std::uint32_t dx0 = clampU(std::floor(d.x), w);
     const std::uint32_t dx1 = clampU(std::ceil(d.right()), w);
@@ -349,7 +350,8 @@ void compositeBufferOver(ImageF& acc, const ImageF& src, core::BlendMode mode, f
         };
         const std::uint32_t x0 = lo(bounds->x, acc.width), x1 = up(bounds->right(), acc.width);
         const std::uint32_t y0 = lo(bounds->y, acc.height), y1 = up(bounds->bottom(), acc.height);
-        if (x1 <= x0 || y1 <= y0) return;  // nothing of the source lands on the target
+        if (x1 <= x0 || y1 <= y0)
+            return; // nothing of the source lands on the target
         const std::uint32_t stride = acc.width;
         parallelFor(y1 - y0, 16, [&](std::size_t b0, std::size_t b1) {
             for (std::uint32_t y = y0 + static_cast<std::uint32_t>(b0),
@@ -357,7 +359,8 @@ void compositeBufferOver(ImageF& acc, const ImageF& src, core::BlendMode mode, f
                  y < yEnd; ++y) {
                 for (std::uint32_t x = x0; x < x1; ++x) {
                     const std::size_t p = (static_cast<std::size_t>(y) * stride + x) * 4;
-                    if (src.rgba[p + 3] * opacity <= 0.0f) continue;
+                    if (src.rgba[p + 3] * opacity <= 0.0f)
+                        continue;
                     const ColorF backdrop{acc.rgba[p], acc.rgba[p + 1], acc.rgba[p + 2],
                                           acc.rgba[p + 3]};
                     const ColorF source{src.rgba[p], src.rgba[p + 1], src.rgba[p + 2],
@@ -2019,9 +2022,8 @@ const ImageF kNoSrc;
     static const std::vector<std::string> names = [] {
         std::vector<std::string> v;
         for (int i = 0; i <= static_cast<int>(core::AdjustmentKind::HighPass); ++i)
-            v.emplace_back("Adjustment: " +
-                           std::string(core::adjustmentKindName(
-                               static_cast<core::AdjustmentKind>(i))));
+            v.emplace_back("Adjustment: " + std::string(core::adjustmentKindName(
+                                                static_cast<core::AdjustmentKind>(i))));
         return v;
     }();
     const auto i = static_cast<std::size_t>(kind);
@@ -2175,12 +2177,10 @@ ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std
         const double sAxisY = std::hypot(localToTarget.m01, localToTarget.m11);
         const double s = std::min(1.0, std::max(sAxisX, sAxisY));
         const std::uint32_t bw =
-            s < 1.0 ? std::max<std::uint32_t>(
-                          1, static_cast<std::uint32_t>(std::lround(ext.w * s)))
+            s < 1.0 ? std::max<std::uint32_t>(1, static_cast<std::uint32_t>(std::lround(ext.w * s)))
                     : ext.w;
         const std::uint32_t bh =
-            s < 1.0 ? std::max<std::uint32_t>(
-                          1, static_cast<std::uint32_t>(std::lround(ext.h * s)))
+            s < 1.0 ? std::max<std::uint32_t>(1, static_cast<std::uint32_t>(std::lround(ext.h * s)))
                     : ext.h;
         // buffer px -> group-local: undo the reduction, then the extent offset.
         const common::Affine2D bufToLocal =
@@ -2213,8 +2213,7 @@ ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std
         ImageF out;
         {
             MOSAIC_PERF_SCOPE("Group place (resample)", common::Lane::Cpu);
-            out = transformImageF(local, place, w, h,
-                                  resolveFilter(rs.filter, place, rs.liveDrag));
+            out = transformImageF(local, place, w, h, resolveFilter(rs.filter, place, rs.liveDrag));
         }
         if (written != nullptr) {
             const common::Rect reach{-kMaxFootprintRadius - 1.0, -kMaxFootprintRadius - 1.0,
@@ -2508,9 +2507,10 @@ ImageF renderLayer(const core::Layer& layer, const common::Affine2D& pre, std::u
     // The GPU override is inside the scope on purpose: it is the same seam doing the same job, and
     // reading Gpu against Cpu for one name is how the lane earns its keep.
     {
-        MOSAIC_PERF_SCOPE("Layer effects", g_layerEffectsOverride ? common::Lane::Gpu
-                                                                 : common::Lane::Cpu);
-        if (!(g_layerEffectsOverride && g_layerEffectsOverride(out, fx, fxAntialias, bufferToLayer)))
+        MOSAIC_PERF_SCOPE("Layer effects",
+                          g_layerEffectsOverride ? common::Lane::Gpu : common::Lane::Cpu);
+        if (!(g_layerEffectsOverride &&
+              g_layerEffectsOverride(out, fx, fxAntialias, bufferToLayer)))
             applyEffects(out, fx, fxAntialias, bufferToLayer);
     }
     if (!windowed) return out;
@@ -2826,9 +2826,8 @@ WorkCounters& workCounters() noexcept {
     return c;
 }
 
-common::Image compositeGroupInto(const core::GroupLayer& group,
-                                 const common::Affine2D& docToOut, std::uint32_t outW,
-                                 std::uint32_t outH) {
+common::Image compositeGroupInto(const core::GroupLayer& group, const common::Affine2D& docToOut,
+                                 std::uint32_t outW, std::uint32_t outH) {
     if (outW == 0 || outH == 0)
         return {};
     // Identical to compositeGroup below, except that the group's world placement is composed with

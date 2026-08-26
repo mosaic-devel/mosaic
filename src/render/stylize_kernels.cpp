@@ -1,13 +1,13 @@
 #include "render/stylize_kernels.hpp"
+
 #include "common/profiler.hpp"
+#include "common/thread_pool.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <vector>
-
-#include "common/thread_pool.hpp"
 
 // The S35 stylize kernels (docs/filters-stylize.md §3). Every kernel obeys the contract stated in
 // stylize_kernels.hpp; the shared machinery below (premultiplied planes, the clamp-to-edge
@@ -155,43 +155,47 @@ void gaussianPlane(std::vector<float>& plane, std::uint32_t W, std::uint32_t H, 
     const int maxY = static_cast<int>(H) - 1;
     const std::size_t n = static_cast<std::size_t>(W) * H;
     std::vector<float> tmp(n);
-    { MOSAIC_PERF_SCOPE("FX gaussian plane (horiz)", mosaic::common::Lane::Cpu);
-    parallelFor(H, 64, [&](std::size_t row0, std::size_t row1) {  // horizontal
-        // ⚠ BORDER / INTERIOR SPLIT. Clamping is only ever needed within `half` texels of an
-        // edge, but the single loop paid TWO std::clamp calls -- four comparisons -- on every tap
-        // of every texel. At 43 taps over 39.8 MP that is ~3.4 billion comparisons per pass to
-        // serve a few thousand edge texels. The interior loop below indexes directly.
-        //
-        // Byte-identical: in the interior the clamps are the identity by construction, so the same
-        // taps are summed with the same weights in the same order. The borders keep the clamped
-        // form verbatim.
-        const std::uint32_t xLo = std::min<std::uint32_t>(static_cast<std::uint32_t>(half), W);
-        const std::uint32_t xHi =
-            W > static_cast<std::uint32_t>(half) ? W - static_cast<std::uint32_t>(half) : xLo;
-        for (std::uint32_t y = static_cast<std::uint32_t>(row0); y < row1; ++y) {
-            const std::size_t row = static_cast<std::size_t>(y) * W;
-            const auto edge = [&](std::uint32_t x) {
-                float acc = plane[row + x] * k[0];
-                for (int i = 1; i <= half; ++i) {
-                    const int l = std::clamp(static_cast<int>(x) - i, 0, maxX);
-                    const int r = std::clamp(static_cast<int>(x) + i, 0, maxX);
-                    acc += (plane[row + static_cast<std::uint32_t>(l)] +
-                            plane[row + static_cast<std::uint32_t>(r)]) *
-                           k[static_cast<std::size_t>(i)];
+    {
+        MOSAIC_PERF_SCOPE("FX gaussian plane (horiz)", mosaic::common::Lane::Cpu);
+        parallelFor(H, 64, [&](std::size_t row0, std::size_t row1) { // horizontal
+            // ⚠ BORDER / INTERIOR SPLIT. Clamping is only ever needed within `half` texels of an
+            // edge, but the single loop paid TWO std::clamp calls -- four comparisons -- on every
+            // tap of every texel. At 43 taps over 39.8 MP that is ~3.4 billion comparisons per pass
+            // to serve a few thousand edge texels. The interior loop below indexes directly.
+            //
+            // Byte-identical: in the interior the clamps are the identity by construction, so the
+            // same taps are summed with the same weights in the same order. The borders keep the
+            // clamped form verbatim.
+            const std::uint32_t xLo = std::min<std::uint32_t>(static_cast<std::uint32_t>(half), W);
+            const std::uint32_t xHi =
+                W > static_cast<std::uint32_t>(half) ? W - static_cast<std::uint32_t>(half) : xLo;
+            for (std::uint32_t y = static_cast<std::uint32_t>(row0); y < row1; ++y) {
+                const std::size_t row = static_cast<std::size_t>(y) * W;
+                const auto edge = [&](std::uint32_t x) {
+                    float acc = plane[row + x] * k[0];
+                    for (int i = 1; i <= half; ++i) {
+                        const int l = std::clamp(static_cast<int>(x) - i, 0, maxX);
+                        const int r = std::clamp(static_cast<int>(x) + i, 0, maxX);
+                        acc += (plane[row + static_cast<std::uint32_t>(l)] +
+                                plane[row + static_cast<std::uint32_t>(r)]) *
+                               k[static_cast<std::size_t>(i)];
+                    }
+                    tmp[row + x] = acc;
+                };
+                for (std::uint32_t x = 0; x < xLo; ++x)
+                    edge(x);
+                for (std::uint32_t x = xLo; x < xHi; ++x) {
+                    const float* c = plane.data() + row + x;
+                    float acc = *c * k[0];
+                    for (int i = 1; i <= half; ++i)
+                        acc += (c[-i] + c[i]) * k[static_cast<std::size_t>(i)];
+                    tmp[row + x] = acc;
                 }
-                tmp[row + x] = acc;
-            };
-            for (std::uint32_t x = 0; x < xLo; ++x) edge(x);
-            for (std::uint32_t x = xLo; x < xHi; ++x) {
-                const float* c = plane.data() + row + x;
-                float acc = *c * k[0];
-                for (int i = 1; i <= half; ++i)
-                    acc += (c[-i] + c[i]) * k[static_cast<std::size_t>(i)];
-                tmp[row + x] = acc;
+                for (std::uint32_t x = std::max(xHi, xLo); x < W; ++x)
+                    edge(x);
             }
-            for (std::uint32_t x = std::max(xHi, xLo); x < W; ++x) edge(x);
-        }
-    }); }
+        });
+    }
     MOSAIC_PERF_SCOPE("FX gaussian plane (vert)", mosaic::common::Lane::Cpu);
     // ⚠ STRIP-MINED, and the strip is the whole optimisation. The vertical pass gathers 2*half+1
     // taps that are W floats apart -- 20 KB at this document's width -- so walking a full row at a
@@ -205,7 +209,7 @@ void gaussianPlane(std::vector<float>& plane, std::uint32_t W, std::uint32_t H, 
     // Byte-identical: each output texel still sums the same taps, in the same order, with the same
     // weights. Only the ORDER IN WHICH OUTPUTS ARE VISITED changes, and they are independent.
     constexpr std::uint32_t kStrip = 256;
-    parallelFor(H, 64, [&](std::size_t row0, std::size_t row1) {  // vertical
+    parallelFor(H, 64, [&](std::size_t row0, std::size_t row1) { // vertical
         for (std::uint32_t xs = 0; xs < W; xs += kStrip) {
             const std::uint32_t xe = std::min(W, xs + kStrip);
             const std::uint32_t yLo = std::min<std::uint32_t>(static_cast<std::uint32_t>(half), H);
