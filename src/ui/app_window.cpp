@@ -98,11 +98,12 @@
 
 #  include <FL/platform.H> // fl_open_callback: Finder's "open documents" Apple Event
 #endif
+#include "ui/icon_pack.hpp"
 #include "ui/menu_visibility.hpp"
 #include "ui/motivation_ticker.hpp"
 #include "ui/new_document_dialog.hpp"
 #include "ui/popover.hpp"
-#include "ui/red_eye_gesture.hpp" // the S38-b eye tool's pure gesture math (scope + params)
+#include "ui/red_eye_gesture.hpp"    // the S38-b eye tool's pure gesture math (scope + params)
 #include "ui/resident_composite.hpp" // S60-a item 13: the device-resident composite lane (opt-in)
 #include "ui/right_dock.hpp" // the dock container: Layers|History above the Brush presets (§8.2)
 #include "ui/ruler.hpp"      // the canvas rulers (View -> Rulers): top/left gutter strips (px)
@@ -114,7 +115,6 @@
 #include "ui/status_bar.hpp"
 #include "ui/tab_strip.hpp"
 #include "ui/theme.hpp"
-#include "ui/icon_pack.hpp"
 #include "ui/tool.hpp"
 #include "ui/tool_flyout.hpp"
 #include "ui/tool_options.hpp"
@@ -122,7 +122,8 @@
 #include "ui/type3d_panel.hpp" // the 3D popup (S30-d §8.4)
 #include "ui/type_panel.hpp"
 #include "ui/vulkan_canvas.hpp"
-#include "ui/widgets.hpp" // Dropdown, and the shared widget toolkit
+#include "ui/widgets.hpp"      // Dropdown, and the shared widget toolkit
+#include "ui/window_hints.hpp" // applyToplevelHints -- Wayland icon + dialog hints, after show()
 
 #include <FL/Fl.H>
 #include <FL/Fl_Copy_Surface.H>
@@ -137,12 +138,12 @@
 #include <algorithm>
 #include <assets/app_icon_svg.hpp> // generated: mosaic::assets::app_icon_svg[]
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
-#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -1327,6 +1328,7 @@ public:
                                                 s.eraserPresetFollowsBrush);
             ui::centerWindowOver(*m_brushEditorDialog, this);
             m_brushEditorDialog->show();
+            applyToplevelHints(m_brushEditorDialog.get()); // Wayland icon + dialog hint (S59-a)
         });
         // A History-tab jump (S16-b) is a multi-undo/redo: re-sync everything once, exactly
         // like the Edit-menu undo path. The history LIST itself refreshes via the command
@@ -2616,6 +2618,11 @@ public:
             this, [this] { return anySessionDirty(); },
             [this] { syncJournalsForSessionEnd(); },
             _("Mosaic has unsaved changes. They will be offered back the next time you open it."));
+        // The compositor's side of the same "after show()" story: on Wayland a client must hand
+        // over its icon through xdg-toplevel-icon-v1, because there is no _NET_WM_ICON and the
+        // Fl_Window::icon() set in the constructor reaches nothing on that backend (S59-a). A
+        // no-op on X11, macOS and Windows -- see ui/window_hints.hpp.
+        applyToplevelHints(this);
         // --profile / MOSAIC_PROFILE=1 asked for measurement, so give it a face: open the Timing
         // Profiler straight away rather than making the user find a menu item (S60-alpha). It is
         // non-modal and hides with the main window, so it never keeps Fl::run() alive on quit.
@@ -6755,6 +6762,7 @@ public:
         m_settingsDialog->position(x() + (w() - m_settingsDialog->w()) / 2,
                                    y() + (h() - m_settingsDialog->h()) / 2);
         m_settingsDialog->show();
+        applyToplevelHints(m_settingsDialog.get()); // Wayland icon + dialog hint (S59-a)
     }
 
     // Edit→Fill… (S39): a transactional modal that fills the current selection (whole active layer
@@ -6796,6 +6804,7 @@ public:
         m_fillDialog->position(x() + (w() - m_fillDialog->w()) / 2,
                                y() + (h() - m_fillDialog->h()) / 2);
         m_fillDialog->show();
+        applyToplevelHints(m_fillDialog.get()); // Wayland icon + dialog hint (S59-a)
     }
 
     // Layer ▸ Layer Effects… (LE-b): open the transactional effects modal for the active layer. The
@@ -6853,6 +6862,7 @@ public:
         m_layerEffectsDialog->position(x() + (w() - m_layerEffectsDialog->w()) / 2,
                                        y() + (h() - m_layerEffectsDialog->h()) / 2);
         m_layerEffectsDialog->show();
+        applyToplevelHints(m_layerEffectsDialog.get()); // Wayland icon + dialog hint (S59-a)
     }
 
     // Filter ▸ Adjustments ▸ … (S32): insert a non-destructive adjustment layer ABOVE the active
@@ -7202,6 +7212,7 @@ public:
         if (m_timingGraph == nullptr)
             m_timingGraph = std::make_unique<TimingGraphWindow>();
         m_timingGraph->show();
+        applyToplevelHints(m_timingGraph.get()); // Wayland icon + dialog hint (S59-a)
     }
 
     // Layer ▸ Texture Generator… (S55-f): the transactional generator modal. Create mode inserts a
@@ -7339,6 +7350,7 @@ public:
         m_textureGenDialog->position(x() + (w() - m_textureGenDialog->w()) / 2,
                                      y() + (h() - m_textureGenDialog->h()) / 2);
         m_textureGenDialog->show();
+        applyToplevelHints(m_textureGenDialog.get()); // Wayland icon + dialog hint (S59-a)
     }
 
     // Capture the current fill target for the dialog: the layer-local region a solid fill will

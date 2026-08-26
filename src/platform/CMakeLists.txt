@@ -12,7 +12,8 @@ if(APPLE)
         system_theme_macos.mm
         system_theme_watch_macos.mm
         display_refresh_macos.mm
-        session_end_stub.cpp)   # no applicationShouldTerminate: hook yet -- see the stub's own note
+        session_end_stub.cpp    # no applicationShouldTerminate: hook yet -- see the stub's own note
+        wayland_integration_stub.cpp)  # no Wayland here; FLTK's own icon() drives the dock icon
 elseif(WIN32)
     # Windows (S57): FLTK is its native Win32/GDI backend, so there are no X11/Wayland accessors to
     # compile. The Vulkan surface is fed an HINSTANCE + HWND by native_window_win32.cpp; the picker
@@ -31,12 +32,16 @@ elseif(WIN32)
         session_end_win32.cpp
         system_theme_win32.cpp
         system_theme_watch_win32.cpp
-        tablet_win32.cpp)
+        tablet_win32.cpp
+        wayland_integration_stub.cpp)  # no Wayland here; FLTK's own icon() drives the window icon
 else()
     set(_platform_os_sources
         native_window.cpp
         wayland_subsurface.cpp
         wayland_foreign.cpp
+        wayland_toplevel.cpp        # the weak-symbol xdg_toplevel accessor the two below need
+        wayland_toplevel_icon.cpp   # xdg-toplevel-icon-v1: a window icon Wayland otherwise has no
+        wayland_dialog.cpp          # xdg-dialog-v1: "this is a modal dialog" (S59-a)
         display_refresh.cpp
         file_dialog.cpp
         session_end_stub.cpp   # Wayland has no session-end protocol; X11's is XSMP (stub's note)
@@ -186,6 +191,27 @@ else()
         "${WL_PROTO_DIR}/unstable/tablet/tablet-unstable-v2.xml"
         "${WL_PROTO_DIR}/staging/cursor-shape/cursor-shape-v1.xml"
         "${WL_PROTO_DIR}/unstable/xdg-foreign/xdg-foreign-unstable-v2.xml")
+
+    # Two more, taken from the VENDORED copies in third_party/wayland-protocols rather than from the
+    # system's wayland-protocols, and deliberately so:
+    #
+    #   xdg-toplevel-icon-v1  a window icon supplied as PIXELS. Wayland has no _NET_WM_ICON, so
+    #                         without this a client cannot give the compositor an icon at all --
+    #                         the icon can only come from an INSTALLED .desktop, which is why an
+    #                         AppImage shows a generic placeholder (wayland_toplevel_icon.cpp).
+    #   xdg-dialog-v1         "this toplevel is a modal dialog", so the compositor can dim the
+    #                         parent and keep it from raising above (wayland_dialog.cpp).
+    #
+    # ⚠ WHY VENDORED. The AppImage is built on Ubuntu 24.04 -- chosen deliberately, because an
+    # AppImage's glibc floor is its build host's (see packaging/linux/make-appimage.sh) -- and 24.04
+    # ships wayland-protocols 1.34, while xdg-toplevel-icon-v1 landed in 1.36. Sourcing these from
+    # the system would silently drop the icon on exactly the artifact that needs it most. Vendoring
+    # also pins the protocol VERSION the stubs are generated against, so every platform speaks the
+    # same wire format regardless of what the build host happens to carry.
+    list(APPEND _wl_protos
+        "${CMAKE_SOURCE_DIR}/third_party/wayland-protocols/xdg-toplevel-icon-v1.xml"
+        "${CMAKE_SOURCE_DIR}/third_party/wayland-protocols/xdg-dialog-v1.xml")
+
     foreach(_proto IN LISTS _wl_protos)
         if(NOT EXISTS "${_proto}")
             message(FATAL_ERROR "missing wayland protocol XML: ${_proto}")

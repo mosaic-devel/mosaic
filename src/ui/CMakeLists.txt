@@ -56,6 +56,7 @@ mosaic_add_module(ui
         menu_bar.cpp
         ${MOSAIC_UI_SYS_MENU_SOURCE}
         menu_visibility.cpp
+        window_hints.cpp   # Wayland xdg-shell hints applied right after a toplevel's show()
         motivational_lines.cpp
         motivation_ticker.cpp
         layer_panel.cpp

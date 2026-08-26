@@ -247,22 +247,91 @@ the **scalable** hicolor icons — so the chain is complete as soon as the app i
 from the build tree, with no `.desktop` in the search path, still shows a generic icon: that is
 expected and is a packaging (S59) matter, not a bug.
 
+### 3.1 The icon an AppImage cannot get that way *(2026-08-26)*
+
+The chain above has a floor: **it requires the app to be installed.** A shipped AppImage never is,
+and v0.3.1 duly showed a generic placeholder in the Wayland taskbar and titlebar while looking
+perfectly correct on X11. That asymmetry is the whole story:
+
+- **X11 carries the icon in the client.** `Fl_Window::icon()` becomes `_NET_WM_ICON` — literal
+  pixels on the window — so a binary run from anywhere shows its icon with nothing installed.
+- **Wayland has no equivalent.** There is no `_NET_WM_ICON`, and FLTK's Wayland driver implements
+  no `icons()` override at all, so the `Fl_Window::icon()` / `default_icon()` pair that
+  `app_window.cpp` sets before `show()` is a **silent no-op** on this backend. The only route left
+  is `app_id` → installed `.desktop` → `Icon=`, which is exactly the route an AppImage cannot take.
+
+`xdg-toplevel-icon-v1` is the protocol that gives the pixels back, and `src/platform/
+wayland_toplevel_icon.cpp` speaks it: one icon object, `set_name("mosaic")` for compositors that can
+resolve the theme name plus real ARGB8888 buffers in a sealed `memfd` pool for those that cannot,
+built once and reused for every toplevel (`ui::applyToplevelHints`, called right after each
+`show()`). Sizes come from the compositor's own `icon_size` events when it sends any.
+
+**Coverage is partial and that is upstream's doing, not ours.** KWin implements the protocol;
+**Mutter does not yet** ([GNOME/mutter#4100][m4100]), so GNOME sessions fall through to the
+`.desktop` chain and an uninstalled AppImage still shows a placeholder there. Nothing in this repo
+can change that; when Mutter lands it, Mosaic gains GNOME for free.
+
 Still open, all packaging-side: PNG raster icon sizes (some environments do not rasterize SVG),
-an AppStream `metainfo.xml`, and a reverse-DNS application id.
+an AppStream `metainfo.xml`, and a reverse-DNS application id. For **packagers** — and for anyone
+who wants an AppImage to behave like an installed app — `packaging/linux/desktop-entry/` holds a
+ready-made `.desktop` + icon install, which is the only thing that also gives a launcher entry,
+MIME associations and task-manager grouping.
+
+[m4100]: https://gitlab.gnome.org/GNOME/mutter/-/issues/4100
 
 ## 4. Deliberately not done
 
-- **`xdg_dialog_v1`** (modal dim / prevent-raise for the Settings dialog). `get_xdg_dialog()` needs
-  the dialog's `xdg_toplevel`, and FLTK 1.4.5's public `FL/wayland.H` exposes only
-  display / xid / surface / compositor / buffer_scale. The toplevel lives in FLTK's **private**
-  `struct wld_window`, and because the dialog is decorated it is actually owned by libdecor. The
-  protocol XML and `libdecor-0` are both present and `src/platform/CMakeLists.txt` already shows the
-  `wayland-scanner` codegen pattern, so *only* the toplevel access is missing — but the only route
-  is hand-declaring a private struct whose layout is version- and build-config-dependent, against a
-  `libfltk.a` we link from the distro. **Parked until FLTK exposes the toplevel** (or we upstream an
-  accessor). Cosmetic: the dialog is already genuinely modal, it just does not dim its parent.
+- ~~**`xdg_dialog_v1`**~~ — **DONE 2026-08-26**, together with `xdg-toplevel-icon-v1` (§3.1) and
+  for the same reason: both needed the window's `xdg_toplevel`, and both got it the same way. See
+  §4.1 below for how, and `src/platform/wayland_dialog.cpp` for the result. Still cosmetic — the
+  dialogs were always genuinely modal, they just did not dim their parent.
 - **Deriving `NativeSurfaceHandle::scale` on X11.** See `docs/vulkan.md`; it would turn on every
   HiDPI path for X11 users in one untested step.
+
+### 4.1 How the toplevel was reached, and why not the other ways *(2026-08-26)*
+
+FLTK 1.4.5's public `FL/wayland.H` exposes display / xid / surface / compositor / buffer_scale / gc
+/ glcontext and stops — no `xdg_toplevel`. That one gap blocked *both* protocols above, and
+1.4.5 is still the newest release (Apr 2026) with master unchanged, so waiting was not a plan.
+Three routes existed; the third is the one taken.
+
+- **Hand-declare FLTK's private `struct wld_window`** and read the frame out of it. Rejected. The
+  layout is version- *and* build-config-dependent, and `find_package(FLTK CONFIG)` means we link
+  whatever the distro built. Reading the wrong union member is a wild pointer, not a failed feature.
+- **Interpose `libdecor_decorate`** — define the symbol ourselves, recover the real one via
+  `dlsym(RTLD_NEXT)`, keep a `wl_surface → libdecor_frame` map, then use the *public*
+  `libdecor_frame_get_xdg_toplevel()`. Genuinely layout-free, and still rejected: **FLTK vendors
+  libdecor** (`CMake/options.cmake` falls back to the bundled copy whenever system libdecor is
+  < 0.2.0 or its plugin dir is missing), and in that configuration the symbol is inside
+  `libfltk.a` — our definition either collides at link time or `RTLD_NEXT` finds nothing. Which of
+  the two happens depends on how the distro built FLTK, which is not a thing to ship.
+- **Patch FLTK to expose it** — `packaging/linux/patches/fltk-1.4.5-wayland-toplevel-accessor.patch`.
+  FLTK **already computes this**: `Fl_Wayland_Window_Driver::xdg_toplevel()` handles the decorated
+  (libdecor-owned) and undecorated cases and answers NULL for sub-windows, menus and tooltips. It is
+  simply a member of a class in a private header. The patch adds the free function that exposes it
+  and nothing else — no new logic, no behaviour change — which is why it is written to be
+  upstreamable and dropped again.
+
+**This does not overturn §2.5.** That section's constraint — "on Linux we cannot patch FLTK,
+because `find_package(FLTK CONFIG)` links the distro's own `libfltk.a`, and changing that means
+vendoring FLTK into the Linux build" — still holds, and nothing here changes it. The patch is
+applied **only** where a from-source FLTK already existed: the release AppImage job, which has
+built FLTK 1.4.5 itself since day one because Ubuntu 24.04 ships 1.3.8. Local builds, distro
+builds and CI still link the distro's unpatched `libfltk.a`, exactly as before. §2.5 also said the
+call belonged to the user rather than to a bug session; it was theirs, on 2026-08-26.
+
+**A patched FLTK is not required to build Mosaic.** The accessor is referenced through a **weak
+symbol** (`src/platform/wayland_toplevel.hpp`): an unpatched FLTK resolves it to null, the two
+backends report themselves unavailable at runtime, and nothing fails to compile or link. That is
+deliberate and load-bearing for CI, which builds against Arch's stock `fltk` package — every line
+of both backends is still compiled and `-Werror`'d there; only the final request is inert. The
+release AppImage, which builds FLTK from source, gets the patch and the feature.
+
+The one ELF subtlety worth knowing: a weak *undefined* reference does not by itself pull a member
+out of a static archive. It resolves only because the object defining it —
+`Fl_Wayland_Window_Driver.cxx.o` — is already linked in for the window driver itself. If that ever
+stopped being true the accessor would read null on a patched build, i.e. fail toward "feature off"
+rather than toward breakage.
 
 ## 5. The keyboard is not a state machine you can infer
 

@@ -1,0 +1,56 @@
+Expose a shown window's xdg_toplevel through FL/wayland.H.
+
+Every xdg-shell EXTENSION protocol addresses a window by its xdg_toplevel:
+xdg_toplevel_icon_manager_v1.set_icon(toplevel, icon) and
+xdg_wm_dialog_v1.get_xdg_dialog(toplevel) both take one. FLTK's public Wayland header exposes
+display / xid / surface / compositor / buffer_scale / gc / glcontext and stops there, so a client
+cannot reach either protocol -- which on Wayland means it cannot set a window icon at all, since
+Wayland has no _NET_WM_ICON equivalent and FLTK's Wayland driver implements no icons() override.
+
+FLTK ALREADY COMPUTES THIS. Fl_Wayland_Window_Driver::xdg_toplevel() (Fl_Wayland_Window_Driver.cxx)
+handles both cases -- a DECORATED window's toplevel belongs to libdecor and comes from
+libdecor_frame_get_xdg_toplevel(), an UNFRAMED one is stored directly -- and answers NULL for
+sub-windows, menus and tooltips. It is a member of a class declared in a PRIVATE header, so the
+only thing missing is a free function in FL/wayland.H. That is all this patch adds; it introduces
+no new logic and changes no existing behaviour.
+
+The alternative, for a client, is hand-declaring FLTK's private `struct wld_window` to read the
+frame out of it -- a layout that is version- and build-config-dependent, against a libfltk the
+distro built. Reading a union member through a wrong layout is a wild pointer, so that route is
+not one a shipped application should take.
+
+Written against FLTK 1.4.5, not yet sent upstream; drop this patch once it lands there.
+Mosaic detects the accessor with a WEAK SYMBOL rather than a build flag, so an unpatched FLTK
+still links and simply reports the feature absent at runtime (src/platform/wayland_toplevel.hpp).
+
+--- a/FL/wayland.H
++++ b/FL/wayland.H
+@@ -32,6 +32,12 @@
+ extern FL_EXPORT struct wl_surface *fl_wl_surface(struct wld_window *xid);
+ /** Returns a platform-specific reference associated to a shown window */
+ extern FL_EXPORT struct wld_window *fl_wl_xid(const Fl_Window *win);
++/** Returns the xdg_toplevel of a shown, top-level window, or NULL.
++ A window has an xdg_toplevel only when it is a decorated or an undecorated top-level
++ window: sub-windows, menu windows and tooltips answer NULL. Use this to address the
++ window with an xdg-shell extension protocol, e.g. xdg-toplevel-icon-v1 or xdg-dialog-v1.
++ */
++extern FL_EXPORT struct xdg_toplevel *fl_wl_toplevel(struct wld_window *xid);
+ /** Returns the Fl_Window corresponding to a given the platform-specific window reference */
+ extern FL_EXPORT Fl_Window *fl_wl_find(struct wld_window *);
+ /** Returns the cairo context associated to the current window or Fl_Image_Surface */
+--- a/src/drivers/Wayland/Fl_Wayland_Window_Driver.cxx
++++ b/src/drivers/Wayland/Fl_Wayland_Window_Driver.cxx
+@@ -2144,6 +2144,13 @@
+ }
+ 
+ 
++struct xdg_toplevel *fl_wl_toplevel(struct wld_window *xid) {
++  Fl_Window *win = fl_wl_find(xid);
++  if (!win) return NULL;
++  return Fl_Wayland_Window_Driver::driver(win)->xdg_toplevel();
++}
++
++
+ struct wl_compositor *fl_wl_compositor() {
+   Fl_Wayland_Screen_Driver *screen_driver = (Fl_Wayland_Screen_Driver*)Fl::screen_driver();
+   return screen_driver->wl_compositor;

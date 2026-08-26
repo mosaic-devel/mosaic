@@ -173,7 +173,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: /opt/mosaic-deps
-          key: linux-deps-${{ matrix.arch }}-ubuntu24.04-fltk1.4.5-jt3.0.4-jxl0.11.2-vkh1.4.350.1-v1
+          key: linux-deps-${{ matrix.arch }}-ubuntu24.04-fltk1.4.5-jt3.0.4-jxl0.11.2-vkh1.4.350.1-v2
 
       - name: Build from-source dependencies
         if: steps.deps-cache.outputs.cache-hit != 'true'
@@ -198,6 +198,25 @@ jobs:
           curl -fL --retry 3 -o fltk.tar.gz \
             https://github.com/fltk/fltk/releases/download/release-1.4.5/fltk-1.4.5-source.tar.gz
           tar xf fltk.tar.gz
+          # Expose a shown window's xdg_toplevel through FL/wayland.H. Without it Mosaic cannot
+          # speak xdg-toplevel-icon-v1, and a Wayland session has NO other way to give an
+          # uninstalled binary -- an AppImage -- a window icon (see the patch header, and
+          # docs/wayland.md §3). A patch that does not apply is FATAL: silently dropping it would
+          # ship the bug back, and the AppImage would look correct everywhere except where it counts.
+          #
+          # ⚠ The already-applied check runs FIRST, and -F0 forbids fuzzy context matching. The
+          # obvious order -- try --forward, fall back to a reverse dry-run -- is not idempotent
+          # here: on an already-patched tree --forward rejects the header hunk but re-applies the
+          # .cxx one at a fuzzy offset, leaving the function defined TWICE and FLTK failing to
+          # compile. That is only reachable when the source tree survives between runs, which the
+          # cache restore above can arrange, so it is guarded rather than assumed away.
+          FLTK_PATCH="$GITHUB_WORKSPACE/packaging/linux/patches/fltk-1.4.5-wayland-toplevel-accessor.patch"
+          if patch -p1 -d fltk-1.4.5 --dry-run --reverse --silent -F0 <"$FLTK_PATCH" >/dev/null 2>&1; then
+            echo "FLTK Wayland toplevel patch: already applied"
+          else
+            patch -p1 -d fltk-1.4.5 --forward -F0 <"$FLTK_PATCH" \
+              || { echo "FLTK Wayland toplevel patch did not apply" >&2; exit 1; }
+          fi
           cmake -S fltk-1.4.5 -B b-fltk -G Ninja \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$P" \
             -DFLTK_BUILD_TEST=OFF -DFLTK_BUILD_EXAMPLES=OFF -DFLTK_BUILD_FLUID=OFF \
@@ -241,7 +260,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: /opt/mosaic-deps
-          key: linux-deps-${{ matrix.arch }}-ubuntu24.04-fltk1.4.5-jt3.0.4-jxl0.11.2-vkh1.4.350.1-v1
+          key: linux-deps-${{ matrix.arch }}-ubuntu24.04-fltk1.4.5-jt3.0.4-jxl0.11.2-vkh1.4.350.1-v2
 
       - name: Build AppImage
         env:
