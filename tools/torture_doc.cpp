@@ -478,28 +478,40 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
     }
 
     // ---- 2. the grade: adjustment layers, two of them SPATIAL -----------------------------------
+    //
+    // ⚠ AT THE ROOT, NOT IN A GROUP, and that is load-bearing rather than tidy. Mosaic's groups are
+    // ISOLATED: renderLayerRaw composites a group's children into a fresh transparent buffer, and an
+    // adjustment grades the accumulator it sits in. So an adjustment inside a group grades that
+    // group's content and nothing below the group -- and a group holding ONLY adjustments has an
+    // empty accumulator (GroupLayer::contentBounds unions its children's, and AdjustmentLayer has
+    // none), so it grades nothing at all and renders transparent.
+    //
+    // That is correct in this model, but it made the first version of this fixture quietly INERT:
+    // six adjustment layers in a "Grade" folder that never touched a pixel, while the profiler's
+    // adjustment rows were really measuring the layer panel's thumbnail previews. A performance
+    // fixture whose most expensive layers do nothing teaches the wrong lesson.
     {
-        Stage s("grade group (adjustments)");
-        auto grade = doc->makeGroup("Grade");
+        Stage s("grade (adjustments over the photograph)");
+        core::GroupLayer& grade = doc->root();
 
         auto lift = doc->makeAdjustment("Levels", core::AdjustmentKind::Levels);
         lift->params() = {{"inBlack", 6.0}, {"inWhite", 246.0}, {"gamma", 1.12},
                           {"outBlack", 4.0}, {"outWhite", 252.0}};
-        grade->addOnTop(std::move(lift));
+        grade.addOnTop(std::move(lift));
 
         auto curves = doc->makeAdjustment("Curves", core::AdjustmentKind::Curves);
         curves->params() = {{"shadows", -0.06}, {"midtones", 0.08}, {"highlights", 0.04}};
-        grade->addOnTop(std::move(curves));
+        grade.addOnTop(std::move(curves));
 
         auto hsl = doc->makeAdjustment("Hue/Saturation", core::AdjustmentKind::HueSaturation);
         hsl->params() = {{"hue", -6.0}, {"saturation", 14.0}, {"lightness", -3.0}};
-        grade->addOnTop(std::move(hsl));
+        grade.addOnTop(std::move(hsl));
 
         // SPATIAL: reads the backdrop's neighbourhood over the whole canvas.
         auto sh = doc->makeAdjustment("Shadows/Highlights", core::AdjustmentKind::ShadowsHighlights);
         sh->params() = {{"shadowAmount", 38.0}, {"shadowRadius", 180.0},
                         {"highlightAmount", 24.0}, {"highlightRadius", 140.0}};
-        grade->addOnTop(std::move(sh));
+        grade.addOnTop(std::move(sh));
 
         // SPATIAL, masked: a large-radius blur confined to a soft ellipse -- the region machinery
         // has to grow the read extent by the blur's reach and then fold the mask.
@@ -508,13 +520,12 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
         blur->setMask(radialMask(static_cast<std::uint32_t>(W / 8),
                                  static_cast<std::uint32_t>(H / 8), 0.5, 0.34, 0.62));
         blur->setOpacity(0.85f);
-        grade->addOnTop(std::move(blur));
+        grade.addOnTop(std::move(blur));
 
         auto vib = doc->makeAdjustment("Vibrance", core::AdjustmentKind::Vibrance);
         vib->params() = {{"vibrance", 26.0}, {"saturation", -4.0}};
-        grade->addOnTop(std::move(vib));
+        grade.addOnTop(std::move(vib));
 
-        doc->root().addOnTop(std::move(grade));
     }
 
     // ---- 3. texture: full-canvas raster passes with blend modes and masks ----------------------
