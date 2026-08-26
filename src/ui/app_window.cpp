@@ -12503,8 +12503,16 @@ private:
             }
         };
         walk(m_document->root(), walk);
+        // REQUEST, don't composite. This hook runs AFTER the frame's recomposite drain, so an
+        // immediate recompositeNow() here is a SECOND full-canvas walk in the same frame -- and
+        // updateReflectionEnv() below did the same thing, so opening a document with both a
+        // path-fitted text layer and a reflecting 3D solid cost THREE full composites where the
+        // drain had already done one. Requesting instead lets the two collapse into a single
+        // coalesced composite on the next frame, which is how every other edit path in this file
+        // already behaves (requestRecomposite has a dozen callers). The cost is one frame of
+        // latency on a re-flow that only happens when the path actually moved.
         if (any)
-            recompositeNow(false);
+            requestRecomposite(/*fitView=*/false);
     }
 
     void updateReflectionEnv() {
@@ -12542,8 +12550,14 @@ private:
         // Only a real rebuild is worth a profiler row. Scoping the whole function reported "61
         // calls" of doing nothing, which buries the one case that costs something -- the readback
         // audit's finding that a rebuild pays TWO full composites in the same frame.
+        //
+        // The row now times the ENV BUILD (the refreshLayerReflection walk above, whose own
+        // below-composites carry the "Drag below-composite" row) rather than the env build PLUS a
+        // full canvas walk: this used to call recompositeNow() directly, which -- because this hook
+        // runs after the frame's drain -- was an extra uncoalesced full composite. Its COUNT is
+        // still the signal it was added for: how many frames actually rebuilt a mirror.
         MOSAIC_PERF_SCOPE("3D reflect env rebuild", Lane::Cpu);
-        recompositeNow(false);
+        requestRecomposite(/*fitView=*/false);
     }
     // Returns true when the layer's snapshot (or its removal) changed something on screen.
     bool refreshLayerReflection(core::TextLayer& tl) {
