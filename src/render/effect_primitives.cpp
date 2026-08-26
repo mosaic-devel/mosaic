@@ -48,13 +48,30 @@ namespace {
 // and writing `dst`, both indexed base + i*stride. `kernel` is the half-kernel [0..r] with the
 // centre at index 0 (symmetric), already normalised so k[0] + 2*sum(k[1..r]) == 1.
 void gaussPass(const float* src, float* dst, int len, int stride, const float* kernel, int r) {
-    for (int i = 0; i < len; ++i) {
+    // ⚠ BORDER / INTERIOR SPLIT. reflect() is a WHILE LOOP, and the single loop called it twice per
+    // tap -- so a 43-tap blur of an effect ROI paid ~86 loop-guarded branches per texel to serve
+    // the `r` texels at each end that actually need mirroring. In the interior reflect(i±k) is
+    // exactly i±k, so the split is the identity: same taps, same weights, same order.
+    const int lo = std::min(r, len);
+    const int hi = len > r ? len - r : lo;
+    const auto edge = [&](int i) {
         float acc = src[i * stride] * kernel[0];
-        for (int k = 1; k <= r; ++k) {
-            acc += (src[reflect(i - k, len) * stride] + src[reflect(i + k, len) * stride]) * kernel[k];
-        }
+        for (int k = 1; k <= r; ++k)
+            acc += (src[reflect(i - k, len) * stride] + src[reflect(i + k, len) * stride]) *
+                   kernel[k];
+        dst[i * stride] = acc;
+    };
+    for (int i = 0; i < lo; ++i) edge(i);
+    for (int i = lo; i < hi; ++i) {
+        const float* c = src + static_cast<std::ptrdiff_t>(i) * stride;
+        float acc = *c * kernel[0];
+        for (int k = 1; k <= r; ++k)
+            acc += (c[-static_cast<std::ptrdiff_t>(k) * stride] +
+                    c[static_cast<std::ptrdiff_t>(k) * stride]) *
+                   kernel[k];
         dst[i * stride] = acc;
     }
+    for (int i = std::max(hi, lo); i < len; ++i) edge(i);
 }
 
 }  // namespace
