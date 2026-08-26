@@ -90,13 +90,16 @@ void rasteriseLayerInto(ImageF& dst, const SrcImage& src, const core::RasterMask
     dst.width = w;
     dst.height = h;
     const std::size_t n = static_cast<std::size_t>(w) * h * 4;
-    if (dst.rgba.size() == n) {
-        parallelFor(n, std::size_t{1} << 18, [&](std::size_t i0, std::size_t i1) {
-            std::fill(dst.rgba.begin() + static_cast<std::ptrdiff_t>(i0),
-                      dst.rgba.begin() + static_cast<std::ptrdiff_t>(i1), 0.0f);
-        });
-    } else {
-        dst.rgba.assign(n, 0.0f);
+    {
+        MOSAIC_PERF_SCOPE("Layer buffer clear", common::Lane::Cpu);
+        if (dst.rgba.size() == n) {
+            parallelFor(n, std::size_t{1} << 18, [&](std::size_t i0, std::size_t i1) {
+                std::fill(dst.rgba.begin() + static_cast<std::ptrdiff_t>(i0),
+                          dst.rgba.begin() + static_cast<std::ptrdiff_t>(i1), 0.0f);
+            });
+        } else {
+            dst.rgba.assign(n, 0.0f);
+        }
     }
     if (src.empty()) return;
     if (mask != nullptr && (mask->empty() || !mask->enabled)) mask = nullptr;
@@ -172,11 +175,31 @@ void rasteriseLayerInto(ImageF& dst, const SrcImage& src, const core::RasterMask
         resampleInto(dst, w, h, inv, filter, fetch, src.width, src.height);
         return;
     }
-    parallelFor(h, 64, [&](std::size_t row0, std::size_t row1) {
-        for (std::uint32_t y = static_cast<std::uint32_t>(row0); y < row1; ++y) {
-            common::Vec2 p = inv.apply({0.5, y + 0.5});
-            std::size_t dp = static_cast<std::size_t>(y) * w * 4;
-            for (std::uint32_t x = 0; x < w; ++x, p.x += inv.m00, p.y += inv.m10, dp += 4) {
+    // The destination window the source can actually reach. Without it this walks the WHOLE
+    // buffer -- inverse-mapping and bounds-testing every one of a canvas's texels to emit the few
+    // thousand a small layer covers. That is the same defect resample.hpp's convolveInto carried,
+    // in its sibling branch: this is the NEAREST path, so the clip is exact rather than dilated by
+    // a kernel radius (one texel of slack for the floor()).
+    const common::Rect srcRect{-1.0, -1.0, static_cast<double>(src.width) + 2.0,
+                               static_cast<double>(src.height) + 2.0};
+    const common::Rect d = t.mapBounds(srcRect);
+    const auto clampU = [](double v, std::uint32_t hi) {
+        return v <= 0.0 ? std::uint32_t{0}
+                        : static_cast<std::uint32_t>(std::min<double>(v, hi));
+    };
+    const std::uint32_t dx0 = clampU(std::floor(d.x), w);
+    const std::uint32_t dx1 = clampU(std::ceil(d.right()), w);
+    const std::uint32_t dy0 = clampU(std::floor(d.y), h);
+    const std::uint32_t dy1 = clampU(std::ceil(d.bottom()), h);
+    if (dx1 <= dx0 || dy1 <= dy0)
+        return; // the source projects entirely off the destination
+    parallelFor(dy1 - dy0, 64, [&](std::size_t band0, std::size_t band1) {
+        for (std::uint32_t y = dy0 + static_cast<std::uint32_t>(band0),
+                           yEnd = dy0 + static_cast<std::uint32_t>(band1);
+             y < yEnd; ++y) {
+            common::Vec2 p = inv.apply({dx0 + 0.5, y + 0.5});
+            std::size_t dp = (static_cast<std::size_t>(y) * w + dx0) * 4;
+            for (std::uint32_t x = dx0; x < dx1; ++x, p.x += inv.m00, p.y += inv.m10, dp += 4) {
                 const long sx = static_cast<long>(std::floor(p.x));
                 const long sy = static_cast<long>(std::floor(p.y));
                 if (sx >= 0 && sy >= 0 && sx < static_cast<long>(src.width) &&
