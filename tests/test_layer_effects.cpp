@@ -1,10 +1,3 @@
-#include <doctest/doctest.h>
-
-#include <cstddef>
-#include <cstdint>
-#include <numeric>
-#include <vector>
-
 #include "common/image.hpp"
 #include "core/commands.hpp"
 #include "core/document.hpp"
@@ -17,6 +10,13 @@
 #include "render/compositor.hpp"
 #include "render/effect_primitives.hpp"
 #include "render/layer_effects_render.hpp"
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <doctest/doctest.h>
+#include <numeric>
+#include <vector>
 
 using namespace mosaic;
 
@@ -228,6 +228,76 @@ TEST_CASE("an outside stroke paints a ring beyond the layer edge, interior intac
     CHECK(px(out, 32, 32) == common::Color8{0, 0, 255, 255});  // interior unchanged
     CHECK(px(out, 18, 32) == common::Color8{255, 0, 0, 255});  // 2 px outside the left edge -> red
     CHECK(px(out, 15, 32).a == 0);                             // 5 px out -> beyond the band
+}
+
+TEST_CASE("bevel and stroke share ONE 3x field, and both still draw their own tier") {
+    // The bevel and the stroke pass each used to build `signedDistanceFieldAA(alpha, rw, rh, 3)`
+    // for themselves. It is a pure function of arguments neither of them changes, and it is the
+    // most expensive single thing in the stack -- 3x supersampling is 9x the texels and
+    // signedDistanceField runs TWO exact Euclidean transforms over them -- so a layer carrying
+    // both, which is what a styled headline is, paid for it twice. It is now built once, lazily.
+    //
+    // What that could break is one tier being handed a field the other has finished with, so the
+    // test asserts BOTH tiers still land: the stroke ring outside the square, the bevel's
+    // light/dark shading inside it, and the untouched interior between them. A share that handed
+    // the strokes an empty field would leave the ring transparent; one that handed the bevel a
+    // stale field would leave the shading flat.
+    //
+    // ⚠ Mutation is a COMPILE error, not a test: applyBevel takes the field by const reference.
+    core::Document doc(64, 64);
+    auto layer = doc.makeRaster("r");
+    fillSquare(*layer, 20, 20, 24, {0, 0, 255, 255}); // square x,y in [20,44)
+    core::RasterLayer& r = *layer;
+    doc.root().addOnTop(std::move(layer));
+
+    // Stroke only -- the reference for the ring.
+    core::LayerEffects strokeOnly;
+    strokeOnly.strokes.push_back(
+        solidStroke(4.0f, core::StrokeEffect::Align::Outside, {1, 0, 0, 1}));
+    r.setEffects(strokeOnly);
+    const common::Image ring = flatten(doc);
+    REQUIRE(px(ring, 18, 32) == common::Color8{255, 0, 0, 255});
+
+    // Bevel only -- the reference for the shading. A raked light must make the two opposite inner
+    // edges differ from each other; if it did not, the check below could not tell the tier ran.
+    core::LayerEffects bevelOnly;
+    bevelOnly.bevel.enabled = true;
+    bevelOnly.bevel.size = 6.0f;
+    bevelOnly.bevel.depth = 2.0f;
+    r.setEffects(bevelOnly);
+    const common::Image shaded = flatten(doc);
+    const common::Color8 litEdge = px(shaded, 32, 23);  // near the top inner edge
+    const common::Color8 darkEdge = px(shaded, 32, 41); // near the bottom inner edge
+    REQUIRE(litEdge != darkEdge);                       // the bevel really does shade
+
+    // Both together: each tier must still produce what it produced alone. The stroke is outside
+    // the silhouette and the bevel is clipped to it, so neither can overwrite the other's probe.
+    core::LayerEffects both = bevelOnly;
+    both.strokes = strokeOnly.strokes;
+    r.setEffects(both);
+    const common::Image out = flatten(doc);
+    CHECK(px(out, 18, 32) == px(ring, 18, 32));   // the ring is still drawn
+    CHECK(px(out, 15, 32).a == 0);                // and still ends where it did
+    CHECK(px(out, 32, 23) == litEdge);            // the bevel's lit edge is still shaded
+    CHECK(px(out, 32, 41) == darkEdge);           // ... and its dark edge too
+    CHECK(px(out, 32, 32) == px(shaded, 32, 32)); // the deep interior matches the bevel-only run
+}
+
+TEST_CASE("the 3x supersampled distance field is a pure function of its input") {
+    // The sharing above is only sound because two calls with the same arguments are the same
+    // field. Pinned directly, because "it is pure" is the whole argument for building it once.
+    std::vector<float> alpha(48 * 40, 0.0f);
+    for (int y = 8; y < 32; ++y)
+        for (int x = 10; x < 38; ++x) // a rectangle with one bitten-out corner, so the field
+            if (!(x > 30 && y > 24))  // varies in both axes and along a diagonal
+                alpha[static_cast<std::size_t>(y) * 48 + x] = 1.0f;
+    const std::vector<float> a = render::fx::signedDistanceFieldAA(alpha, 48, 40, 3);
+    const std::vector<float> b = render::fx::signedDistanceFieldAA(alpha, 48, 40, 3);
+    REQUIRE(a.size() == static_cast<std::size_t>(48) * 40);
+    CHECK(a == b);
+    // ... and it is not trivially constant, or the equality above would prove nothing.
+    CHECK(*std::min_element(a.begin(), a.end()) < -1.0f);
+    CHECK(*std::max_element(a.begin(), a.end()) > 1.0f);
 }
 
 TEST_CASE("an inside stroke stays within the layer, leaving the far interior") {

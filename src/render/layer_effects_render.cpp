@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstddef>
 #include <mutex>
+#include <optional>
 #include <variant>
 #include <vector>
 
@@ -150,6 +151,23 @@ struct AlphaBoxes {
     // layer does not.
     return core::vec::sampleAt(paint, {(px - box.x0) / bw, (py - box.y0) / bh}, true,
                                core::vec::SamplePixel{px, py, true});
+}
+
+// The constant a SOLID paint evaluates to, or nullopt for one that varies per pixel.
+//
+// `paintColorAt` returns `s->color` for a SolidPaint and reads neither the coordinate nor the
+// dither key, so for that arm `paintAtNorm` is a constant function called once per texel -- plus
+// two double divisions to build the normalised coordinate it then ignores. `applyStrokes` has
+// cached this since it was written (see `Ring::solid` below); the overlays and the two glows had
+// not, and they are the effects a GROUP tends to carry. The S60 fixture's Texture folder is an
+// outer glow and a colour overlay over children that cover the canvas, so that was ~80 million
+// calls through a variant dispatch to fetch the same four floats.
+//
+// Byte-identical: the hoisted value IS what every one of those calls returned.
+[[nodiscard]] std::optional<ColorF> constantPaint(const core::vec::Paint& paint) {
+    if (const auto* s = std::get_if<core::vec::SolidPaint>(&paint))
+        return s->color;
+    return std::nullopt;
 }
 
 // A resolved stroke ring: its signed-distance band [lo,hi] (px), paint, compositing, alignment.
@@ -294,13 +312,16 @@ void applyOverlay(ImageF& io, const core::OverlayEffect& ov, const std::vector<f
                   const Box& content, int rx0, int ry0, int rw, int rh, bool antialias,
                   const std::optional<common::Affine2D>& bufferToLayer) {
     if (!ov.enabled || std::holds_alternative<core::vec::NoPaint>(ov.paint)) return;
+    const std::optional<ColorF> flat = constantPaint(ov.paint);
     forEachRow(rh, [&](int y) {
         for (int x = 0; x < rw; ++x) {
             const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
             const float cov = alpha[idx];
             if (cov <= 0.0f)
                 continue; // outside the shape
-            ColorF src = paintAtNorm(ov.paint, rx0 + x, ry0 + y, content, antialias, bufferToLayer);
+            ColorF src =
+                flat ? *flat
+                     : paintAtNorm(ov.paint, rx0 + x, ry0 + y, content, antialias, bufferToLayer);
             // Do NOT fade the overlay by coverage here: composite it over the layer at its OWN alpha,
             // then clamp the RESULT to the coverage below. Fading src by cov let the layer colour bleed
             // through the shape's AA rim, so the anti-aliased edge read in the LAYER's colour instead of
@@ -414,13 +435,16 @@ void applyOuterGlow(std::vector<ColorF>& below, const core::GlowEffect& glow,
     std::vector<float> field(sd.size());
     for (std::size_t i = 0; i < sd.size(); ++i) field[i] = dilatedCov(sd[i], glow.choke);
     blurCoverage(field, rw, rh, sigmaForSize(glow.size));
+    const std::optional<ColorF> flat = constantPaint(glow.paint);
     forEachRow(rh, [&](int y) {
         for (int x = 0; x < rw; ++x) {
             const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
             const float f = field[idx];
             if (f <= 0.0f)
                 continue;
-            ColorF src = paintAtNorm(glow.paint, rx0 + x, ry0 + y, anchor, antialias, bufferToLayer);
+            ColorF src =
+                flat ? *flat
+                     : paintAtNorm(glow.paint, rx0 + x, ry0 + y, anchor, antialias, bufferToLayer);
             if (src.a <= 0.0f)
                 continue;
             src.a *= f;
@@ -479,6 +503,7 @@ void applyInnerGlow(ImageF& io, const core::GlowEffect& glow, const std::vector<
         for (std::size_t i = 0; i < sd.size(); ++i)
             field[i] = std::clamp((-sd[i] - glow.choke) * inv, 0.0f, 1.0f);
     }
+    const std::optional<ColorF> flat = constantPaint(glow.paint);
     forEachRow(rh, [&](int y) {
         for (int x = 0; x < rw; ++x) {
             const std::size_t idx = static_cast<std::size_t>(y) * rw + x;
@@ -488,7 +513,9 @@ void applyInnerGlow(ImageF& io, const core::GlowEffect& glow, const std::vector<
             const float f = field[idx];
             if (f <= 0.0f)
                 continue;
-            ColorF src = paintAtNorm(glow.paint, rx0 + x, ry0 + y, anchor, antialias, bufferToLayer);
+            ColorF src =
+                flat ? *flat
+                     : paintAtNorm(glow.paint, rx0 + x, ry0 + y, anchor, antialias, bufferToLayer);
             if (src.a <= 0.0f)
                 continue;
             src.a *= f;
@@ -613,8 +640,8 @@ void applySatin(ImageF& io, const core::SatinEffect& sa, const std::vector<float
 // `ax`/`ay` anchor the dither below to the geometric silhouette (the `anchor` box): a key that is
 // identical between a full composite and the footprint path, so region == full stays byte-exact,
 // and that travels WITH the shape instead of crawling when the layer moves.
-void applyBevel(ImageF& io, const core::BevelEffect& bv, const std::vector<float>& alpha, int rx0,
-                int ry0, int rw, int rh, int ax, int ay) {
+void applyBevel(ImageF& io, const core::BevelEffect& bv, const std::vector<float>& alpha,
+                const std::vector<float>& sd, int rx0, int ry0, int rw, int rh, int ax, int ay) {
     if (!bv.enabled || bv.size <= 0.0f) return;
     // Height field from the alpha's SDF (px, negative inside), per style. The ANTI-ALIASED field
     // (3x supersampled, the stroke renderer's fix) is load-bearing here: the plain binary EDT is
@@ -622,7 +649,6 @@ void applyBevel(ImageF& io, const core::BevelEffect& bv, const std::vector<float
     // edge, and the Sobel turns those facets into disconnected highlight/shadow BLOCKS (user
     // 2026-07-16: "rendered in blocks that do not connect -- most visible on 3D text and
     // circles"). The AA field's sub-pixel 0.5 crossing keeps the gradient direction continuous.
-    const std::vector<float> sd = fx::signedDistanceFieldAA(alpha, rw, rh, 3);
     std::vector<float> hgt(static_cast<std::size_t>(rw) * rh);
     for (std::size_t i = 0; i < hgt.size(); ++i) hgt[i] = bevelHeight(sd[i], bv.size, bv.style);
     // `soften` blurs the height field before the Sobel -> softer normals (still a single-pass
@@ -863,11 +889,34 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
                        bufferToLayer);
     }
 
+    // ---- The 3x SUPERSAMPLED field, built at most ONCE ---------------------------------------
+    //
+    // Both remaining tiers want it, and they want the SAME one: `signedDistanceFieldAA(alpha, rw,
+    // rh, 3)` is a pure function of arguments neither of them changes. The bevel built its own
+    // inside applyBevel and the stroke pass built another, so a layer carrying both -- which is
+    // what a styled headline is -- paid for it twice.
+    //
+    // It is the most expensive single thing in the stack, because the 3x supersample is 9x the
+    // texels and `signedDistanceField` runs TWO exact Euclidean transforms over them: on a
+    // headline's 3958x1034 ROI that is a pair of EDTs across 36.8 MP, done twice over.
+    //
+    // Lazy, so a layer with neither tier still builds nothing, and a layer with one builds one.
+    std::vector<float> sdAA;
+    bool sdAABuilt = false;
+    const auto supersampledSdf = [&]() -> const std::vector<float>& {
+        if (!sdAABuilt) {
+            MOSAIC_PERF_SCOPE("FX signed-distance field (3x)", common::Lane::Cpu);
+            sdAA = fx::signedDistanceFieldAA(alpha, rw, rh, 3);
+            sdAABuilt = true;
+        }
+        return sdAA;
+    };
+
     // BEVEL (LE-f) -- after inner glow, before stroke. Shades the silhouette with a raked light over a
     // height field built from the alpha's SDF (single-pass Sobel normals, doc §5.5).
-    {
+    if (fx.bevel.enabled && fx.bevel.size > 0.0f) {
         MOSAIC_PERF_SCOPE("FX bevel", common::Lane::Cpu);
-        applyBevel(io, fx.bevel, alpha, rx0, ry0, rw, rh, anchor.x0, anchor.y0);
+        applyBevel(io, fx.bevel, alpha, supersampledSdf(), rx0, ry0, rw, rh, anchor.x0, anchor.y0);
     }
 
     // ABOVE -- concentric strokes on top of everything.
@@ -877,8 +926,9 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
     if (anyStroke) {
         // 3x supersampled so an outside stroke's outer edge is smooth along the content's own AA
         // (a binary-threshold field would make it bumpy). ROI-bounded, so the cost stays local.
-        const std::vector<float> sd = fx::signedDistanceFieldAA(alpha, rw, rh, 3);
-        applyStrokes(io, fx.strokes, sd, alpha, anchor, rx0, ry0, rw, rh, antialias, bufferToLayer);
+        MOSAIC_PERF_SCOPE("FX strokes", common::Lane::Cpu);
+        applyStrokes(io, fx.strokes, supersampledSdf(), alpha, anchor, rx0, ry0, rw, rh, antialias,
+                     bufferToLayer);
     }
 }
 
