@@ -8,22 +8,17 @@
 // 1.75 M executions across all six came back clean -- and coverage ROSE, because a decoder that
 // stops lying about its bounds explores further.
 //
-// BUILD (clang only -- libFuzzer is not a GCC feature, and this project builds with GCC):
+// BUILD AND RUN VIA tools/fuzz/run-fuzzers.sh -- do not hand-roll the command line.
 //
-//   clang++ -std=c++23 -g -O1 -I src -fsanitize=fuzzer,address,undefined \
-//       -fno-sanitize-recover=undefined -o fuzz_formats \
-//       tools/fuzz/fuzz_formats.cpp src/formats/*.cpp
+//   ./tools/fuzz/run-fuzzers.sh replay        replay the checked-in corpus (what CI gates on)
+//   ./tools/fuzz/run-fuzzers.sh explore 300   mutate for N seconds per harness
 //
-// RUN (seed it from real files -- the encoders in the same library will write them):
-//
-//   ./fuzz_formats corpus seeds -fork=4 -ignore_crashes=1 -max_total_time=600 \
-//       -rss_limit_mb=4096 -max_len=65536 -artifact_prefix=artifacts/
-//
-// -fork=4 with -ignore_crashes collects EVERY distinct crash instead of stopping at the first,
-// which is what turns a fuzz run into a triage list rather than a single bug report.
-//
-// ⚠ src/formats links nothing but the standard library, on purpose (see its CMakeLists), which is
-// exactly what makes this harness three lines of glue. Keep it that way.
+// ⚠ The flags are not incidental. They name every vendored include directory and the defines the
+// project builds its vendored libraries with, and the script CHECKS that the vendored headers are
+// the ones that answered. A hand-written command line that omits -I third_party/pugixml still
+// compiles on a machine with a system pugixml installed -- against the wrong library, silently,
+// with a clean fuzz run to show for it. That happened; CI caught it; the script exists so it
+// cannot happen twice.
 
 #include "formats/bmp.hpp"
 #include "formats/hdr.hpp"

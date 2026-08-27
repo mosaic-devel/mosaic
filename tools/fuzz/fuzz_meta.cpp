@@ -15,24 +15,17 @@
 //               a path that eats shared files, and the compiler is entitled to assume it cannot
 //               happen. See the commit that added this file for the options.
 //
-// BUILD (clang only; libFuzzer is not a GCC feature and this project builds with GCC):
+// BUILD AND RUN VIA tools/fuzz/run-fuzzers.sh -- do not hand-roll the command line.
 //
-//   clang++ -std=c++23 -g -O1 -I src -I third_party -I third_party/nanosvg \
-//       -I build/linux-release/generated -fsanitize=fuzzer,address,undefined \
-//       -fno-sanitize-recover=undefined -w -o fuzz_meta tools/fuzz/fuzz_meta.cpp \
-//       src/io/exif.cpp src/common/image_svg.cpp src/common/image.cpp src/common/logging.cpp \
-//       src/common/fs_path.cpp -lspdlog -lfmt
+//   ./tools/fuzz/run-fuzzers.sh replay        replay the checked-in corpus (what CI gates on)
+//   ./tools/fuzz/run-fuzzers.sh explore 300   mutate for N seconds per harness
 //
-//   ./fuzz_meta corpus seeds -fork=4 -ignore_crashes=1 -max_total_time=600 \
-//       -rss_limit_mb=4096 -max_len=65536 -artifact_prefix=artifacts/
-//
-// Both EXIF entry points are covered: parseExif (the TIFF/IFD payload walk) and extractExif (the
-// JPEG APP1 / PNG eXIf container walk that finds the payload). The latter needs sniffImageFormat,
-// which lives in io.cpp behind every image decoder in the project, so the harness supplies a real
-// two-format sniffer below rather than a stub that would make those walks unreachable.
-//
-// Seeds: any .svg (the app's own assets, /usr/share/icons) and any .jpg/.png with metadata. The
-// first input byte selects the entry point.
+// ⚠ The flags are not incidental. They name every vendored include directory and the defines the
+// project builds its vendored libraries with, and the script CHECKS that the vendored headers are
+// the ones that answered. A hand-written command line that omits -I third_party/pugixml still
+// compiles on a machine with a system pugixml installed -- against the wrong library, silently,
+// with a clean fuzz run to show for it. That happened; CI caught it; the script exists so it
+// cannot happen twice.
 
 #include "common/image_svg.hpp"
 #include "io/exif.hpp"

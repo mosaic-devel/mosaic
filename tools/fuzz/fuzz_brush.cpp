@@ -2,35 +2,31 @@
 // third party's binary format with its own hands: MyPaint .myb, GIMP .gbr/.gih, Photoshop .abr,
 // Krita .kpp, Mosaic .mbp, the PNG tip reader, and the two XML parsers behind them.
 //
-// RESULT SO FAR: clean. 22.8 M executions over 4,264 coverage features, no crashes. That is
+// RESULT SO FAR: clean. 21.4 M executions over 3,949 coverage features, no crashes. That is
 // evidence, not proof, and it is worth re-running whenever one of these readers is touched.
 //
-// BUILD (clang only; this project builds with GCC, and libFuzzer is not a GCC feature). These
-// readers are not dependency-free the way src/formats is, so the sources come in by hand:
+// ⚠ Those are the numbers from the run against the VENDORED pugixml. An earlier run reported
+// 22.8 M / 4,264 and had to be discarded: the harness was picking up a system /usr/include copy,
+// so it was fuzzing a library the project does not ship. A clean result against the wrong code is
+// not a clean result. See the note under BUILD below.
 //
-//   clang++ -std=c++23 -g -O1 -I src -I third_party -I third_party/nanosvg \
-//       -I third_party/pugixml -I build/linux-release/generated \
-//       -fsanitize=fuzzer,address -w -o fuzz_brush tools/fuzz/fuzz_brush.cpp \
-//       src/io/brush/*.cpp src/core/brush/*.cpp src/common/*.cpp src/formats/*.cpp \
-//       src/io/png.cpp src/core/selection.cpp src/core/layer.cpp src/core/vector/*.cpp \
-//       third_party/pugixml/*.cpp -lz -lpng -ljpeg -lspdlog -lfmt
+// ⚠ ASAN_OPTIONS=alloc_dealloc_mismatch=0 is required and run-fuzzers.sh sets it. Without it,
+// std::stable_sort's _Temporary_buffer -- allocated through operator new(nothrow), released
+// through __return_temporary_buffer -- reads as an alloc-dealloc mismatch under clang's ASan with
+// GCC's libstdc++. Fifteen false positives on core/brush/curve.cpp:58, a plain stable_sort over
+// parsed curve points, and they cost real coverage by killing jobs.
 //
-// RUN -- and ⚠ ASAN_OPTIONS=alloc_dealloc_mismatch=0 IS NOT OPTIONAL:
+// BUILD AND RUN VIA tools/fuzz/run-fuzzers.sh -- do not hand-roll the command line.
 //
-//   ASAN_OPTIONS=alloc_dealloc_mismatch=0 ./fuzz_brush corpus seeds -fork=4 \
-//       -ignore_crashes=1 -max_total_time=600 -rss_limit_mb=4096 -max_len=131072 \
-//       -artifact_prefix=artifacts/
+//   ./tools/fuzz/run-fuzzers.sh replay        replay the checked-in corpus (what CI gates on)
+//   ./tools/fuzz/run-fuzzers.sh explore 300   mutate for N seconds per harness
 //
-// Without it the run drowns in FALSE POSITIVES: std::stable_sort's _Temporary_buffer allocates
-// through operator new(nothrow) and releases through __return_temporary_buffer, and clang's ASan
-// paired with GCC's libstdc++ calls that an alloc-dealloc mismatch. Fifteen artifacts on the first
-// run, every one of them core/brush/curve.cpp:58 -- which is a plain stable_sort over parsed curve
-// points and is not doing anything wrong. They also cost real coverage by killing jobs: 2,143
-// features with the noise, 4,264 without.
-//
-// SEEDS: real presets make this worthwhile. Krita ships a good corpus at
-// /usr/share/krita/paintoppresets (.kpp and .myb); GIMP's brushes are .gbr/.gih under /usr/share.
-// The first byte of each input selects the reader, so prefix a seed with the right selector.
+// ⚠ The flags are not incidental. They name every vendored include directory and the defines the
+// project builds its vendored libraries with, and the script CHECKS that the vendored headers are
+// the ones that answered. A hand-written command line that omits -I third_party/pugixml still
+// compiles on a machine with a system pugixml installed -- against the wrong library, silently,
+// with a clean fuzz run to show for it. That happened; CI caught it; the script exists so it
+// cannot happen twice.
 
 #include "io/brush/kpp.hpp"
 #include "io/brush/myb.hpp"

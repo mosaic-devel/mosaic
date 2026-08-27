@@ -38,14 +38,40 @@ command -v "$CXX" >/dev/null || { echo "run-fuzzers: $CXX not found (libFuzzer n
 [ -d "$GEN" ] || { echo "run-fuzzers: no generated/ dir -- configure and build the project first"; exit 1; }
 
 mkdir -p "$OUT"
-COMMON=(-std=c++23 -g -O1 -I "$ROOT/src" -I "$ROOT/third_party" -I "$ROOT/third_party/nanosvg"
-        -I "$GEN" -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -w)
+# ⚠ EVERY VENDORED INCLUDE DIR HAS TO BE NAMED, and named BEFORE the system paths.
+#
+# third_party/pugixml was missing here, and the omission did not fail locally -- it failed in CI.
+# This machine has a system /usr/include/pugixml.hpp, so the harness silently compiled against the
+# distro's copy while the project deliberately vendors v1.16 and does not "hinge on a distro
+# shipping libpugixml" (third_party/CMakeLists.txt). So the local run was not merely lucky, it was
+# fuzzing a DIFFERENT LIBRARY than Mosaic ships. CI, with no system copy, said so honestly.
+#
+# PUGIXML_NO_XPATH matches how the project builds it; without it the harness compiles a
+# configuration that does not ship. Anything else vendored and reachable from a harness belongs on
+# these two lines too.
+COMMON=(-std=c++23 -g -O1
+        -I "$ROOT/src" -I "$ROOT/third_party" -I "$ROOT/third_party/nanosvg"
+        -I "$ROOT/third_party/pugixml" -I "$GEN"
+        -DPUGIXML_NO_XPATH
+        -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -w)
 
 build() { # name, then sources
     local name="$1"; shift
     echo "  building $name"
     "$CXX" "${COMMON[@]}" -o "$OUT/$name" "$@"
 }
+
+# The guard for the above: ask the compiler which files a representative TU actually included,
+# and insist the vendored copies are the ones that answered. A system header shadowing a vendored
+# one is invisible in a successful build and changes what is being tested.
+echo "== checking vendored headers win over system ones =="
+deps=$("$CXX" "${COMMON[@]}" -MM "$ROOT/src/io/brush/preset_xml.cpp" 2>/dev/null || true)
+for want in third_party/pugixml/pugixml.hpp; do
+    case "$deps" in
+        *"$want"*) echo "  ok: $want" ;;
+        *) echo "  FAIL: $want was not the header that answered -- a system copy shadowed it"; exit 1 ;;
+    esac
+done
 
 echo "== building harnesses =="
 build fuzz_formats "$ROOT/tools/fuzz/fuzz_formats.cpp" "$ROOT"/src/formats/*.cpp
