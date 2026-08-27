@@ -2308,7 +2308,17 @@ static void nsvg__pathArcTo(NSVGparser* p, float* cpx, float* cpy, float* args, 
 
 	// Split arc into max 90 degree segments.
 	// The loop assumes an iteration per end point (including start and end), this +1.
-	ndivs = (int)(fabsf(da) / (NSVG_PI*0.5f) + 1.0f);
+	/* ---- MOSAIC LOCAL CHANGE 1 of 2 (see third_party/nanosvg/MOSAIC-PATCHES.md) -------------
+	 * `da` is derived from arbitrary arc parameters in the path data, so it can be NaN, and
+	 * (int) of a NaN is undefined behaviour. Found by fuzzing: nanosvg.h:2311, six witnesses.
+	 * A legitimate arc sweep is at most 2*PI, so ndivs is at most 5 -- the guard below cannot
+	 * change what any real drawing does, and it also bounds the loop that follows against a
+	 * count large enough to hang. NaN fails both comparisons and lands on 1. */
+	{
+		const float nsvg__ndivsf = fabsf(da) / (NSVG_PI*0.5f) + 1.0f;
+		ndivs = (nsvg__ndivsf >= 1.0f && nsvg__ndivsf < 1024.0f) ? (int)nsvg__ndivsf : 1;
+	}
+	/* ---- end MOSAIC LOCAL CHANGE ---------------------------------------------------------- */
 	hda = (da / (float)ndivs) / 2.0f;
 	// Fix for ticket #179: division by 0: avoid cotangens around 0 (infinite)
 	if ((hda < 1e-3f) && (hda > -1e-3f))

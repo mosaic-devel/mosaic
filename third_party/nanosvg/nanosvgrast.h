@@ -331,6 +331,32 @@ static float nsvg__normalize(float *x, float* y)
 }
 
 static float nsvg__absf(float x) { return x < 0 ? -x : x; }
+/* MOSAIC LOCAL CHANGE: float -> int without the undefined behaviour. A value outside int's range
+ * saturates and a NaN becomes 0; anything representable converts exactly as (int) would, so this
+ * cannot change the rendering of a well-formed drawing. 2147483008 is the largest power-of-two
+ * multiple below INT_MAX that a float represents exactly, so the comparisons are exact too. */
+static int nsvg__f2i(float v)
+{
+	if (v != v) return 0;                     /* NaN: no direction to preserve */
+	if (v >= 2147483008.0f) return 2147483007;
+	if (v <= -2147483008.0f) return -2147483007;
+	return (int)v;
+}
+
+/* MOSAIC LOCAL CHANGE: saturating int add, for the active-edge x accumulator.
+ * Saturating the CONVERSION alone was not enough and the fuzzer said so immediately: the two
+ * remaining witnesses moved one step downstream to `z->x += z->dx` (signed overflow, two
+ * saturated values added). No static bound on dx fixes that, because x accumulates dx once per
+ * subsampled scanline -- the safe bound depends on the raster height. Saturating the ADD needs no
+ * such reasoning, and the fill path already clamps x to the raster, so a pinned value is as
+ * harmless as a huge one was meant to be. Exact for every pair whose sum is representable. */
+static int nsvg__addsat(int a, int b)
+{
+	if (b > 0 && a > 2147483007 - b) return 2147483007;
+	if (b < 0 && a < -2147483007 - b) return -2147483007;
+	return a + b;
+}
+
 static float nsvg__roundf(float x) { return (x >= 0) ? floorf(x + 0.5) : ceilf(x - 0.5); }
 
 static void nsvg__flattenCubicBez(NSVGrasterizer* r,
@@ -874,11 +900,18 @@ static NSVGactiveEdge* nsvg__addActive(NSVGrasterizer* r, NSVGedge* e, float sta
 	float dxdy = (e->x1 - e->x0) / (e->y1 - e->y0);
 //	STBTT_assert(e->y0 <= start_point);
 	// round dx down to avoid going too far
+	/* ---- MOSAIC LOCAL CHANGE 2 of 2 (see third_party/nanosvg/MOSAIC-PATCHES.md) -------------
+	 * dxdy is a slope over an edge whose endpoints come from the file, so a near-horizontal
+	 * edge makes it enormous and a degenerate one makes it infinite or NaN. Scaled by
+	 * NSVG__FIX and converted to int, that is undefined behaviour -- fuzzing found six
+	 * witnesses across these three conversions. nsvg__f2i saturates instead, which leaves
+	 * every in-range value (i.e. every real drawing) bit-identical. */
 	if (dxdy < 0)
-		z->dx = (int)(-nsvg__roundf(NSVG__FIX * -dxdy));
+		z->dx = nsvg__f2i(-nsvg__roundf(NSVG__FIX * -dxdy));
 	else
-		z->dx = (int)nsvg__roundf(NSVG__FIX * dxdy);
-	z->x = (int)nsvg__roundf(NSVG__FIX * (e->x0 + dxdy * (startPoint - e->y0)));
+		z->dx = nsvg__f2i(nsvg__roundf(NSVG__FIX * dxdy));
+	z->x = nsvg__f2i(nsvg__roundf(NSVG__FIX * (e->x0 + dxdy * (startPoint - e->y0))));
+	/* ---- end MOSAIC LOCAL CHANGE ---------------------------------------------------------- */
 //	z->x -= off_x * FIX;
 	z->ey = e->y1;
 	z->next = 0;
@@ -1147,7 +1180,8 @@ static void nsvg__rasterizeSortedEdges(NSVGrasterizer *r, float tx, float ty, fl
 //					NSVG__assert(z->valid);
 					nsvg__freeActive(r, z);
 				} else {
-					z->x += z->dx; // advance to position for current scanline
+					z->x = nsvg__addsat(z->x, z->dx); // advance to position for current scanline
+					                                  /* MOSAIC LOCAL CHANGE: was `z->x += z->dx` */
 					step = &((*step)->next); // advance through list
 				}
 			}
