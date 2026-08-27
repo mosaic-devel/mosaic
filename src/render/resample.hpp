@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <optional>
 #include <utility>
+#include <vector>
 
 // The resampler: the kernel bank plus the sampling passes that place one pixel grid into another
 // through an affine (the "Transform Anti-aliasing" feature, S7). It lived in compositor.cpp's
@@ -164,39 +165,139 @@ void convolveInto(common::ImageF& dst, std::uint32_t w, std::uint32_t h,
     // at most 2*kMaxFootprintRadius + 1; +1 more for the ceil/floor straddle.
     constexpr int kMaxTapsPerAxis = static_cast<int>(2.0 * kMaxFootprintRadius) + 2;
 
+    // ---- Weight tables for an AXIS-ALIGNED placement --------------------------------------
+    //
+    // With no rotation and no shear (m01 == m10 == 0) the inverse map separates: p.x depends only
+    // on the destination COLUMN and p.y only on the destination ROW. So every texel in a column
+    // shares one set of x-weights, and every texel in a row shares one set of y-weights -- and the
+    // loop below was re-deriving both for every texel. For Lanczos3 that is fourteen kernelWeight
+    // calls per destination texel, each of them two `sin`s, which on a placed layer is tens of
+    // millions of transcendentals to compute a few thousand distinct numbers.
+    //
+    // This is not a corner case, it is the shape the compositor places nearly everything in. A
+    // TEXT layer is the sharpest instance: text_layer_render bakes the layer transform's linear
+    // part into the glyph cache, so what reaches the compositor is a bitmap at 1:1 with a
+    // FRACTIONAL translation -- a sub-pixel nudge, which chooseAutoFilter (rightly) resolves to
+    // Lanczos3 and which then paid a full per-texel kernel evaluation. The S60 fixture composites
+    // ~17 MP of text cache that way.
+    //
+    // The tables hold exactly what the pixel loop would have computed, in the same order, so the
+    // accumulation is BIT-IDENTICAL to the general path -- this moves work, it does not
+    // approximate. `kernelWeight` is a pure function of (filter, offset); nothing else is read.
+    const bool axisAligned = inv.m01 == 0.0 && inv.m10 == 0.0;
+    const std::size_t cols = bx1 - bx0, rows = by1 - by0;
+    // Laid out row-major with a fixed kMaxTapsPerAxis stride so a column's/row's weights are one
+    // contiguous span. `n` is the tap count, `s0` the first source index; n == 0 marks a
+    // column/row whose every tap is a kernel zero (the `anyX` skip below).
+    std::vector<double> wxTab, wyTab;
+    std::vector<long> sx0Tab, sy0Tab;
+    std::vector<int> nxTab, nyTab;
+    if (axisAligned) {
+        wxTab.resize(cols * kMaxTapsPerAxis);
+        sx0Tab.resize(cols);
+        nxTab.resize(cols);
+        for (std::size_t c = 0; c < cols; ++c) {
+            const double px = inv.m00 * (static_cast<double>(bx0 + c) + 0.5) + inv.m02;
+            const long sx0 = static_cast<long>(std::ceil(px - 0.5 - rx));
+            const long sx1 = static_cast<long>(std::floor(px - 0.5 + rx));
+            const int nx = static_cast<int>(std::min<long>(sx1 - sx0, kMaxTapsPerAxis - 1)) + 1;
+            sx0Tab[c] = sx0;
+            if (nx <= 0) {
+                nxTab[c] = 0;
+                continue;
+            }
+            double* wxs = wxTab.data() + c * kMaxTapsPerAxis;
+            bool anyX = false;
+            for (int i = 0; i < nx; ++i) {
+                wxs[i] = kernelWeight(filter, ((sx0 + i + 0.5) - px) * invSclX);
+                anyX = anyX || wxs[i] != 0.0;
+            }
+            nxTab[c] = anyX ? nx : 0; // 0 == the general path's `!anyX -> continue`
+        }
+        wyTab.resize(rows * kMaxTapsPerAxis);
+        sy0Tab.resize(rows);
+        nyTab.resize(rows);
+        for (std::size_t r = 0; r < rows; ++r) {
+            const double py = inv.m11 * (static_cast<double>(by0 + r) + 0.5) + inv.m12;
+            const long sy0 = static_cast<long>(std::ceil(py - 0.5 - ry));
+            const long sy1 = static_cast<long>(std::floor(py - 0.5 + ry));
+            // The y span is NOT capped in the general loop (it cannot overrun: ry <= 8, so
+            // sy1 - sy0 <= 16); the min below is the same bound written down, not a new limit.
+            const int ny = static_cast<int>(std::min<long>(sy1 - sy0, kMaxTapsPerAxis - 1)) + 1;
+            sy0Tab[r] = sy0;
+            nyTab[r] = std::max(ny, 0);
+            double* wys = wyTab.data() + r * kMaxTapsPerAxis;
+            for (int j = 0; j < ny; ++j)
+                wys[j] = kernelWeight(filter, ((sy0 + j + 0.5) - py) * invSclY);
+        }
+    }
+
     common::parallelFor(by1 - by0, 32, [&](std::size_t band0, std::size_t band1) {
-        double wxs[kMaxTapsPerAxis];
+        double wxsLocal[kMaxTapsPerAxis];
+        double wysLocal[kMaxTapsPerAxis];
         for (std::uint32_t y = by0 + static_cast<std::uint32_t>(band0),
                            yEnd = by0 + static_cast<std::uint32_t>(band1);
              y < yEnd; ++y) {
             common::Vec2 p = inv.apply({bx0 + 0.5, y + 0.5});
             std::size_t dp = (static_cast<std::size_t>(y) * w + bx0) * 4;
+            // Axis-aligned: this row's y-weights are the whole row's, read once.
+            const std::size_t r = y - by0;
+            const double* wysRow = axisAligned ? wyTab.data() + r * kMaxTapsPerAxis : nullptr;
+            const long sy0Row = axisAligned ? sy0Tab[r] : 0;
+            const int nyRow = axisAligned ? nyTab[r] : 0;
             for (std::uint32_t x = bx0; x < bx1; ++x, p.x += inv.m00, p.y += inv.m10, dp += 4) {
-                const long sx0 = static_cast<long>(std::ceil(p.x - 0.5 - rx));
-                const long sx1 = static_cast<long>(std::floor(p.x - 0.5 + rx));
-                const long sy0 = static_cast<long>(std::ceil(p.y - 0.5 - ry));
-                const long sy1 = static_cast<long>(std::floor(p.y - 0.5 + ry));
                 // ⚠ The x-weights depend only on p.x, so they are IDENTICAL for every source row
                 // in this pixel's footprint. Evaluating them in the sy loop recomputed each one
                 // (2*ry + 1) times -- and for Lanczos3 one evaluation is two `sin` calls, so a
                 // 7x7 footprint spent ~98 transcendentals per destination texel, per layer, on a
                 // canvas-sized buffer. Hoisting is a pure motion: the same values multiply in the
                 // same order, so the accumulation is bit-identical to the pre-hoist loop.
-                const int nx = static_cast<int>(std::min<long>(sx1 - sx0, kMaxTapsPerAxis - 1)) + 1;
-                if (nx <= 0)
-                    continue;
-                bool anyX = false;
-                for (int i = 0; i < nx; ++i) {
-                    wxs[i] = kernelWeight(filter, ((sx0 + i + 0.5) - p.x) * invSclX);
-                    anyX = anyX || wxs[i] != 0.0;
+                const double* wxs;
+                long sx0;
+                int nx;
+                if (axisAligned) {
+                    const std::size_t c = x - bx0;
+                    nx = nxTab[c];
+                    if (nx == 0)
+                        continue; // no taps, or every x tap is a kernel zero
+                    sx0 = sx0Tab[c];
+                    wxs = wxTab.data() + c * kMaxTapsPerAxis;
+                } else {
+                    sx0 = static_cast<long>(std::ceil(p.x - 0.5 - rx));
+                    const long sx1 = static_cast<long>(std::floor(p.x - 0.5 + rx));
+                    nx = static_cast<int>(std::min<long>(sx1 - sx0, kMaxTapsPerAxis - 1)) + 1;
+                    if (nx <= 0)
+                        continue;
+                    bool anyX = false;
+                    for (int i = 0; i < nx; ++i) {
+                        wxsLocal[i] = kernelWeight(filter, ((sx0 + i + 0.5) - p.x) * invSclX);
+                        anyX = anyX || wxsLocal[i] != 0.0;
+                    }
+                    if (!anyX)
+                        continue; // every x tap is a kernel zero: nothing this pixel can accumulate
+                    wxs = wxsLocal;
                 }
-                if (!anyX)
-                    continue; // every x tap is a kernel zero: nothing this pixel can accumulate
+                const double* wys;
+                long sy0;
+                int ny;
+                if (axisAligned) {
+                    wys = wysRow;
+                    sy0 = sy0Row;
+                    ny = nyRow;
+                } else {
+                    sy0 = static_cast<long>(std::ceil(p.y - 0.5 - ry));
+                    const long sy1 = static_cast<long>(std::floor(p.y - 0.5 + ry));
+                    ny = static_cast<int>(std::min<long>(sy1 - sy0, kMaxTapsPerAxis - 1)) + 1;
+                    for (int j = 0; j < ny; ++j)
+                        wysLocal[j] = kernelWeight(filter, ((sy0 + j + 0.5) - p.y) * invSclY);
+                    wys = wysLocal;
+                }
                 double pr = 0, pg = 0, pb = 0, pa = 0, wsum = 0;
-                for (long sy = sy0; sy <= sy1; ++sy) {
-                    const double wy = kernelWeight(filter, ((sy + 0.5) - p.y) * invSclY);
+                for (int j = 0; j < ny; ++j) {
+                    const double wy = wys[j];
                     if (wy == 0.0)
                         continue;
+                    const long sy = sy0 + j;
                     for (int i = 0; i < nx; ++i) {
                         const double wgt = wy * wxs[i];
                         if (wgt == 0.0)

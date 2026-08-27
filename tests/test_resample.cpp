@@ -1,15 +1,16 @@
-#include <doctest/doctest.h>
+#include "common/geometry.hpp"
+#include "common/image.hpp"
+#include "render/resample.hpp"
 
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <doctest/doctest.h>
 #include <numbers>
+#include <optional>
+#include <string>
 #include <vector>
-
-#include "common/geometry.hpp"
-#include "common/image.hpp"
-#include "render/resample.hpp"
 
 using namespace mosaic;
 using render::ResampleFilter;
@@ -280,4 +281,187 @@ TEST_CASE("transformImageF places a float source through an affine and drops a s
     for (float v : none.rgba)
         allZero = allZero && v == 0.0f;
     CHECK(allZero);
+}
+
+// ---------------------------------------------------------------------------------------------
+// convolveInto's AXIS-ALIGNED weight tables.
+//
+// When a placement has no rotation and no shear, the x-weights depend only on the destination
+// column and the y-weights only on the row, so convolveInto hoists both out of the pixel loop into
+// tables. That is a pure motion of work -- but it is a SECOND implementation of where the taps
+// land, and the two are only ever compared here. The reference below re-derives the footprint and
+// the weight sum straight from the definition (per texel, per tap, no tables), so a table that
+// drifts by a column, caps a span early, or loses the all-zero-weight skip fails against the math
+// rather than against a recorded picture.
+//
+// This is the shape the type stack composites in: text_layer_render bakes the layer transform's
+// linear part into the glyph cache, so what reaches the compositor is a bitmap at 1:1 under a
+// FRACTIONAL translation -- axis-aligned, sub-pixel, and resolved to Lanczos3 by Auto.
+// ---------------------------------------------------------------------------------------------
+namespace {
+
+// One destination texel, straight from the definition in resample.hpp's header comment:
+// premultiplied accumulation over the kernel footprint, normalised by the weight sum.
+common::ColorF referenceTexel(const common::ImageF& src, const common::Affine2D& inv,
+                              ResampleFilter f, std::uint32_t x, std::uint32_t y) {
+    const double sclX = std::max(1.0, std::hypot(inv.m00, inv.m10));
+    const double sclY = std::max(1.0, std::hypot(inv.m01, inv.m11));
+    const double rx = std::min(render::kernelRadius(f) * sclX, render::kMaxFootprintRadius);
+    const double ry = std::min(render::kernelRadius(f) * sclY, render::kMaxFootprintRadius);
+    const common::Vec2 p = inv.apply({x + 0.5, y + 0.5});
+    double pr = 0, pg = 0, pb = 0, pa = 0, wsum = 0;
+    for (long sy = static_cast<long>(std::ceil(p.y - 0.5 - ry));
+         sy <= static_cast<long>(std::floor(p.y - 0.5 + ry)); ++sy) {
+        const double wy = render::kernelWeight(f, ((sy + 0.5) - p.y) / sclY);
+        for (long sx = static_cast<long>(std::ceil(p.x - 0.5 - rx));
+             sx <= static_cast<long>(std::floor(p.x - 0.5 + rx)); ++sx) {
+            const double wgt = wy * render::kernelWeight(f, ((sx + 0.5) - p.x) / sclX);
+            if (wgt == 0.0)
+                continue;
+            const bool inside = sx >= 0 && sy >= 0 && sx < static_cast<long>(src.width) &&
+                                sy < static_cast<long>(src.height);
+            const common::ColorF c =
+                inside ? src.at(static_cast<std::uint32_t>(sx), static_cast<std::uint32_t>(sy))
+                       : common::ColorF{0.0f, 0.0f, 0.0f, 0.0f};
+            const double aw = static_cast<double>(c.a) * wgt;
+            pr += static_cast<double>(c.r) * aw;
+            pg += static_cast<double>(c.g) * aw;
+            pb += static_cast<double>(c.b) * aw;
+            pa += aw;
+            wsum += wgt;
+        }
+    }
+    if (wsum <= 0.0)
+        return {0.0f, 0.0f, 0.0f, 0.0f};
+    common::ColorF out{0.0f, 0.0f, 0.0f, static_cast<float>(std::clamp(pa / wsum, 0.0, 1.0))};
+    if (pa > 1e-8) {
+        out.r = static_cast<float>(pr / pa);
+        out.g = static_cast<float>(pg / pa);
+        out.b = static_cast<float>(pb / pa);
+    }
+    return out;
+}
+
+common::ImageF noiseImageF(std::uint32_t w, std::uint32_t h, std::uint32_t seed) {
+    common::ImageF img(w, h);
+    std::uint32_t s = seed | 1u;
+    const auto next = [&s] { // xorshift32: deterministic, and not a ramp any kernel reproduces
+        s ^= s << 13;
+        s ^= s >> 17;
+        s ^= s << 5;
+        return static_cast<float>(s & 0xFFFFFFu) / static_cast<float>(0xFFFFFFu);
+    };
+    for (std::uint32_t y = 0; y < h; ++y)
+        for (std::uint32_t x = 0; x < w; ++x)
+            img.set(x, y, {next(), next(), next(), next()});
+    return img;
+}
+
+} // namespace
+
+TEST_CASE("convolveInto's axis-aligned weight tables agree with the per-texel definition") {
+    const common::ImageF src = noiseImageF(23, 17, 0xC0FFEEu);
+    const auto fetch = [&src](long sx, long sy, float out[4]) {
+        if (sx < 0 || sy < 0 || sx >= static_cast<long>(src.width) ||
+            sy >= static_cast<long>(src.height)) {
+            out[0] = out[1] = out[2] = out[3] = 0.0f;
+            return;
+        }
+        const std::size_t sp =
+            (static_cast<std::size_t>(sy) * src.width + static_cast<std::size_t>(sx)) * 4;
+        out[0] = src.rgba[sp + 0];
+        out[1] = src.rgba[sp + 1];
+        out[2] = src.rgba[sp + 2];
+        out[3] = src.rgba[sp + 3];
+    };
+    // Every axis-aligned family the tables must cover: the sub-pixel translation a placed text
+    // cache arrives as, an enlargement, a minification (which widens the footprint), and a flip
+    // (a negative column, so the tap order runs backwards).
+    struct Placement {
+        const char* what;
+        common::Affine2D t;
+    };
+    const Placement placements[] = {
+        {"sub-pixel translate", common::Affine2D::translation(4.37, 2.81)},
+        {"whole translate", common::Affine2D::translation(5.0, 3.0)},
+        {"enlarge + translate",
+         common::Affine2D::translation(3.25, 1.5) * common::Affine2D::scaling(2.4, 1.7)},
+        {"minify + translate",
+         common::Affine2D::translation(2.1, 0.9) * common::Affine2D::scaling(0.45, 0.6)},
+        {"flip x", common::Affine2D::translation(30.0, 2.0) * common::Affine2D::scaling(-1.3, 1.1)},
+    };
+    constexpr ResampleFilter kConvolving[] = {ResampleFilter::Bilinear, ResampleFilter::Bicubic,
+                                              ResampleFilter::Mitchell, ResampleFilter::Lanczos2,
+                                              ResampleFilter::Lanczos3, ResampleFilter::Area,
+                                              ResampleFilter::Gaussian};
+    constexpr std::uint32_t kW = 48, kH = 36;
+    std::size_t compared = 0;
+    for (const Placement& pl : placements) {
+        const std::optional<common::Affine2D> inv = pl.t.inverse();
+        REQUIRE(inv.has_value());
+        for (ResampleFilter f : kConvolving) {
+            INFO("placement=" << std::string(pl.what)
+                              << " filter=" << render::resampleFilterName(f));
+            // Both with and without the source-extent clip: the clip moves the walk's bounds, and
+            // the tables are indexed off those bounds.
+            for (int clip = 0; clip < 2; ++clip) {
+                common::ImageF dst(kW, kH);
+                render::convolveInto(dst, kW, kH, *inv, f, fetch, clip ? src.width : 0,
+                                     clip ? src.height : 0);
+                for (std::uint32_t y = 0; y < kH; ++y) {
+                    for (std::uint32_t x = 0; x < kW; ++x) {
+                        const common::ColorF want = referenceTexel(src, *inv, f, x, y);
+                        const common::ColorF got = dst.at(x, y);
+                        // Bit-exact: the tables hold the same doubles the pixel loop computed,
+                        // accumulated in the same order. Any drift here is a real defect.
+                        CHECK(got.r == want.r);
+                        CHECK(got.g == want.g);
+                        CHECK(got.b == want.b);
+                        CHECK(got.a == want.a);
+                        ++compared;
+                    }
+                }
+            }
+        }
+    }
+    CHECK(compared == 5u * 7u * 2u * kW * kH);
+}
+
+TEST_CASE("a rotated placement still agrees with the per-texel definition") {
+    // The general (non-axis-aligned) arm keeps evaluating the kernel per texel; the table arm must
+    // not be reachable for it. Same reference, one sheared placement.
+    const common::ImageF src = noiseImageF(19, 21, 0xBADCAFEu);
+    const auto fetch = [&src](long sx, long sy, float out[4]) {
+        if (sx < 0 || sy < 0 || sx >= static_cast<long>(src.width) ||
+            sy >= static_cast<long>(src.height)) {
+            out[0] = out[1] = out[2] = out[3] = 0.0f;
+            return;
+        }
+        const std::size_t sp =
+            (static_cast<std::size_t>(sy) * src.width + static_cast<std::size_t>(sx)) * 4;
+        out[0] = src.rgba[sp + 0];
+        out[1] = src.rgba[sp + 1];
+        out[2] = src.rgba[sp + 2];
+        out[3] = src.rgba[sp + 3];
+    };
+    const common::Affine2D t = common::Affine2D::trs({6.4, 3.7}, 0.37, {1.4, 1.1}) *
+                               common::Affine2D{1.0, 0.2, 0.0, 0.0, 1.0, 0.0};
+    const std::optional<common::Affine2D> inv = t.inverse();
+    REQUIRE(inv.has_value());
+    constexpr std::uint32_t kW = 40, kH = 40;
+    for (ResampleFilter f : {ResampleFilter::Lanczos3, ResampleFilter::Mitchell}) {
+        INFO("filter=" << render::resampleFilterName(f));
+        common::ImageF dst(kW, kH);
+        render::convolveInto(dst, kW, kH, *inv, f, fetch, src.width, src.height);
+        for (std::uint32_t y = 0; y < kH; ++y) {
+            for (std::uint32_t x = 0; x < kW; ++x) {
+                const common::ColorF want = referenceTexel(src, *inv, f, x, y);
+                const common::ColorF got = dst.at(x, y);
+                CHECK(got.r == want.r);
+                CHECK(got.g == want.g);
+                CHECK(got.b == want.b);
+                CHECK(got.a == want.a);
+            }
+        }
+    }
 }
