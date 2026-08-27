@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <cmath>
 #include <cstddef>
 #include <functional>
@@ -2107,6 +2108,77 @@ void walkStep(GroupWalk& st, const core::Layer& layer, const ImageF& src, const 
 // Composite a group's children bottom(0)->top into a fresh W x H buffer. `pre` maps the group's
 // local space to that buffer (identity at the document root; a translation when a parent group
 // offset its own local buffer): all children share the group's local space, so they all take it.
+// ---- Per-layer attribution (MOSAIC_PROFILE_LAYERS=1) -----------------------------------------
+//
+// "Composite (full): 15 s" answers WHETHER the walk is slow and nothing about WHICH LAYER made it
+// so, and every lane row after it (adjustments, effects, resamples) is aggregated across the whole
+// document. On a 56-layer file that is a sum with no addends. This gives each layer its own row.
+//
+// OFF by default and behind its own switch rather than --profile, because it is the one kind of
+// row that scales with the DOCUMENT: 56 layers is 56 extra rows, and profiler.hpp's own warning is
+// that a table padded with rows buries the ones that matter. Turn it on when the question is
+// "which layer", not "which lane".
+//
+// ⚠ A GROUP'S ROW INCLUDES ITS CHILDREN, because compositeChildren recurses inside the timed
+// region. That is the same nesting every other row in the table has (Layer effects contains FX
+// bevel, Adjustment: High Pass contains FX gaussian plane), and it is what makes a group's row
+// answer "what does this folder cost me" -- but it means the rows do not sum to the total. Read a
+// group against its own children, never by adding the column up.
+[[nodiscard]] bool layerProfilingOn() {
+    static const bool on = [] {
+        const char* v = std::getenv("MOSAIC_PROFILE_LAYERS");
+        return v != nullptr && v[0] == '1' && v[1] == '\0';
+    }();
+    return on;
+}
+
+// "L37 Type rail [text]" -- the id first so the row is unambiguous when two layers share a name
+// (torture_doc alone makes fourteen called "Shape N"), the kind last so a glance separates a
+// group's inclusive row from a leaf's.
+[[nodiscard]] std::string layerRowName(const core::Layer& layer) {
+    const char* kind = "?";
+    switch (layer.kind()) {
+    case core::LayerKind::Group: kind = "group"; break;
+    case core::LayerKind::Raster: kind = "raster"; break;
+    case core::LayerKind::Vector: kind = "vector"; break;
+    case core::LayerKind::Text: kind = "text"; break;
+    case core::LayerKind::Adjustment: kind = "adjust"; break;
+    case core::LayerKind::Magic: kind = "magic"; break;
+    case core::LayerKind::Texture: kind = "texture"; break;
+    }
+    std::string name = layer.name();
+    if (name.size() > 28)
+        name.resize(28);
+    return "L" + std::to_string(layer.id()) + " " + name + " [" + kind + "]";
+}
+
+// Times one layer's WHOLE contribution to the walk -- its render, its effects, its adjustment pass
+// and its blend -- and records it under that layer's own row. A no-op unless both switches are on.
+class LayerTimer {
+public:
+    explicit LayerTimer(const core::Layer& layer)
+        : m_on(layerProfilingOn() && common::Profiler::enabled()) {
+        if (m_on) {
+            m_name = layerRowName(layer);
+            m_t0 = std::chrono::steady_clock::now();
+        }
+    }
+    ~LayerTimer() {
+        if (!m_on)
+            return;
+        const double ms = std::chrono::duration<double, std::milli>(
+                              std::chrono::steady_clock::now() - m_t0).count();
+        common::Profiler::instance().record(m_name, common::Lane::Cpu, ms);
+    }
+    LayerTimer(const LayerTimer&) = delete;
+    LayerTimer& operator=(const LayerTimer&) = delete;
+
+private:
+    bool m_on;
+    std::string m_name;
+    std::chrono::steady_clock::time_point m_t0;
+};
+
 [[nodiscard]] ImageF compositeChildren(const core::GroupLayer& group, const common::Affine2D& pre,
                                        std::uint32_t w, std::uint32_t h, const BlendFn& blend,
                                        const ResampleCtx& rs, const common::Rect& maskDomain) {
@@ -2123,6 +2195,7 @@ void walkStep(GroupWalk& st, const core::Layer& layer, const ImageF& src, const 
         // invisible layer drops out -- so "composite without this layer" costs a comparison instead
         // of a document mutation.
         if (rs.skip != core::kInvalidLayerId && layer.id() == rs.skip) continue;
+        const LayerTimer layerTime(layer); // MOSAIC_PROFILE_LAYERS=1; nothing otherwise
         if (layer.as<core::AdjustmentLayer>() != nullptr)
             walkStep(st, layer, kNoSrc, blend);
         else {
