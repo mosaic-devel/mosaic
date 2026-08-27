@@ -1,11 +1,13 @@
 #include "core/text/extrude_overlay.hpp"
 
-#include <algorithm>
-#include <cmath>
-#include <variant>
-
+#include "common/thread_pool.hpp"
 #include "core/blend_math.hpp"
 #include "core/vector/paint.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <optional>
+#include <variant>
 
 namespace mosaic::core::text {
 namespace {
@@ -87,6 +89,13 @@ ExtrudeOverlay buildExtrudeOverlay(const LayerEffects& fx, const ExtrudeMesh& me
     const std::uint32_t h = dim(uvDomain.h);
 
     const OverlayEffect* overlays[3] = {&fx.colorOverlay, &fx.gradientOverlay, &fx.patternOverlay};
+    // A SOLID overlay evaluates to the same four floats at every texel -- vec::sampleAt reaches
+    // paintColorAt, whose SolidPaint arm returns `s->color` and reads neither the coordinate nor
+    // the dither key. Resolved once per overlay so the map loops below do not ask 2 million times.
+    std::optional<ColorF> flat[3];
+    for (int i = 0; i < 3; ++i)
+        if (const auto* sp = std::get_if<vec::SolidPaint>(&overlays[i]->paint))
+            flat[i] = sp->color;
 
     // Wrap mode's wall-map extent: the unrolled band (outline length x depth), same texel
     // density + budget discipline as the design map.
@@ -120,43 +129,62 @@ ExtrudeOverlay buildExtrudeOverlay(const LayerEffects& fx, const ExtrudeMesh& me
         if (slot == albedos.size()) {
             albedos.push_back(base);
             ImageF map(w, h);
-            for (std::uint32_t y = 0; y < h; ++y) {
-                for (std::uint32_t x = 0; x < w; ++x) {
-                    // The stack composites over the OPAQUE albedo (the solid's surface): dst
-                    // alpha stays 1, so the result RGB is exactly the colour the face shades
-                    // with. Coverage is the solid's own -- overlays never change it.
-                    ColorF dst{base.r, base.g, base.b, 1.0f};
-                    for (const OverlayEffect* ov : overlays) {
-                        if (!ov->enabled || std::holds_alternative<vec::NoPaint>(ov->paint))
-                            continue;
-                        const ColorF src =
-                            overlayColorAt(ov->paint, x, y, map, uvDomain, antialias);
-                        dst = compositeOver(ov->blend, dst, src, ov->opacity);
+            // ⚠ BANDED OVER ROWS, and this is the 3D type stack's largest single host cost. Each
+            // texel is a pure function of its own (x, y) -- up to three overlay evaluations, and a
+            // gradient one carries a dither -- and each row writes only its own slice of `map`. The
+            // maps are capped at two million texels EACH and there are two of them (design +
+            // wall), so a headline with a conic gradient overlay was ~10 million gradient
+            // evaluations on one core with the rest of the machine parked.
+            common::parallelFor(h, 16, [&](std::size_t y0, std::size_t y1) {
+                for (std::uint32_t y = static_cast<std::uint32_t>(y0),
+                                   yEnd = static_cast<std::uint32_t>(y1);
+                     y < yEnd; ++y) {
+                    for (std::uint32_t x = 0; x < w; ++x) {
+                        // The stack composites over the OPAQUE albedo (the solid's surface): dst
+                        // alpha stays 1, so the result RGB is exactly the colour the face shades
+                        // with. Coverage is the solid's own -- overlays never change it.
+                        ColorF dst{base.r, base.g, base.b, 1.0f};
+                        for (int oi = 0; oi < 3; ++oi) {
+                            const OverlayEffect* ov = overlays[oi];
+                            if (!ov->enabled || std::holds_alternative<vec::NoPaint>(ov->paint))
+                                continue;
+                            const ColorF src = flat[oi] ? *flat[oi]
+                                                        : overlayColorAt(ov->paint, x, y, map,
+                                                                         uvDomain, antialias);
+                            dst = compositeOver(ov->blend, dst, src, ov->opacity);
+                        }
+                        map.set(x, y, dst);
                     }
-                    map.set(x, y, dst);
                 }
-            }
+            });
             out.maps.push_back(std::move(map));
             if (walls) {
                 ImageF wall(ww, wh);
-                for (std::uint32_t y = 0; y < wh; ++y) {
-                    const double tN = (static_cast<double>(y) + 0.5) / wh;
-                    for (std::uint32_t x = 0; x < ww; ++x) {
-                        const double sN = (static_cast<double>(x) + 0.5) / ww;
-                        const common::Vec2 design =
-                            stationDesignAt(mesh.sideStations, static_cast<float>(sN));
-                        ColorF dst{base.r, base.g, base.b, 1.0f};
-                        for (const OverlayEffect* ov : overlays) {
-                            if (!ov->enabled || std::holds_alternative<vec::NoPaint>(ov->paint))
-                                continue;
-                            const ColorF src =
-                                wallColorAt(ov->paint, sN * mesh.sideLength, tN * tDepth, design,
-                                            uvDomain, antialias);
-                            dst = compositeOver(ov->blend, dst, src, ov->opacity);
+                common::parallelFor(wh, 16, [&](std::size_t y0, std::size_t y1) {
+                    for (std::uint32_t y = static_cast<std::uint32_t>(y0),
+                                       yEnd = static_cast<std::uint32_t>(y1);
+                         y < yEnd; ++y) {
+                        const double tN = (static_cast<double>(y) + 0.5) / wh;
+                        for (std::uint32_t x = 0; x < ww; ++x) {
+                            const double sN = (static_cast<double>(x) + 0.5) / ww;
+                            const common::Vec2 design =
+                                stationDesignAt(mesh.sideStations, static_cast<float>(sN));
+                            ColorF dst{base.r, base.g, base.b, 1.0f};
+                            for (int oi = 0; oi < 3; ++oi) {
+                                const OverlayEffect* ov = overlays[oi];
+                                if (!ov->enabled || std::holds_alternative<vec::NoPaint>(ov->paint))
+                                    continue;
+                                const ColorF src =
+                                    flat[oi]
+                                        ? *flat[oi]
+                                        : wallColorAt(ov->paint, sN * mesh.sideLength, tN * tDepth,
+                                                      design, uvDomain, antialias);
+                                dst = compositeOver(ov->blend, dst, src, ov->opacity);
+                            }
+                            wall.set(x, y, dst);
                         }
-                        wall.set(x, y, dst);
                     }
-                }
+                });
                 out.wallMaps.push_back(std::move(wall));
             }
         }

@@ -352,6 +352,74 @@ TEST_CASE("overlay maps bake in design space: gradient direction, blend opacity,
     CHECK(mov.mapForRun(0) != mov.mapForRun(1));
 }
 
+TEST_CASE(
+    "a mixed solid + gradient overlay stack bakes deterministically and varies in both axes") {
+    // The map bake is banded over rows and resolves a SOLID overlay to one constant instead of
+    // asking per texel. Two things that can break:
+    //
+    //   * the constant attaching to the wrong slot of the stack -- which only shows when a solid
+    //     and a non-solid are BOTH present, so both are here, in that z-order;
+    //   * a row band reading or writing outside its own rows, which is a data race and therefore
+    //     shows as NON-DETERMINISM rather than as a wrong picture. Baking twice and requiring the
+    //     two byte-for-byte is the direct pin on that.
+    Extrude e = flatRed();     // lighting off: the shaded colour IS the (overlay) albedo
+    e.overlayWrapSides = true; // ... and bake the wall map too, which is the second banded loop
+    const ExtrudeMesh mesh = buildExtrudeMesh({square10()}, e);
+    REQUIRE_FALSE(mesh.empty());
+
+    mosaic::core::LayerEffects fx;
+    fx.colorOverlay.enabled = true; // under...
+    fx.colorOverlay.paint = vec::SolidPaint{ColorF{0, 1, 0, 1}};
+    vec::Gradient g; // ... a radial, whose parameter is sqrt(u^2 + v^2): it varies in BOTH axes,
+    g.type = vec::GradientType::Radial; // which a purely horizontal gradient would not, and a row
+    g.stops = {{0.0, ColorF{1, 0, 0, 1}}, {1.0, ColorF{0, 0, 1, 1}}}; // band defect hides in y.
+    fx.gradientOverlay.enabled = true;
+    fx.gradientOverlay.paint = g;
+    fx.gradientOverlay.opacity = 0.5f; // half, so the solid beneath it still shows through
+
+    const ExtrudeOverlay a = buildExtrudeOverlay(fx, mesh, e, mesh.designBounds, 8.0, true);
+    const ExtrudeOverlay b = buildExtrudeOverlay(fx, mesh, e, mesh.designBounds, 8.0, true);
+    REQUIRE(a.maps.size() == 1);
+    REQUIRE(b.maps.size() == 1);
+    REQUIRE(a.wallMaps.size() == 1);
+    REQUIRE(b.wallMaps.size() == 1);
+    CHECK(a.maps[0].rgba == b.maps[0].rgba); // deterministic under banding
+    CHECK(a.wallMaps[0].rgba == b.wallMaps[0].rgba);
+
+    const ImageF& map = a.maps[0];
+    REQUIRE(map.width >= 8);
+    REQUIRE(map.height >= 8);
+    // EVERY texel is written, and the bake's own contract says how: the stack composites over the
+    // opaque albedo, so alpha stays exactly 1. A row a band failed to visit keeps the image's
+    // calloc'd zero and shows up here -- which determinism alone cannot catch, since two bakes
+    // skip the same rows.
+    const auto everyTexelWritten = [](const ImageF& m) {
+        for (std::uint32_t y = 0; y < m.height; ++y)
+            for (std::uint32_t x = 0; x < m.width; ++x)
+                if (m.at(x, y).a != 1.0f) {
+                    INFO("unwritten texel at " << x << "," << y);
+                    return false;
+                }
+        return true;
+    };
+    CHECK(everyTexelWritten(map));
+    CHECK(everyTexelWritten(a.wallMaps[0]));
+    // Varies along x AND along y -- so the equality above is not comparing two flat maps, and a
+    // band that dropped its rows would have to reproduce the variation to pass.
+    CHECK(map.at(0, 0).b != map.at(map.width - 1, 0).b);
+    CHECK(map.at(0, 0).b != map.at(0, map.height - 1).b);
+
+    // The SOLID under the gradient is really in the result: drop it and the map must change.
+    mosaic::core::LayerEffects gradOnly;
+    gradOnly.gradientOverlay = fx.gradientOverlay;
+    const ExtrudeOverlay go = buildExtrudeOverlay(gradOnly, mesh, e, mesh.designBounds, 8.0, true);
+    REQUIRE(go.maps.size() == 1);
+    REQUIRE(go.maps[0].rgba.size() == map.rgba.size());
+    CHECK(go.maps[0].rgba != map.rgba);
+    // ... and its contribution is GREEN, on a red albedo, so the green channel has to rise.
+    CHECK(map.at(map.width / 2, map.height / 2).g > go.maps[0].at(map.width / 2, map.height / 2).g);
+}
+
 TEST_CASE("the front face carries the overlay; walls join only in wrap mode; the back cap never") {
     Extrude e = flatRed();  // lighting off: the shaded colour IS the (overlay) albedo
     const ExtrudeMesh mesh = buildExtrudeMesh({square10()}, e);
