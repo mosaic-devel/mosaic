@@ -628,7 +628,17 @@ static void nsvg__straightJoin(NSVGrasterizer* r, NSVGpoint* left, NSVGpoint* ri
 static int nsvg__curveDivs(float r, float arc, float tol)
 {
 	float da = acosf(r / (r + tol)) * 2.0f;
-	int divs = (int)ceilf(arc / da);
+	/* ---- MOSAIC LOCAL CHANGE 3 of 3 (see MOSAIC-PATCHES.md) --------------------------------
+	 * `r` is half a line width out of the file and `tol` is the tessellation tolerance, so
+	 * `da` reaches 0 (a zero tolerance, or a width so large the ratio rounds to 1) and
+	 * `arc / da` is then infinite. (int)ceilf(inf) is undefined behaviour -- seven witnesses at
+	 * this line, found only after the EXIF container walk widened the corpus enough to reach
+	 * stroke expansion at all. The upper bound also stops a huge count from turning one cap
+	 * into a very long loop. A real cap tessellates into a few dozen segments; 4096 cannot
+	 * change any drawing anyone made on purpose. */
+	const float nsvg__divsf = ceilf(arc / da);
+	int divs = (nsvg__divsf >= 2.0f && nsvg__divsf <= 4096.0f) ? (int)nsvg__divsf : 2;
+	/* ---- end MOSAIC LOCAL CHANGE ----------------------------------------------------------- */
 	if (divs < 2) divs = 2;
 	return divs;
 }

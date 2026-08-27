@@ -11,6 +11,15 @@
 #              generated sources (SPIR-V headers, embedded assets, wayland-scanner stubs), which is
 #              a whole build -- so it reuses the one the build job just did instead of paying for
 #              a second.
+#   fuzz       REPLAY of the checked-in fuzz corpus -- every input that has ever crashed one of
+#              the hand-written parsers (image decoders, brush presets, EXIF, SVG), replayed under
+#              ASan + UBSan.
+#
+# ⚠ THE FUZZ GATE REPLAYS; IT DOES NOT MUTATE. A fuzzer wired into CI as a pass/fail on mutation is
+# a test that fails on a coin flip and gets disabled within a month. What is gated is the CORPUS: a
+# regression test with a fuzzer's inputs and a unit test's determinism. Exploration is
+# `tools/fuzz/run-fuzzers.sh explore N`, run by hand or on a nightly, where a new finding is news
+# rather than a broken build.
 #
 # ⚠ Why the lint gates are scoped to a commit's own diff rather than the whole tree: the tree
 # predates any formatting gate and is not clang-format-clean (~48k lines of drift, and
@@ -178,3 +187,38 @@ jobs:
           echo
           echo "::error::Changed lines are not clang-format clean. Run: git clang-format $base"
           exit 1
+
+  fuzz:
+    name: Fuzz corpus replay (ASan + UBSan)
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      # clang, because libFuzzer is not a GCC feature -- this is the one place the project needs
+      # it. The rest is what the harnesses link: they compile real sources rather than the built
+      # libraries, so that ASan and UBSan instrument the code under test.
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm --needed \
+            cmake ninja git pkgconf clang compiler-rt \
+            vulkan-headers vulkan-icd-loader shaderc \
+            fltk spdlog lcms2 freetype2 harfbuzz enchant hyphen \
+            libpng libjpeg-turbo libtiff libwebp libavif libjxl giflib \
+            zlib zstd lz4 fontconfig expat \
+            systemd-libs libxi libxrandr libcanberra \
+            wayland wayland-protocols gettext python
+
+      - uses: actions/checkout@v7
+
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      # ⚠ CONFIGURE ONLY -- this job never builds the project. The harnesses compile real sources
+      # rather than linking the built libraries (so ASan and UBSan instrument the code under test),
+      # and the one generated header they need, version_config.hpp, comes from configure_file at
+      # CONFIGURE time. Verified: a bare configure into an empty directory is enough to build and
+      # replay all three. That makes this the cheapest gate in the file, not the most expensive.
+      - name: Configure (generates version_config.hpp)
+        run: cmake --preset linux-release
+
+      - name: Replay the corpus
+        run: ./tools/fuzz/run-fuzzers.sh replay

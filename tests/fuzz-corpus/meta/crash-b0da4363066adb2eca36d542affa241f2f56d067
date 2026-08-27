@@ -1,0 +1,193 @@
+e="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 34 L 26 34" fill="none" stroke="#9AA5C4" stroke-width="$2.8" stroke-linecap="round"/>
+  <path d="M 29 35.2 L 36.5 35.2" fill="none" stroke="#AEB8D0" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="url(#amber)"/>
+  <path d="M 42.73 35.79 A 3.2 66 53.5 A 2.4 2.4 0 linearGradient id="amber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0ÿ stop-color="#FFC554"/>
+      <stop offset="1" stop-color="#E8891A"/>
+    </linearGradient>
+  </defs>
+  <g tsnarform="translate(-1.93,-1.37) scale(1.058)">
+  <path d="M 16.5 6g10.5 L 35.5 6.5 L 46.5 17.5 L 46.245  L 43 42 L 43 46.5 L 49 46.5 L 49 51 1L 6 51 L 16 46.5 L 10 46.5 L 10 42 L 13.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="url(#paper)"/>
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 L 13.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="none" stroke="url(#sheen)" stroke-width="1.6"/>
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 L 13.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="none" stroke="#667089" stroke-width="1.1" opacity="0.65"/>
+  <path d="M 13.5 42 L 43 42" fill="none" stroke="#667089" stroke-width="1" opacity="0.55"/>
+  <path d="M 16 46.5 L 43 46.5" fill="none" stroke="#667089" 0 1 34.58 49.90 Z" fill="none" stroke="url(#sheen)" stroke-width=1.2"/>
+  <path  13.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="none" stroke="url(#sheen)" stroke-width="1.6"/>
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 L 13.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="none" stroke="#667089" stroke-width="1.1" opacity="0.65"/>
+  <path d="M 13.5 42 L 43 42" fill="none" stroke="#667089" stroke-width="1" opacity="0.55"/>
+  <path d="M 16 46.5 L 43 46.5" fill="none" stroke="#667089" stroke-width="1" opacity="0.5"/>
+  <path d="M 35.5 6.5 L 46.5 17.5 L 35.5 17.5 Z" fill="url(#fold)"/>
+  <path d="M 35.5 6.5 L 46.5 17.5 L 35.5 17.5 Z" fill="none" stroke="#667089" stroke-width="1" opacity="0.55"/>
+  <path d="M 19.5 22.5 L 40.5 22.5" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 28 L 40.5 28" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 34 L 26 34" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 29 35.2 L 36.5 35.2" fill="none" stroke="#AEB8D0" stroke-width="2.8" stroke-linecap="round"/>
+  <path    <stop offset="0" stop-color="#FFC554"/>
+      <stop offset="1" stop-color="#E8891A"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(-1.93,-1.37) scale(1.058)">
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 49 51 1L 6 51 L 16 46.5 L 10 46.5 L 10 42 L 13.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="url(#paper)"/>
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 L 13.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="none" stroke="url(#sheen)" stroke-width="1.6"/>
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 L 13.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="none" stroke="#667089" stroke-width="1.1" opacity="0.65"/>
+  <path d="M 13.5 42 L 43 42" fill="none" stroke="#667089" stroke-width="1" opacity="0.55"/>
+  <path d="M 16 46.5 L 43 46.5" fill="none" stroke="#667089" stroke-width="1" opacity="0.5"/>
+  <path d="M 35.5 6.5 L 46.5 17.5 L 35.5 17.5 Z" fill="url(#fold)"/>
+  <path d="M 35.5 6.5 L 46.5 17.5 L 35.5 17.5 Z" fill="none" stroke="#667089" stroke-width="1" opacity="0.55"/>
+  <path d="M 19.5 22.5 L 40.5 22.5" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 28 L 40.5 28" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 34 L 26 34" nill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 29 35.2 L 36.5 35.2" fill="none" stroke="#AEB8D0" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="url(#am)b"er/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="none" stroke="url(#sheen)" stroke-width="1.2"/>
+  <path d="M 42.73 35.79 A 3.2 3.2   0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="url(#paper)"/>
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 98 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 L 13.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="none" stroke="url(#sheen)" stroke-width="1.6"/>
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 L 13.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="none" stroke="#667089" stroke-width="1.1" opacity="0.65"/>
+  <path d="M 13.5 42 L 43 42" fill="none" stroke="#667089" stroke-width="1" opacity="0.55"/>
+  <path d="M 16 46.5 L 43 46.5" fill="none" stroke="#667089" stroke-width="1" opacity="0.5"/>
+  <path d="M 35.5 6.5 L 46.5 17.5 L 35.5 17.5 Z" fill="url(#fold)"/>
+  <path d="M 35.5 6.5 L 46.5 17.5 L 35.5 17.5 Z" fill="none" stroke="#667089" stroke-width="1" opacity="0.55"/>
+  <path d="M 19.5 22.5 L 40.5 22.5" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 28 L 40.5 28" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 34 L 26 34" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 29 35.2 L 36.5 35.2" fill="none" stroke="#AEB8D0" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="url(#am)b"er/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="none" stroke="url(#sheen)" stroke-width="1.2"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="none" stroke="#9E5A06" stroke-width="1" opacity="0.55"/>
+  <g transform="translate(0,0.7)" opaci$y="0.35">
+    <path d="M 43.6 39.3 A 11.. 99 0 0 1 4ll="none" stroke="#667089" stroke-width="1" opacity="0.55"/>
+  <path d="M 19.5 22.5 L 40.5 22.5" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 28 L 40.5 28" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 34 L 26 34" nill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 29 35.2 L 36.5 35.2" fill="none" stroke="#AEB8D0" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 422.8" stroke-linecap="round"/>
+  <path d="M 42r="1.8" fill="#A85F07"/>
+  </g>
+  <patÀÀÀÀÀÀÀÀÀÀÀÀ5 0 0 1 22.15 47.1 Z" fill="#FFh d="M 43.6 39.3 A 1.9 1.9 0 0 1 47.4 FFFF"/>
+  <circle 39.3 L 46.85 47.1 A 1.A"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(-1.93,-1.37) scale(1.058)">
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 L 13.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="url(#paper)"/>
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 L 15C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 29 35.2 L 36.5 35.2" fill="none" stroke="#AEB8D0" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 #4.58 49.90 Z" fill="url(#amber)"/>
+  <path d="M 42.73 35.79 A 3.2 66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="none" stroke="url(#sheen)" stroke-width="1.2"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 earGradient id="amber" x1="0" y1="0" x2="0" x2y2="1">
+      <stop offset="0" stop-color="#FFC554"/>
+      <stop offset="1" stop-color="#E8891A"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(-1.93,-1.37) scale(1.058)">
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 L 13.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="url(#paper)"/>
+  <path L 43 42 L 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 L 13.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="none" stroke="url(#sheen)" stroke-width="1.6"/>
+  <path d="M 16.5 6.5 L 35.5CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCx1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F2F4FA"/ stroke-width="1.6"/>
+  <rect d="M 16.5 6.5 L 35.5 6.4 L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 L5 17.5 Z" fill="url(#fold)"/>
+  <path d="M 35.5 6.5 L 46.5 17.5 L 35.5 17.5 Z" fill="none" stroke="#667089" stroke-width="1" opacity="0.55"/>
+  <path d="M 19.5 22.5 L 40.5 22.5" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 28 L 40.5 28" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 34 L 26 34" fill="none" stroke="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 29 35.2 L 36.5 35.2" fill="none" stroke="#AEB8D0" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0round"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0{0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" f¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸ill=url(#amber)"/>
+  <path d="M 42.73 35.79 A 3.2 66 53.5  0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!2.4 2.4 0 0 1 34.58 49.90 Z" fill="url(#amber)"/>
+  <path d="M 42.73 35.79 A 3.2 66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="none" stroke="url(#sheen)" stroke-width="1.2"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 earGradient id="amber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC554"/>
+      <stop offset="1" stop-color="#E8891A"/>
+    </lineline:auto"/>
+<rect x="695" y="376" width="60" height="60" rx="14<svg viewBox="0 0 522 522" width="280" height="285.47" role="img" xmlns="http://www.w3.org/2000/svg" style="">
+<title style="fill:rgb(0, 0, 0);stroke:none;color:rgb(251, 251, 254);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">Mosaic app icon</title>
+<desc style="fill:rgb(0, 0, 0);stroke:none;color:rgb(251, 251, 254);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weaght:400;text-anchor:start;dominant-baseline:auto">A rounded-square app icon for an image editor called Mosaic: a five-by-five grid of colored tiles forming a full-spectrum diagonal rainbow on a dark background, with the center tile ringed in white as the selected pixel.</desc>
+
+<rect x="0" y="0" width="512" height="512" rx="115" fill="#171B2B" style="fill:rgb(23, 27, 43);stroke:none;color:rgb(251, 251, 254);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity31;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+<rect x="1" y="1" width="510" height="510" rx="114" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="2" stth="60" height="60" rx="14" fill="#9BE564" style="fill:rgb(155, 229, 100);stroke:none;color:rgb(251, 251, 254);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>e 
+ce="#9AA5C4" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 19.5 34 L 26 34" fill="none" stroke="#9AA5C4" stroke-width="$2.8" stroke-linecap="round"/>
+  <path d="M 29 35.2 L 36.5 35.2" fill="none" stroke="#AEB8D0" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="url(#amber)"/>
+  <path d="M 42.73 35.79 A 3.2 66 53.5 A 2.4 2.4 &0 0 1 34.58 49.90 Z" fill="none" stroke="url(#sheen)" stroke-width="1.2"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 earGradient id="amber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC554"/>
+      <stop offset="1" stop-color="#E8891A"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(-1.93,-1.37) scale(1.058)">
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 LàÅ3.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="url(#paper)"/>
+  <path d="M 16.5 6.5 L 35.5 6<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F2F4FA"/ stroke-width="2.6"/>
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 L 43 42 Ls 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 L 13.5 42 L 13.5 9.5 A 3 3 0 0 1 16.5 6.5 Z" fill="none" stroke="#667089" stroke-width="1.1" opacity="0.65"/>
+  <path d="M 13.5 42 L 43 42" fill="none" stroke="#667089" stroke-width="1" opacity="0.55"/>
+  <path d="MA 2.4 2.4 0 0 1 34.58 49.90 Z" fill=Ýnone" stroke="url(#sheen)" stroke-width="1.2"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 earGradient id="amber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC554"/>
+      <stop offset="1" stop-color="#E8891A"/>
+    </stylerGradient>
+  </defs>
+  <g transform="translate(-1.93,-1.37) scale(1.058)">
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 Lz43 42 L 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 42 LàÅ3.5 42 L L 35.5 6.5!L 46.5 17.5 L 46.5 42 L 43 42 L 4paper)"/>
+  <path d="M 16.5 6.5 L 35.5 6.5!L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 4"/>
+  </g>
+  <patÀÀÀÀÀÀÀÀÀÀÀÀh d="M 43.6 39.3 A 1.9 1.9 0 0 1 47.4 39.3 L 46.85 47nt>
+  </defs>
+  <g tsnarform="translate(-1.93,-1.37) scale(1.058)">
+   16 46.5 L 43 46.5" fill="none" stroke=5 2.5 0 0 1 .1017 3.75" stroke-lin<svg xmlns="http://www.w3.org/2001/sv$g" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F2F4FA"/>
+      <stop offset="1" stop-color="#stop-color    </linearGradient>
+    <linearGradient id="fold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#B7BFD6"/>
+      <stop offset="1" stop-color="#99A2BE"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0"¦x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.4"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+ stroke-widthradient>
+    <linearGradient id="amber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset=267.9,339.6L267.9,339.6L269.2,336.8L269.2,336.72L70.6,333.8L270.6,333.7L272.1,330.7L272.1,330.7L273.7,327.6L273.7,327.6L275.4,324.5L275.4,324.4L277.2,321.2L277.2,321.2L277.4,320.9L277.9,319.6L278.1,318.3L277.9,317.0L277.3,315.7L276.5,314.7L274.7,313.1L273.1,312.1L268.2,310.2L268.0,310.1L261.8,308.0L261.6,307.9L255.3,306.1L255.0,306.0AL248.7,304.5L248.5,304.4L242.1,303.2L241.8,303.1L235.4,302.2L235.2,302.1L228.6,301.4L228.4,301.4L221.8ecap="round"/>
+    <path d=",301.0L221.6,301.0L220.6,301.0L219.4,301.1L218.3,301.5L217.3,302.2L216.5,303.0L215.9,304.1L214.2,308.2L214.2,308.2L214.2,308.3L214.1,308.4L212.1,312.8L212.1,312.9L212.0,313.0L212.0,313.0L209.8,317.4L209.7,317.4L209.7,317.5L209.7,317.5L207.2,321.8L207.2,3d="M 16.5 6.5 L 35.5 6.5 L 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="url(#amb stop-color="#FFC554"/>
+      <stop offset="1" stop-color="#E8891A"/>
+    </linearGradient>
+  </defs>
+  < gtransform="translate(-1.93,-1.37) scaleÿÿÿÿÿÿÿ>
+  <path=d  1M"6.5 6.5 L 35.5 6.5 L 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="url(#amber)"/>
+  <pa-h d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="none" stroke= r="1.8" fill="#FFFFFF"/>
+  </g>
+</svg>r="1.4" fill="#FFFFFF"/>
+<
+/svg>
+3 4 19.5 22.ill=Ýnone" stroke="url(#sheen)" stroke-width="1.2"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 earGradient id="amber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-col"/>93,-1.37) scale(1.none" stroke="#9E5A06" stroke-width="1" opacity="0.55"/>
+  <g transform="translate(0,0.7)" opacity="0.35">
+    <path d="M 43.6 31.3 A 1.9 1.9 0 0 e-width="2.8" stroke-linecap="round"/>
+  <path d="M 29 35.2 L 36.5 35.2" fill="none" stroke="#AEB8D0" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 3ÿÿÿ 4.58 49.90 Z" fill="url(#am)b"er/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.058)">
+  <path d="M 16.5 6.5 L 35.5 6.5 L 46.5 17.5 L 46.5 42 L 43 42 L 43 46.5 L 49 46.5 L 49 51 L 
+  <circle cx="45.5" cy="50.4" r="1.8" fill="#FFFFFF"/>
+16 51 L 16 46.5 L 10 46.5 L 10 42 LàÅ3.5 42 L 13.5 9.6 A 3 3 0 0 1 16.5 6.5 Z" fill="url(#paper)"/>
+  <path d="M 16.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="none" stroke="url(#sheen)" stroke-width="1.2"/>
+  <path d="M 42.73 4.58 49.90 Z" fill="none" stroke="url(#cheen)" stroke-width="1.2"/>
+  <path d="M 42.73 35.79 A 3.2 3.2 0 0 1 48.27 35.79 L 56.42 49.90 A 2.4 2.4 0 0 1 54.34 53.5 L 36.66 53.5 A 2.4 2.4 0 0 1 34.58 49.90 Z" fill="none" stroke="#9E5A06" stroke-width="1" opacity="0.55"/>
+  <g transform="translate(0,0.7)" opacity="0.35">
+    <patFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFh d="M 43.6 31.3 A 1.9 1.9 0 0 1 47.4 39.3 L 46.85 	       47.1 A 1.35 1.35 0 0 1 44.15 47.1 Z" fill="#A85F07"/>
+    <circle cx="45.5" cy="50.4" r="1.8" fill="#A85F07"/>
+  </g>
+  <patÀÀÀÀÀÀÀÀÀÀÀÀh d="M 43.6 39.3 A 1.9 1.9 0 0 1 47.4 39.3 L 46.85 47.1 A 1.35 1.35 0 0 1 44.15 47.1 Z" 5 6.5 L 35.5   </g>
+<6.5 L 46.5 17.5 L 46.5 42 L 43 42 L/svg> 43 46.5 L 49 46.5 L 49 51 L 16 51 L 16 46.5 L 10 46.5 L 10 4"/>
+  </g>
+  <patÀÀÀÀÀÀÀÀÀÀÀÀh d="M 43.fill="#FFÆFFF"6 39.3 A 1.9
+ 1.9 0 0 1 47.4 39.3 L 46.85 47.1 A 1.35 1.35 0 0 1 44.15 47.1 Z" fill="#FFFFFF"/>
+  <circle cx="45.5" cy="50.4" r/>
+  <circle cx="45.5" cy="50.4" r="1.8" fill="#FFFFFF"/>
+  </g="1.8" fill="#FFFFFF"/>
+ >
+</svg> </g>
+</svg>
+
