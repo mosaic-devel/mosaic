@@ -1,10 +1,6 @@
 // CPU 3D render-lane tests (S30-c, docs/type-tool.md §10.3): the software z-buffer rasterizer on
 // hand-built solids (deterministic, no fonts) plus one fonts-gated end-to-end renderTextF pass.
 // Asserts follow the render-test lesson: measure INK (coverage, colour, luminance), not just math.
-#include <doctest/doctest.h>
-
-#include <cmath>
-
 #include "common/geometry3d.hpp"
 #include "core/document.hpp"
 #include "core/layer.hpp"
@@ -12,11 +8,15 @@
 #include "core/text/extrude_mesh.hpp"
 #include "core/text/extrude_overlay.hpp"
 #include "core/text/extrude_render.hpp"
+#include "core/text/shaping.hpp"
 #include "core/text/text_layer_render.hpp"
 #include "core/text/text_model.hpp"
 #include "core/text/text_render.hpp"
-#include "core/text/shaping.hpp"
 #include "platform/font_db.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <doctest/doctest.h>
 
 using namespace mosaic::core::text;
 namespace vec = mosaic::core::vec;
@@ -350,6 +350,56 @@ TEST_CASE("overlay maps bake in design space: gradient direction, blend opacity,
     CHECK(mov.maps.size() == 2);
     CHECK(mov.mapForRun(0) == mov.mapForRun(2));
     CHECK(mov.mapForRun(0) != mov.mapForRun(1));
+}
+
+TEST_CASE("the mesh rasteriser is banded by SCANLINE, so it stays deterministic and gapless") {
+    // The fragment loop resolves every sample against a shared z-buffer, so it is split by ROW and
+    // not by triangle: a texel belongs to exactly one band, and each band walks the ranges and
+    // triangles in the same order the serial loop did, so its z-test resolves identically. Split by
+    // triangle instead and two threads would race for the same texel with the winner decided by
+    // timing.
+    //
+    // Rendered big enough to actually cross band boundaries -- parallelFor runs inline below its
+    // minimum per band, so a small render would exercise the serial path and prove nothing.
+    Extrude e = flatRed();
+    e.depth = 24.0f;
+    e.bevelFront.size = 2.0f;  // a bevel puts many small triangles near the silhouette, which is
+    e.bevelFront.segments = 3; // where a band boundary is most likely to drop one
+    e.orientation = Quat::fromAxisAngle({0.3, 1.0, 0.2}, 0.5); // off-axis: triangles span rows
+    const ExtrudeMesh mesh = buildExtrudeMesh({square10()}, e);
+    REQUIRE_FALSE(mesh.empty());
+
+    constexpr std::uint32_t kW = 420, kH = 380;
+    const auto render = [&] {
+        ImageF img(kW, kH);
+        renderExtrudeMeshF(img, mesh, e,
+                           Affine2D::translation(60.0, 40.0) * Affine2D::scaling(28.0, 28.0),
+                           /*antialias=*/true);
+        return img;
+    };
+    const ImageF a = render();
+    const ImageF b = render();
+    CHECK(a.rgba == b.rgba); // a race in the z-buffer split shows up here and nowhere else
+
+    // The solid must actually be large enough to have crossed bands, or the equality above is
+    // comparing two serial renders.
+    const Ink ink = scan(a);
+    REQUIRE(ink.count > 2000);
+    REQUIRE(ink.maxY - ink.minY > 100.0);
+
+    // ... and every row inside the silhouette must still reach FULL coverage somewhere. A band that
+    // failed to shade its first row leaves a stripe across the solid, which determinism cannot see
+    // (two renders drop the same row) -- and which a "does this row have any coverage at all" test
+    // cannot see either: 2x2 supersampling averages the missing row with its surviving twin, so a
+    // dropped row reads as alpha 0.5, not 0. The peak is what moves.
+    for (long y = static_cast<long>(ink.minY) + 1; y < static_cast<long>(ink.maxY); ++y) {
+        float peak = 0.0f;
+        for (std::uint32_t x = 0; x < kW; ++x)
+            peak = std::max(peak, a.at(x, static_cast<std::uint32_t>(y)).a);
+        INFO("row y=" << y << " peaks at alpha " << peak << ", inside [" << ink.minY << ", "
+                      << ink.maxY << "]");
+        CHECK(peak > 0.9f);
+    }
 }
 
 TEST_CASE(

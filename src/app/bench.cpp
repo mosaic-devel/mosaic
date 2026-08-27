@@ -1038,12 +1038,34 @@ std::vector<Case> runTypeKeystroke(std::uint32_t iters) {
     const std::string seed =
         "The quick brown fox jumps over the lazy dog, and then it does so again "
         "because a paragraph of body copy is what a keystroke actually re-shapes.";
+    // Short on purpose: a headline's cost is its POINT SIZE, not its character count, and a long
+    // string at 200 px would simply run off a 1920-wide canvas and be measuring the clip instead.
+    const std::string headline = "Harbinger";
 
+    // ⚠ THE SHAPES BELOW ARE THE POINT, not just the two paths. The original pair measures 28 px
+    // body copy in ONE run, which is the cheapest text a document can hold -- and it is the shape
+    // the type stack is LEAST likely to be slow on. The three added cases are the ones users
+    // actually report:
+    //
+    //   headline    one run at 200 px. The cache is baked at device scale, so the raster and every
+    //               effect over it grow with the SQUARE of the point size while the block's
+    //               character count does not. This is "large text on a 1080p document".
+    //   styled      the same body copy cut into a dozen runs by per-run styling, which is what an
+    //               italic emphasis or a coloured lead-in per paragraph produces. Each run is
+    //               rasterised into its own full-window image and composited, so the run COUNT is
+    //               a multiplier on the cache area.
+    //   3D headline the headline as an extruded solid. It pays everything the flat headline pays
+    //               and then meshes, bakes per-face overlay maps and renders the solid on top --
+    //               "3D text is slow for what it is" needs a row before it can be answered.
     struct Variant {
         const char* suffix;
         bool regionPath;  // false = the pre-S60-b full-document composite
+        int kind;         // 0 = 28px body, 1 = 200px headline, 2 = styled runs, 3 = 3D headline
     };
-    static constexpr Variant kVariants[] = {{" region", true}, {" full-composite", false}};
+    static constexpr Variant kVariants[] = {
+        {" region", true, 0},      {" full-composite", false, 0},   {" headline 200px", true, 1},
+        {" styled runs", true, 2}, {" headline 200px 3D", true, 3},
+    };
 
     // A font-less sandbox is a legitimate machine to build on -- report the cases as skipped
     // rather than pretend a number (the shaper has nothing to shape).
@@ -1051,6 +1073,7 @@ std::vector<Case> runTypeKeystroke(std::uint32_t iters) {
         for (const Variant& v : kVariants)
             cases.push_back(skipped(std::string("1920x1080") + v.suffix, "1920x1080, 2 layers",
                                     "no usable font on this machine"));
+        (void)0;
         return cases;
     }
 
@@ -1060,10 +1083,28 @@ std::vector<Case> runTypeKeystroke(std::uint32_t iters) {
         const auto doc = makeBenchDoc(kW, kH, 1);
         text::CharStyle style;
         style.setSolidFill(common::ColorF{0.06f, 0.07f, 0.09f, 1.0f});
-        style.sizePx = 28.0f;
+        style.sizePx = v.kind == 1 || v.kind == 3 ? 200.0f : 28.0f;
         style.font.family = family;
+        const std::string& body = v.kind == 1 || v.kind == 3 ? headline : seed;
         auto textLayer = doc->makeText("Body");
-        textLayer->setBlock(text::makeBlock(seed, style));
+        text::TextBlock block = text::makeBlock(body, style);
+        if (v.kind == 2) {
+            // Per-run styling, the way the type panel produces it: a short emphasised span every
+            // 24 characters, which cuts the block into ~a dozen runs.
+            for (std::size_t at = 0; at + 20 < block.utf8.size(); at += 24)
+                text::mutateStyleRange(block, at, at + 8, [](text::CharStyle& cs) {
+                    cs.font.italic = true;
+                    cs.setSolidFill(common::ColorF{0.9f, 0.4f, 0.1f, 1.0f});
+                });
+        }
+        if (v.kind == 3) {
+            text::Extrude ex;
+            ex.depth = 26.0f;
+            ex.bevelFront.size = 5.0f; // a bevelled front edge: the mesher's expensive half
+            ex.bevelFront.segments = 3;
+            block.extrude = ex;
+        }
+        textLayer->setBlock(std::move(block));
         textLayer->setTransform(common::Affine2D::translation(120.0, 240.0));
         const core::LayerId textId = textLayer->id();
         doc->root().addOnTop(std::move(textLayer));
@@ -1085,7 +1126,7 @@ std::vector<Case> runTypeKeystroke(std::uint32_t iters) {
         c.name = std::string("1920x1080") + v.suffix;
         c.shape = shapeOf(kW, kH, doc->layerCount(),
                           v.regionPath ? "dirty-region path" : "full composite");
-        const std::size_t caret = seed.size() / 2;
+        const std::size_t caret = body.size() / 2;
         for (std::uint32_t i = 0; i < iters + 1; ++i) {
             text::TextBlock block = tl->block();
             const char ch = kCycle[i % (sizeof kCycle - 1)];
