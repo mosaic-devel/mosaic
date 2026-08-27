@@ -247,14 +247,18 @@ std::vector<float> signedDistanceField(const std::vector<float>& alpha, int w, i
     });
     edt2d(distToOutside, w, h);
     edt2d(distToInside, w, h);
-    std::vector<float> sd(n);
+    // Resolved IN PLACE into `distToOutside`, which is then moved out. Each element reads only its
+    // own slot before overwriting it, so this is the same arithmetic in the same order -- what it
+    // drops is a third n-float buffer, and at 3x supersampling that buffer is not small: a
+    // headline's bevel field is 36.8 MP upsampled, so `std::vector<float> sd(n)` was a 147 MB
+    // allocation that std::vector zero-fills and the loop then overwrites completely.
     common::parallelFor(n, std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
         for (std::size_t i = i0; i < i1; ++i) {
             const bool inside = alpha[i] >= 0.5f;
-            sd[i] = inside ? -std::sqrt(distToOutside[i]) : std::sqrt(distToInside[i]);
+            distToOutside[i] = inside ? -std::sqrt(distToOutside[i]) : std::sqrt(distToInside[i]);
         }
     });
-    return sd;
+    return distToOutside;
 }
 
 std::vector<float> signedDistanceFieldAA(const std::vector<float>& alpha, int w, int h, int ss) {
