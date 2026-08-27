@@ -338,8 +338,11 @@ TEST_CASE("Levels at gamma 1 is exactly the linear range remap, pow or no pow") 
     core::Document doc(6, 1);
     seedTestCard(doc);
     addAdjustment(doc, core::AdjustmentKind::Levels,
-                  {{"in_black", inB}, {"in_white", inW}, {"gamma", 1.0},
-                   {"out_black", outB}, {"out_white", outW}});
+                  {{"in_black", inB},
+                   {"in_white", inW},
+                   {"gamma", 1.0},
+                   {"out_black", outB},
+                   {"out_white", outW}});
     const common::Image out = flatten(doc);
     const common::Image before = [] {
         core::Document d(6, 1);
@@ -358,12 +361,15 @@ TEST_CASE("Levels at gamma 1 is exactly the linear range remap, pow or no pow") 
     core::Document doc2(6, 1);
     seedTestCard(doc2);
     addAdjustment(doc2, core::AdjustmentKind::Levels,
-                  {{"in_black", inB}, {"in_white", inW}, {"gamma", 1.0000001},
-                   {"out_black", outB}, {"out_white", outW}});
+                  {{"in_black", inB},
+                   {"in_white", inW},
+                   {"gamma", 1.0000001},
+                   {"out_black", outB},
+                   {"out_white", outW}});
     const common::Image nearOne = flatten(doc2);
     for (std::uint32_t x = 0; x < 6; ++x)
-        CHECK(std::abs(static_cast<int>(px(nearOne, x, 0).r) -
-                       static_cast<int>(px(out, x, 0).r)) <= 1);
+        CHECK(std::abs(static_cast<int>(px(nearOne, x, 0).r) - static_cast<int>(px(out, x, 0).r)) <=
+              1);
 }
 
 TEST_CASE("Exposure: +1 EV doubles linear light (through the sRGB curve)") {
