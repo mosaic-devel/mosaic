@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(Mosaic
+    # 0.3.3 -- the 0.3.2 text-edit regression, a runaway 3D-mirror recomposite, the save-preview
+    # and New-Document stalls, and the first fuzzing pass over the hand-written parsers.
+    #
     # 0.3.2 -- the S60 performance arc, plus the Wayland app icon.
     #
     # 0.3.1 -- Windows interface fixes on top of 0.3.0 (PLAN.md item 9).
@@ -14,7 +17,7 @@ project(Mosaic
     # has to be able to name a build. So the version now moves only when something is RELEASED,
     # which is what SemVer asks of it. The short git commit is still appended (0.3.0+g<rev>) and is
     # still the exact identifier; the number in front of it is now the human-facing one.
-    VERSION 0.3.2
+    VERSION 0.3.3
     DESCRIPTION "A professional, GPU-accelerated, cross-platform image editor"
     HOMEPAGE_URL "https://github.com/mosaic-devel/mosaic"
     LANGUAGES CXX)
