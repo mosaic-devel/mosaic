@@ -96,22 +96,26 @@ std::vector<std::optional<std::vector<std::uint8_t>>> readNewestChunkPayloads(
         if (!f.read(reinterpret_cast<char*>(frame.data()),
                     static_cast<std::streamsize>(frame.size())))
             break;
-        // ⚠ The checksum gate is decodeChunkPayload's -- it returns nullopt for any record that
-        // did not verify -- so `rec->valid` here is a local restatement of the contract, not the
-        // thing enforcing it. Dropping it changes no behaviour (verified: the corrupt corpus
-        // cannot tell the difference). It stays because a reader of this loop should not have to
-        // go one layer down to learn that an unverified frame is never returned.
         const std::optional<ChunkRecord> rec = parseChunkAt(frame, 0);
-        if (rec.has_value() && rec->valid) {
-            if (std::optional<std::vector<std::uint8_t>> payload = decodeChunkPayload(*rec, frame)) {
-                out[want] = std::move(payload);
-                bestGeneration[want] = rec->generation;
-                haveBest[want] = true;
-            }
+        if (!rec.has_value() || !rec->valid) {
+            // ⚠ A FRAME THAT FAILED ITS CHECKSUM HAS AN UNTRUSTWORTHY LENGTH, and we have just
+            // learned that at no extra cost -- so do not step by it. scanChunks has always had
+            // this rule ("a valid chunk is consumed wholesale; anything else advances one byte
+            // and resyncs"); this walk skipped it and could be steered.
+            //
+            // The attack it closes is in the corpus as 19-adversarial-frame-skip: the length field
+            // is checksum-covered, so a crafted length necessarily invalidates its own frame -- and
+            // stepping by it lands past a frame the resyncing reader would have found. A file that
+            // hid its newest VECT that way made this walk and the in-memory scan disagree.
+            pos = findNextMagic(f, size, pos + 1);
+            continue;
         }
-        // Valid or not, the frame's own length is the best guess at where the next one starts; a
-        // wrong guess lands on no magic and resyncs on the next turn of the loop.
-        pos += head->frameLength;
+        if (std::optional<std::vector<std::uint8_t>> payload = decodeChunkPayload(*rec, frame)) {
+            out[want] = std::move(payload);
+            bestGeneration[want] = rec->generation;
+            haveBest[want] = true;
+        }
+        pos += head->frameLength; // verified, so its length is the container's own word
     }
     return out;
 }

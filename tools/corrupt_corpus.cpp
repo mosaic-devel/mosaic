@@ -44,6 +44,7 @@
 #include "io/mosaic/naming.hpp"
 #include "io/mosaic/save.hpp"
 #include "io/mosaic/tagscan.hpp"
+#include "io/mosaic/wire.hpp"
 
 #include <algorithm>
 #include <array>
@@ -168,6 +169,38 @@ void checkTapeMatchesScan(const fs::path& dir) {
                                (!want.has_value() || *want == *tape[i]);
             check(agree, p.filename().string() + ": on-disk walk == in-memory scan for " +
                              io::detail::tagToString(tags[i]));
+        }
+
+        // ⚠ AND THE SAME QUESTION IN THE SHAPE PRODUCTION ASKS IT. Everything above asked for nine
+        // tags at once, which means every frame of those types was READ AND VERIFIED -- a stricter
+        // configuration than any real caller uses. readDocumentCard asks for two, so every other
+        // frame in the file is stepped over on the strength of a length nobody checked, and a
+        // crafted file can still steer that step past something (19-adversarial-frame-skip is that
+        // attack; it is defeated for a tag being asked for, because the failed checksum is learned
+        // before the step, and NOT defeated in general).
+        //
+        // So completeness is not promised in the two-tag shape, and asserting it would be a lie.
+        // SOUNDNESS is promised and is what matters: whatever comes back is a real, verified frame
+        // of that tag out of this file -- never invented, never a frame that failed its checksum,
+        // never bytes from somewhere else. That holds however the framing is crafted, and it is
+        // the property the app depends on.
+        const std::array<io::ChunkTag, 2> cardTags{io::kTypeManifest, io::kTypePreview};
+        const auto card = io::readNewestChunkPayloads(p.string(), cardTags);
+        for (std::size_t i = 0; i < cardTags.size() && i < card.size(); ++i) {
+            if (!card[i].has_value())
+                continue; // nothing returned is always sound
+            bool isARealFrame = false;
+            for (const io::ChunkRecord& rec : io::scanChunks(bytes)) {
+                if (!rec.valid || rec.type != cardTags[i])
+                    continue;
+                if (const auto payload = io::decodeChunkPayload(rec, bytes);
+                    payload.has_value() && *payload == *card[i]) {
+                    isARealFrame = true;
+                    break;
+                }
+            }
+            check(isARealFrame, p.filename().string() + ": card read returned a REAL verified " +
+                                    io::detail::tagToString(cardTags[i]));
         }
     }
 }
@@ -580,6 +613,10 @@ constexpr const char* kFixtureNames[] = {
     "14-compacted-then-appended.mosaic", "15-manifest-replica.mosaic",
     "16-cas-folded.mosaic",       "17-cas-blob-rot.mosaic",
     "18-cas-repaired-by-parity.mosaic",
+    "19-adversarial-frame-skip.mosaic",
+    "20-adversarial-embedded-magic.mosaic",
+    "21-adversarial-decompression-bomb.mosaic",
+    "22-adversarial-giant-length.mosaic",
 };
 
 // Recovery journals and advisory locks are named <uuid>-<pathhash> under $XDG_STATE_HOME. Every
@@ -1275,6 +1312,147 @@ int main(int argc, char** argv) {
               "second holder. Open any .mosaic in two Mosaic windows at once: the second offers\n"
               "\"already open in another window\" ([Cancel] [Open read-only]); read-only routes Save to\n"
               "Save As. Kill the first window (a crash) and reopening acquires the stale lock cleanly.\n";
+    }
+
+    // ---- 19-22: ADVERSARIAL FRAMING ----------------------------------------------------------
+    //
+    // Everything above this line is DAMAGE: bit rot, torn tails, a killed root. Damage is random
+    // and does not aim. A .mosaic downloaded from the internet is neither -- every byte in it is
+    // chosen, including the ones the readers use to decide where the next frame begins and how
+    // much memory to allocate. These four are written by an adversary, not by a disk.
+    //
+    // What is NOT at stake, established before writing them so the fixtures aim at something real:
+    // chunk payloads live in std::vector<std::uint8_t> on the NX heap, the only mmap in the tree is
+    // the Wayland icon buffer at PROT_READ|PROT_WRITE, and there is no mprotect anywhere -- so file
+    // bytes never become executable memory. The decoders are bounded too (codec.hpp caps
+    // uncompressedLen at 256 MB, LZ4 uses the _safe decoder, ZSTD is handed an exact output size).
+    // The reachable attack surface here is CONFUSION -- making a reader skip content, mis-attribute
+    // it, or allocate absurdly -- not control flow.
+    std::printf("19-adversarial-frame-skip.mosaic\n");
+    {
+        const fs::path p = out / "19-adversarial-frame-skip.mosaic";
+        writeFile(p, base);
+        std::vector<std::uint8_t> bytes = readFile(p);
+
+        // Rewrite one frame's PAYLOAD LENGTH so that "skip to the next frame" lands exactly on a
+        // real MAGIC further along -- hopping OVER a manifest. The length field is checksum-
+        // covered, so the tampered frame no longer verifies: a reader that resyncs after an
+        // invalid record still finds the hidden frame, and a reader that trusts the length to
+        // skip does not. That is the whole trick, and it needs no invalid bytes anywhere else.
+        // ⚠ HIDE A VECTOR FRAME, NOT A MANIFEST. Hiding a manifest proves nothing: spec 2.3
+        // replicates it late in the file precisely so one lost copy cannot matter, so the
+        // format's own redundancy defeats this attack before the readers are even involved.
+        // (Tried it; both readers still agreed, via the replica.) A VECT frame has no replica,
+        // so hiding one is the case where a length-trusting reader and a resyncing reader can
+        // actually part company.
+        const std::vector<io::ChunkRecord> recs = io::scanChunks(bytes);
+        std::size_t victim = recs.size(), hidden = recs.size(), landing = recs.size();
+        // ... and hide the LAST vector frame, not just any one. Replicas and ties are decided
+        // later-wins, so hiding an early copy changes no answer -- the frame that has to disappear
+        // is the one that would have won.
+        for (std::size_t i = recs.size(); i-- > 1;) {
+            if (!recs[i].valid || recs[i].type != io::kTypeVector || i + 1 >= recs.size())
+                continue;
+            if (!recs[i - 1].valid || recs[i - 1].linked())
+                continue;
+            victim = i - 1;
+            hidden = i;
+            landing = i + 1;
+            break;
+        }
+        check(victim != recs.size(), "adversarial: found a frame to hide a vector behind");
+        if (victim != recs.size()) {
+            const std::size_t span = recs[landing].offset - recs[victim].offset;
+            const std::size_t suffix = io::chunkChecksumSize(recs[victim].type);
+            const std::size_t forgedPayload = span - io::kHeaderSize - suffix;
+            io::detail::storeLe32(bytes.data() + recs[victim].offset + io::kOffPayloadLen,
+                                  static_cast<std::uint32_t>(forgedPayload));
+            writeFile(p, bytes);
+
+            const io::OpenReport r = io::openDocument(readFile(p));
+            std::string err;
+            const auto d = io::documentFromReport(r, &err);
+            // The AUTHORITATIVE reader is unaffected: it resyncs after the tampered frame and
+            // finds everything, so the document opens exactly as the pristine one does.
+            check(d.has_value() && r.base.rootFound,
+                  "adversarial frame-skip: the full reader still opens the document");
+            check(recs[hidden].type == io::kTypeVector,
+                  "adversarial frame-skip: a vector frame is the one being hidden");
+        }
+    }
+
+    std::printf("20-adversarial-embedded-magic.mosaic\n");
+    {
+        // MAGIC bytes planted INSIDE a valid frame's payload. A reader that hunts for magic
+        // without consuming valid frames wholesale would parse attacker-chosen bytes as a header.
+        const fs::path p = out / "20-adversarial-embedded-magic.mosaic";
+        std::vector<std::uint8_t> bytes = base;
+        std::size_t planted = 0;
+        for (const io::ChunkRecord& rec : io::scanChunks(bytes)) {
+            if (!rec.valid || rec.type != io::kTypeTile || rec.payloadLen < 64)
+                continue;
+            std::copy(io::kChunkMagic.begin(), io::kChunkMagic.end(),
+                      bytes.begin() + static_cast<std::ptrdiff_t>(rec.payloadOffset + 16));
+            ++planted;
+            if (planted == 3)
+                break;
+        }
+        writeFile(p, bytes);
+        check(planted == 3, "adversarial: planted MAGIC inside three tile payloads");
+        // Those three tiles no longer verify (the payload is checksum-covered), so this is a
+        // three-tile data loss -- but the FRAMING must not be fooled into inventing chunks.
+        const io::OpenReport r = io::openDocument(readFile(p));
+        std::string err;
+        const auto d = io::documentFromReport(r, &err);
+        check(d.has_value() && r.base.rootFound,
+              "adversarial embedded magic: structure intact, no phantom chunks");
+    }
+
+    std::printf("21-adversarial-decompression-bomb.mosaic\n");
+    {
+        // A tiny payload claiming to expand to 4 GB. codec.hpp caps uncompressedLen, so the
+        // decoder must refuse rather than allocate -- this fixture exists so that cap can never be
+        // quietly removed.
+        const fs::path p = out / "21-adversarial-decompression-bomb.mosaic";
+        std::vector<std::uint8_t> bytes = base;
+        std::size_t bombed = 0;
+        for (const io::ChunkRecord& rec : io::scanChunks(bytes)) {
+            if (!rec.valid || rec.type != io::kTypeTile)
+                continue;
+            io::detail::storeLe32(bytes.data() + rec.offset + io::kOffUncompressedLen, 0xFFFFFFFFu);
+            ++bombed;
+            if (bombed == 2)
+                break;
+        }
+        writeFile(p, bytes);
+        check(bombed == 2, "adversarial: two tiles claim a 4 GB expansion");
+        const io::OpenReport r = io::openDocument(readFile(p));
+        std::string err;
+        const auto d = io::documentFromReport(r, &err);
+        check(d.has_value(), "adversarial bomb: refused, and the document still opens");
+    }
+
+    std::printf("22-adversarial-giant-length.mosaic\n");
+    {
+        // A payload length past the end of the file. The extent check must reject the frame and
+        // the scan must resync rather than reading (or trusting) past the buffer.
+        const fs::path p = out / "22-adversarial-giant-length.mosaic";
+        std::vector<std::uint8_t> bytes = base;
+        std::size_t hit = 0;
+        for (const io::ChunkRecord& rec : io::scanChunks(bytes)) {
+            if (!rec.valid || rec.type != io::kTypeTile)
+                continue;
+            io::detail::storeLe32(bytes.data() + rec.offset + io::kOffPayloadLen, 0xFFFFFF00u);
+            ++hit;
+            if (hit == 2)
+                break;
+        }
+        writeFile(p, bytes);
+        check(hit == 2, "adversarial: two frames claim a length past EOF");
+        const io::OpenReport r = io::openDocument(readFile(p));
+        std::string err;
+        const auto d = io::documentFromReport(r, &err);
+        check(d.has_value(), "adversarial giant length: rejected, document still opens");
     }
 
     // Every fixture above verified the READER's verdict. This verifies the on-disk chunk walk

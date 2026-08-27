@@ -32,6 +32,22 @@
 //
 // The one thing it deliberately does NOT do is notice damage in frames nobody asked about. That is
 // the full scan's job (openDocument), and a card reader has never reported it anyway.
+//
+// ⚠ SOUND, NOT COMPLETE, AGAINST A CRAFTED FILE -- and the difference is worth stating because a
+// .mosaic can arrive from anywhere. The length field is checksum-covered, so a crafted length
+// necessarily breaks its own frame's checksum; when the frame is one being ASKED FOR, that is
+// learned before the step and the walk resyncs instead (corrupt_corpus 19-adversarial-frame-skip
+// is exactly that attack, and it fails). When it is a frame nobody asked for, it is stepped over
+// unverified and a crafted length can steer that step past a frame the full scan would have found.
+//
+// So the guarantee is SOUNDNESS: everything returned is a real, verified frame of that tag out of
+// that file -- never invented, never one that failed its checksum, never bytes from elsewhere.
+// COMPLETENESS is not promised against an adversary: a crafted file can make this under-report,
+// and the consequence is a recents card showing an older thumbnail or none. The authoritative
+// reader (openDocument) does not use this and is unaffected.
+//
+// Nothing here executes, allocates on a claimed size, or indexes on an unverified length: payloads
+// land in std::vector on the NX heap, and codec.hpp caps what a frame may claim to decompress to.
 namespace mosaic::io::native {
 
 // The newest VALID frame's DECODED payload for each tag in `tags`, in the same order; nullopt for
