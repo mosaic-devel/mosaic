@@ -94,6 +94,21 @@ AppendedChunk appendChunk(std::vector<std::uint8_t>& out, ChunkTag type, const C
 [[nodiscard]] std::optional<ChunkRecord> parseChunkAt(std::span<const std::uint8_t> buf,
                                                       std::size_t offset);
 
+// The largest UNCOMPRESSED payload a chunk of this type may legitimately carry.
+//
+// codec.hpp's kMaxUncompressedLen is one ceiling for every type, and 256 MB is the right order for
+// a directory or a history table. For a TILE it is 16,384 times too generous: a tile is one 64x64
+// cell at no more than 4 bytes per pixel, so 16 KB is not a heuristic, it is the format's own
+// arithmetic (docio.cpp builds them as tw * th * bpp).
+//
+// ⚠ THIS IS A MEMORY-EXHAUSTION BOUND, not tidiness. A frame's UNCOMPRESSED_LEN is checksum-
+// covered, so it cannot be forged into an existing file -- but a file crafted from scratch carries
+// whatever checksum its author computed, and zeros compress about 32,000:1. A 2 MB file holding 160
+// valid TILE frames that each honestly expand to 256 MB drove openDocument to 23.6 GB of resident
+// memory in 18 seconds, because the full-scan path RETAINS one decoded payload per (type, key).
+// With the tile bound applied the same file costs 160 x 16 KB.
+[[nodiscard]] std::size_t maxUncompressedFor(const ChunkTag& type) noexcept;
+
 // The fields a 46-byte header carries, WITHOUT reading or verifying the payload -- everything
 // needed to decide "do I want this frame?" and "where does the next one start?".
 //

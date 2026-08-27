@@ -126,16 +126,24 @@ struct Rgb {
 // pinning the tape's answers to constants would just add a second thing to drift.
 [[nodiscard]] std::optional<std::vector<std::uint8_t>> newestByScan(
     const std::vector<std::uint8_t>& file, const io::ChunkTag& tag) {
-    std::optional<io::ChunkRecord> best;
+    // ⚠ NEWEST THAT DECODES, not newest-then-decode. A frame can verify and still be undecodable --
+    // the decompression bound refuses a valid frame whose claimed size is impossible for its type
+    // (fixture 21) -- and the walk being compared against falls back to the next candidate rather
+    // than giving up. A ground truth that gave up here would report a divergence that is really
+    // the reference model being naive; fixture 21 is exactly the file that catches it.
+    std::optional<std::vector<std::uint8_t>> bestPayload;
+    std::optional<std::uint64_t> bestGeneration;
     for (const io::ChunkRecord& rec : io::scanChunks(file)) {
         if (!rec.valid || rec.type != tag)
             continue;
-        if (!best.has_value() || rec.generation >= best->generation)
-            best = rec;
+        if (bestGeneration.has_value() && rec.generation < *bestGeneration)
+            continue;
+        if (auto payload = io::decodeChunkPayload(rec, file)) {
+            bestPayload = std::move(payload);
+            bestGeneration = rec.generation;
+        }
     }
-    if (!best.has_value())
-        return std::nullopt;
-    return io::decodeChunkPayload(*best, file);
+    return bestPayload;
 }
 
 void checkTapeMatchesScan(const fs::path& dir) {
@@ -1410,26 +1418,57 @@ int main(int argc, char** argv) {
 
     std::printf("21-adversarial-decompression-bomb.mosaic\n");
     {
-        // A tiny payload claiming to expand to 4 GB. codec.hpp caps uncompressedLen, so the
-        // decoder must refuse rather than allocate -- this fixture exists so that cap can never be
-        // quietly removed.
+        // ⚠ A REAL BOMB, not a patched length field. Patching UNCOMPRESSED_LEN in an existing
+        // frame breaks its checksum, so the decoder never even looks at it -- the first version of
+        // this fixture did exactly that and tested nothing. A file crafted from scratch carries
+        // whatever checksum its author computed, so the frame VERIFIES and the decoder really does
+        // try to expand it. Zeros compress about 32,000:1, so a few KB on the wire buys hundreds of
+        // megabytes of allocation.
+        //
+        // Measured before the bound existed, on a 2 MB file holding 160 such frames:
+        // openDocument reached 23.6 GB resident in 17.9 s, because the full-scan path RETAINS one
+        // decoded payload per (type, key) -- kMaxUncompressedLen caps each chunk at 256 MB and
+        // nothing capped the total. maxUncompressedFor now bounds a TILE by the format's own
+        // arithmetic (one 64x64 cell, <= 4 bpp = 16 KB), and the same file costs 21 MB in 10 ms.
         const fs::path p = out / "21-adversarial-decompression-bomb.mosaic";
+        constexpr std::size_t kBombExpand = 64u << 20; // 64 MB per frame, honestly compressible
+        constexpr int kBombCount = 16;
         std::vector<std::uint8_t> bytes = base;
-        std::size_t bombed = 0;
-        for (const io::ChunkRecord& rec : io::scanChunks(bytes)) {
-            if (!rec.valid || rec.type != io::kTypeTile)
-                continue;
-            io::detail::storeLe32(bytes.data() + rec.offset + io::kOffUncompressedLen, 0xFFFFFFFFu);
-            ++bombed;
-            if (bombed == 2)
-                break;
+        {
+            const std::vector<std::uint8_t> zeros(kBombExpand, 0);
+            for (int i = 0; i < kBombCount; ++i)
+                io::appendChunk(bytes, io::kTypeTile,
+                                io::tileKey(7, static_cast<std::uint32_t>(900 + i), 0), 99, zeros,
+                                io::Profile::Max);
         }
+        // Destroy the accelerators so the reader must FULL SCAN -- the fast path only decodes what
+        // the directory references, so appended frames would simply be ignored and the fixture
+        // would prove nothing. (Learned the same way as everything else here.)
+        for (const io::ChunkRecord& rec : io::scanChunks(bytes))
+            if (rec.valid && (rec.type == io::kTypeRoot || rec.type == io::kTypeDir ||
+                              rec.type == io::kTypeRootPtr))
+                corruptPayload(bytes, rec);
         writeFile(p, bytes);
-        check(bombed == 2, "adversarial: two tiles claim a 4 GB expansion");
-        const io::OpenReport r = io::openDocument(readFile(p));
+
+        const std::vector<std::uint8_t> onDisk = readFile(p);
+        std::size_t verified = 0, refused = 0;
+        for (const io::ChunkRecord& rec : io::scanChunks(onDisk)) {
+            if (!rec.valid || rec.type != io::kTypeTile || rec.uncompressedLen != kBombExpand)
+                continue;
+            ++verified; // the frame's checksum passes: this is a legitimate-looking chunk
+            if (!io::decodeChunkPayload(rec, onDisk).has_value())
+                ++refused; // ... and the decoder still declines to allocate for it
+        }
+        check(verified == kBombCount, "adversarial bomb: the bomb frames VERIFY (checksums pass)");
+        check(refused == verified, "adversarial bomb: every verifying bomb is refused before it "
+                                   "can allocate");
+        check(fs::file_size(p) < 4u << 20,
+              "adversarial bomb: the file is small; the claims are not");
+        const io::OpenReport r = io::openDocument(onDisk);
         std::string err;
         const auto d = io::documentFromReport(r, &err);
-        check(d.has_value(), "adversarial bomb: refused, and the document still opens");
+        check(d.has_value() && r.base.usedFullScan,
+              "adversarial bomb: full scan runs, and the document still opens");
     }
 
     std::printf("22-adversarial-giant-length.mosaic\n");

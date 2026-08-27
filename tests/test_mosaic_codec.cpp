@@ -1,4 +1,6 @@
 #include "io/mosaic/chunk.hpp"
+#include "io/mosaic/docio.hpp"   // kTileSize -- the number chunk.cpp mirrors
+#include "io/mosaic/preview.hpp" // kPreviewEdge -- ditto
 #include "io/mosaic/codec.hpp"
 #include "io/mosaic/paeth.hpp"
 
@@ -206,4 +208,61 @@ TEST_CASE("mosaic paeth: filtering pays on smooth content and round-trips with t
     REQUIRE(decoded.has_value());
     unfilterPaethRgba(*decoded, w, h);
     CHECK(*decoded == raw);
+}
+
+TEST_CASE("mosaic codec: a chunk may not claim more than its type can hold") {
+    using namespace mosaic::io::native;
+
+    // ⚠ THIS IS A MEMORY-EXHAUSTION BOUND. kMaxUncompressedLen alone caps every type at 256 MB,
+    // which is the right order for a directory or a history table and 16,384x too generous for a
+    // TILE. A frame's UNCOMPRESSED_LEN is checksum-covered, so it cannot be forged into an existing
+    // file -- but a file crafted from scratch carries whatever checksum its author computed, and
+    // zeros compress about 32,000:1. A 2 MB file holding 160 valid TILE frames that each honestly
+    // expanded to 256 MB drove openDocument to 23.6 GB resident in 17.9 s, because the full-scan
+    // path retains one decoded payload per (type, key) and nothing capped the total. With the
+    // per-type bound the same file costs 21 MB in 10 ms. corrupt_corpus ships that file as
+    // 21-adversarial-decompression-bomb.mosaic.
+    SUBCASE("a tile is one cell, and the bound says so") {
+        // chunk.cpp spells 64 and 256 out locally rather than including these headers, which sit
+        // ABOVE the framing layer and include it. This is the pin that keeps the two in step.
+        CHECK(maxUncompressedFor(kTypeTile) ==
+              static_cast<std::size_t>(kTileSize) * kTileSize * 4);
+        CHECK(maxUncompressedFor(kTypePreview) >=
+              static_cast<std::size_t>(kPreviewEdge) * kPreviewEdge * 4);
+        CHECK(maxUncompressedFor(kTypeTile) < kMaxUncompressedLen);
+        CHECK(maxUncompressedFor(kTypePreview) < kMaxUncompressedLen);
+    }
+    SUBCASE("types with no arithmetic bound keep the global ceiling") {
+        // A manifest, directory, history table, vector or blob has no size this layer can derive,
+        // so narrowing them would be a guess -- and a guess that refuses a legitimate document.
+        for (const ChunkTag& t : {kTypeManifest, kTypeRoot, kTypeDir, kTypeVector, kTypeHist,
+                                  kTypeBlob, kTypeCommit})
+            CHECK(maxUncompressedFor(t) == kMaxUncompressedLen);
+    }
+    SUBCASE("a VERIFYING frame is still refused when its claim is impossible") {
+        // The whole point: the checksum passing is not enough. Build a real, correctly-checksummed
+        // TILE frame whose payload honestly expands past what a tile can be, and watch the decoder
+        // decline it -- before it allocates.
+        const std::size_t tooBig = maxUncompressedFor(kTypeTile) + 1;
+        std::vector<std::uint8_t> wire;
+        appendChunk(wire, kTypeTile, tileKey(1, 0, 0), 7,
+                    std::vector<std::uint8_t>(tooBig, 0), Profile::Max);
+        const auto rec = parseChunkAt(wire, 0);
+        REQUIRE(rec.has_value());
+        CHECK(rec->valid);                       // it is a perfectly well-formed frame
+        CHECK(rec->uncompressedLen == tooBig);   // that claims one byte too many
+        CHECK_FALSE(decodeChunkPayload(*rec, wire).has_value()); // and is refused anyway
+    }
+    SUBCASE("and one byte under the bound still decodes") {
+        const std::size_t justFits = maxUncompressedFor(kTypeTile);
+        std::vector<std::uint8_t> wire;
+        appendChunk(wire, kTypeTile, tileKey(1, 0, 0), 7,
+                    std::vector<std::uint8_t>(justFits, 0xAB), Profile::Max);
+        const auto rec = parseChunkAt(wire, 0);
+        REQUIRE(rec.has_value());
+        REQUIRE(rec->valid);
+        const auto payload = decodeChunkPayload(*rec, wire);
+        REQUIRE(payload.has_value());
+        CHECK(payload->size() == justFits);
+    }
 }

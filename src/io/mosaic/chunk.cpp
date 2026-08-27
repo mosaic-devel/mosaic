@@ -131,6 +131,10 @@ std::optional<std::vector<std::uint8_t>> decodeChunkPayload(const ChunkRecord& r
                                                             std::span<const std::uint8_t> buf) {
     if (!rec.valid)
         return std::nullopt;
+    // Refuse BEFORE the decoder allocates. decompressPayload sizes its output buffer from the
+    // claim, so a frame claiming 256 MB costs 256 MB whether or not the stream can fill it.
+    if (rec.uncompressedLen > maxUncompressedFor(rec.type))
+        return std::nullopt;
     return decompressPayload(rec.payload(buf), static_cast<Profile>(rec.profile),
                              rec.uncompressedLen);
 }
@@ -179,6 +183,28 @@ std::optional<ChunkRecord> parseChunkAt(std::span<const std::uint8_t> buf, std::
     rec.valid = std::equal(expected.begin(), expected.begin() + static_cast<std::ptrdiff_t>(suffix),
                            rec.checksum.begin());
     return rec;
+}
+
+// ⚠ SPELLED OUT HERE RATHER THAN INCLUDED. The authoritative constants live in docio.hpp
+// (kTileSize) and preview.hpp (kPreviewEdge), both of which sit ABOVE this framing layer and
+// include it -- taking them as includes would invert the layering. test_mosaic_codec pins these
+// two numbers against the real definitions, so the duplication cannot drift silently.
+constexpr std::size_t kTileEdgeMirror = 64;     // == io::native::kTileSize
+constexpr std::size_t kPreviewEdgeMirror = 256; // == io::native::kPreviewEdge
+
+std::size_t maxUncompressedFor(const ChunkTag& type) noexcept {
+    // One 64x64 cell at no more than 4 bytes per pixel (mask surfaces are 1). docio.cpp builds
+    // them as tw * th * bpp and never bigger, so nothing legitimate is refused.
+    if (type == kTypeTile)
+        return kTileEdgeMirror * kTileEdgeMirror * 4;
+    // A preview is kPreviewEdge on its longest side, RGBA, plus its small payload header. The 4x
+    // edge allowance is headroom for a future format revision raising that budget -- still 64x
+    // tighter than the global ceiling.
+    if (type == kTypePreview)
+        return (kPreviewEdgeMirror * 4) * (kPreviewEdgeMirror * 4) * 4 + 4096;
+    // The rest -- manifests, directories, history tables, vector geometry, blobs -- have no
+    // arithmetic bound this layer can know, so they keep the global ceiling.
+    return kMaxUncompressedLen;
 }
 
 std::size_t chunkChecksumSize(const ChunkTag& type) noexcept {
