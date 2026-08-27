@@ -6,9 +6,11 @@
 #include "io/mosaic/manifest_tokens.hpp"
 #include "io/mosaic/format.hpp"
 #include "io/mosaic/preview.hpp"
+#include "io/mosaic/tagscan.hpp"
 
 #include <nlohmann/json.hpp>
 
+#include <array>
 #include <fstream>
 #include <iterator>
 #include <vector>
@@ -86,33 +88,21 @@ std::optional<DocumentFileInfo> readDocumentInfo(const std::string& path) {
 }
 
 DocumentCard readDocumentCard(const std::string& path) {
-    // ⚠ ONE read and ONE scan for BOTH answers. The dialog wants a manifest and a preview per
-    // recent, and asking for them separately meant reading the file twice and walking every chunk
-    // frame twice -- 231 ms per card on a 302 MB document, for two selections out of the same
-    // walk. The frames are the expensive part (33,664 of them there), not the picking.
+    // ⚠ THE TAPE HEAD GOES TO THE DISK, not the disk to memory. A card needs two frames -- the
+    // newest manifest and the newest preview -- out of a document that may hold tens of thousands,
+    // and pulling the whole file in to find them read 302 MB and hashed every tile to answer a
+    // question about two small chunks near the end. tagscan walks the frame chain on disk, reads
+    // 46-byte headers, and seeks past every payload it was not asked for.
+    const std::array<ChunkTag, 2> tags{kTypeManifest, kTypePreview};
+    std::vector<std::optional<std::vector<std::uint8_t>>> found =
+        readNewestChunkPayloads(path, tags);
     DocumentCard card;
-    std::vector<std::uint8_t> bytes;
-    if (!common::readWholeFile(path, bytes))
+    if (found.size() != tags.size())
         return card;
-    std::optional<ChunkRecord> bestManifest;
-    std::optional<ChunkRecord> bestPreview;
-    for (const ChunkRecord& rec : scanChunks(bytes)) {
-        if (!rec.valid)
-            continue;
-        if (rec.type == kTypeManifest) {
-            if (!bestManifest.has_value() || rec.generation >= bestManifest->generation)
-                bestManifest = rec;
-        } else if (rec.type == kTypePreview) {
-            if (!bestPreview.has_value() || rec.generation >= bestPreview->generation)
-                bestPreview = rec;
-        }
-    }
-    if (bestManifest.has_value())
-        if (const auto payload = decodeChunkPayload(*bestManifest, bytes))
-            card.info = parseManifestInfo(*payload);
-    if (bestPreview.has_value())
-        if (const auto payload = decodeChunkPayload(*bestPreview, bytes))
-            card.preview = decodePreviewPayload(*payload);
+    if (found[0].has_value())
+        card.info = parseManifestInfo(*found[0]);
+    if (found[1].has_value())
+        card.preview = decodePreviewPayload(*found[1]);
     return card;
 }
 

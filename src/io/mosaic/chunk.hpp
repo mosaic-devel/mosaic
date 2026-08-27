@@ -94,6 +94,31 @@ AppendedChunk appendChunk(std::vector<std::uint8_t>& out, ChunkTag type, const C
 [[nodiscard]] std::optional<ChunkRecord> parseChunkAt(std::span<const std::uint8_t> buf,
                                                       std::size_t offset);
 
+// The fields a 46-byte header carries, WITHOUT reading or verifying the payload -- everything
+// needed to decide "do I want this frame?" and "where does the next one start?".
+//
+// ⚠ NOTHING HERE IS VERIFIED. The checksum covers the payload, so a header alone cannot say whether
+// a frame is intact; `frameLength` is a claim by a length field that may itself be damaged. This
+// exists so a reader after ONE chunk out of a 300 MB file can seek past the rest instead of
+// hashing them -- it lands on the next header and, if the magic is not there, resyncs exactly as
+// scanChunks does. Anything that cares whether a frame is GOOD still reads it and calls
+// parseChunkAt.
+struct ChunkHeaderView {
+    ChunkTag type{};
+    std::uint8_t flags = 0;
+    std::uint64_t generation = 0;
+    std::uint32_t payloadLen = 0;
+    std::size_t frameLength = 0; // header [+ link] + payload + checksum, per the length field
+};
+
+// Parse a header from at least kHeaderSize bytes beginning with MAGIC. nullopt when the buffer is
+// too short or the magic is absent.
+[[nodiscard]] std::optional<ChunkHeaderView> parseChunkHeader(std::span<const std::uint8_t> buf);
+
+// The checksum suffix a tag carries (ROOT is BLAKE3-32, everything else xxh3-8). Public because
+// frame length is header + link + payload + THIS, and a streaming reader has to compute it.
+[[nodiscard]] std::size_t chunkChecksumSize(const ChunkTag& type) noexcept;
+
 // Linear magic-resync scan (spec 2.8, the full-scan fallback's engine): every chunk found, valid
 // or not, in file order. After an invalid or incomplete record the scan advances one byte and
 // hunts for the next MAGIC, so a corrupted length field cannot derail it; a valid chunk is

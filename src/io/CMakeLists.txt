@@ -101,6 +101,7 @@ mosaic_add_module(io
         mosaic/journal_session.cpp
         mosaic/lock.cpp
         mosaic/paeth.cpp
+        mosaic/tagscan.cpp
         mosaic/fileinfo.cpp
         mosaic/preview.cpp
         mosaic/records.cpp

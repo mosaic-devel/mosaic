@@ -21,7 +21,7 @@ using detail::storeLe64;
 namespace {
 
 [[nodiscard]] std::size_t checksumSizeFor(const ChunkTag& type) noexcept {
-    return type == kTypeRoot ? kStrongChecksumSize : kFastChecksumSize;
+    return chunkChecksumSize(type);
 }
 
 // Checksum over one contiguous range (frames are packed contiguously, so the checked region --
@@ -179,6 +179,27 @@ std::optional<ChunkRecord> parseChunkAt(std::span<const std::uint8_t> buf, std::
     rec.valid = std::equal(expected.begin(), expected.begin() + static_cast<std::ptrdiff_t>(suffix),
                            rec.checksum.begin());
     return rec;
+}
+
+std::size_t chunkChecksumSize(const ChunkTag& type) noexcept {
+    return type == kTypeRoot ? kStrongChecksumSize : kFastChecksumSize;
+}
+
+std::optional<ChunkHeaderView> parseChunkHeader(std::span<const std::uint8_t> buf) {
+    if (buf.size() < kHeaderSize)
+        return std::nullopt;
+    if (!std::equal(kChunkMagic.begin(), kChunkMagic.end(), buf.data()))
+        return std::nullopt;
+    const std::uint8_t* p = buf.data();
+    ChunkHeaderView h;
+    std::copy(p + kOffType, p + kOffType + 4, h.type.begin());
+    h.flags = p[kOffFlags];
+    h.generation = loadLe64(p + kOffGeneration);
+    h.payloadLen = loadLe32(p + kOffPayloadLen);
+    const std::size_t linkBytes = (h.flags & kFlagLinked) != 0 ? kLinkSize : 0;
+    h.frameLength = kHeaderSize + linkBytes + static_cast<std::size_t>(h.payloadLen) +
+                    chunkChecksumSize(h.type);
+    return h;
 }
 
 std::vector<ChunkRecord> scanChunks(std::span<const std::uint8_t> buf, std::size_t start) {

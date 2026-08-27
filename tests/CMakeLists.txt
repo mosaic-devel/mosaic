@@ -163,6 +163,7 @@ add_executable(mosaic_tests
     test_mosaic_format.cpp
     test_mosaic_codec.cpp
     test_mosaic_file.cpp
+    test_mosaic_tagscan.cpp
     test_mosaic_rs.cpp
     test_mosaic_journal.cpp
     test_mosaic_journal_session.cpp
