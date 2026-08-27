@@ -202,6 +202,30 @@ std::optional<Bitmap> decodeTga(const std::uint8_t* data, std::size_t size, std:
         fail(error, "TGA: unsupported colour-map index width");
         return std::nullopt;
     }
+    // ⚠ THE DEPTH HAS TO BE LEGAL FOR THE IMAGE TYPE, not merely legal in the abstract.
+    //
+    // The check above accepts {8, 15, 16, 24, 32} for every type, and readPixel below bounds its
+    // reads by bytesPerPixel = (pixelDepth + 7) / 8. For a truecolour image those two disagree: a
+    // type-2 (or RLE type-10) header declaring depth 8 gives bytesPerPixel == 1, so readPixel
+    // checks that ONE byte is available and then reads three -- b, g, r -- off the end of the
+    // buffer. A heap-buffer-overflow READ of attacker-controlled length, from opening a .tga.
+    //
+    // Found by fuzzing (libFuzzer + ASan, 1.1 M executions); it produced seventeen witnesses and
+    // all seventeen were this. The other five decoders came back clean over the same run.
+    //
+    // The honest fix is here rather than at the read: a truecolour TGA is 15/16/24/32 and a
+    // greyscale one is 8/16, by the format, so a header claiming otherwise is not a picture this
+    // decoder can read -- and saying so up front keeps bytesPerPixel and readPixel's appetite in
+    // agreement by construction instead of by coincidence.
+    if (!indexed && !greyscale && pixelDepth != 15 && pixelDepth != 16 && pixelDepth != 24 &&
+        pixelDepth != 32) {
+        fail(error, "TGA: unsupported pixel depth for a true-colour image");
+        return std::nullopt;
+    }
+    if (greyscale && pixelDepth != 8 && pixelDepth != 16) {
+        fail(error, "TGA: unsupported pixel depth for a greyscale image");
+        return std::nullopt;
+    }
 
     r.skip(idLength);  // the id field is free-form text; nothing here reads it
     if (r.pos() != 18u + idLength) {

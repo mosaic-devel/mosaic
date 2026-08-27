@@ -270,3 +270,59 @@ TEST_CASE("TGA rejects what it cannot decode and survives every truncation") {
             CHECK(decoded->consistent());
     }
 }
+
+TEST_CASE("TGA: a pixel depth its image type cannot have is refused, not read past") {
+    // ⚠ REGRESSION, found by fuzzing (libFuzzer + ASan): a heap-buffer-overflow READ reachable by
+    // opening a .tga file.
+    //
+    // The depth check accepted {8, 15, 16, 24, 32} for EVERY image type, while readPixel bounded
+    // its reads by bytesPerPixel = (pixelDepth + 7) / 8. For a TRUE-COLOUR image those disagree: a
+    // type-2 header declaring depth 8 gives bytesPerPixel == 1, so the reader checked that one byte
+    // was available and then read three -- b, g, r -- off the end of the buffer. Seventeen distinct
+    // fuzz witnesses, all of them this; the header now rejects the combination up front, which is
+    // what the format says anyway (true-colour is 15/16/24/32, greyscale is 8/16).
+    //
+    // The assertion is "declined", not "did not crash": in a normal build the old code read out of
+    // bounds and usually got away with it, which is exactly why it survived the hand-written
+    // negative tests below.
+    const auto header = [](std::uint8_t imageType, std::uint8_t depth) {
+        std::vector<std::uint8_t> f(18 + 64, 0);
+        f[2] = imageType;
+        f[12] = 4; // width  = 4
+        f[14] = 1; // height = 1
+        f[16] = depth;
+        return f;
+    };
+    std::string err;
+
+    SUBCASE("true-colour cannot be 8-bit") {
+        const auto f = header(2, 8);
+        CHECK_FALSE(mosaicfmt::decodeTga(f.data(), f.size(), &err).has_value());
+        CHECK(err.find("true-colour") != std::string::npos);
+    }
+    SUBCASE("nor can its RLE twin") {
+        const auto f = header(10, 8);
+        CHECK_FALSE(mosaicfmt::decodeTga(f.data(), f.size(), &err).has_value());
+    }
+    SUBCASE("greyscale cannot be 24- or 32-bit") {
+        for (std::uint8_t depth : {std::uint8_t{24}, std::uint8_t{32}}) {
+            const auto f = header(3, depth);
+            CHECK_FALSE(mosaicfmt::decodeTga(f.data(), f.size(), &err).has_value());
+        }
+    }
+    SUBCASE("and the legal combinations still decode") {
+        // The fix must not have narrowed what a real file may be: round-trip each depth the format
+        // does allow, through the encoder that writes it.
+        const Bitmap src = pattern(4, 3);
+        for (TgaOptions::Depth d :
+             {TgaOptions::Depth::Bgra32, TgaOptions::Depth::Bgr24, TgaOptions::Depth::Bgra16}) {
+            TgaOptions opt;
+            opt.depth = d;
+            const auto bytes = mosaicfmt::encodeTga(
+                mosaicfmt::ImageView{src.rgba.data(), src.width, src.height}, opt, &err);
+            REQUIRE(bytes.has_value());
+            const auto back = mosaicfmt::decodeTga(bytes->data(), bytes->size(), &err);
+            CHECK(back.has_value());
+        }
+    }
+}
