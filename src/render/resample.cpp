@@ -14,12 +14,6 @@ namespace {
 
 constexpr double kPi = 3.14159265358979323846;
 
-// A transform that maps every point to itself (the common case: a layer drawn 1:1).
-[[nodiscard]] bool isIdentity(const common::Affine2D& t) noexcept {
-    return t.m00 == 1.0 && t.m01 == 0.0 && t.m02 == 0.0 && t.m10 == 0.0 && t.m11 == 1.0 &&
-           t.m12 == 0.0;
-}
-
 [[nodiscard]] bool isInteger(double v) noexcept { return v == std::floor(v); }
 
 [[nodiscard]] double sinc(double x) noexcept {
@@ -47,6 +41,12 @@ double cubicKernel(double x, double B, double C) noexcept {
                 (8.0 * B + 24.0 * C)) /
                6.0;
     return 0.0;
+}
+
+// A transform that maps every point to itself (the common case: a layer drawn 1:1).
+bool isIdentity(const common::Affine2D& t) noexcept {
+    return t.m00 == 1.0 && t.m01 == 0.0 && t.m02 == 0.0 && t.m10 == 0.0 && t.m11 == 1.0 &&
+           t.m12 == 0.0;
 }
 
 bool isLosslessGrid(const common::Affine2D& t) noexcept {

@@ -47,12 +47,6 @@ using common::ImageF;
 using BlendFn = std::function<void(ImageF& acc, const ImageF& src, core::BlendMode mode,
                                    float opacity, const common::Rect* bounds)>;
 
-// A transform that maps every point to itself (the common case: a layer drawn 1:1).
-[[nodiscard]] bool isIdentity(const common::Affine2D& t) noexcept {
-    return t.m00 == 1.0 && t.m01 == 0.0 && t.m02 == 0.0 && t.m10 == 0.0 && t.m11 == 1.0 &&
-           t.m12 == 0.0;
-}
-
 // Split [0, count) into contiguous bands across hardware threads and run fn(begin, end) on
 // each. Bands touch disjoint ranges, so results stay bit-identical to the serial loop (the
 // golden test remains valid). `minPerBand` keeps small inputs serial — composites run per
@@ -2343,7 +2337,17 @@ ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std
         ImageF out;
         {
             MOSAIC_PERF_SCOPE("Group place (resample)", common::Lane::Cpu);
-            out = transformImageF(local, place, w, h, resolveFilter(rs.filter, place, rs.liveDrag));
+            // A group whose local extent already IS the target window, placed 1:1, is not a
+            // resample -- transformImageF's own first line recognises that and does `dst.rgba =
+            // src.rgba`. But `local` is dead the moment this returns, so that copy can be a MOVE.
+            // At 39.8 MP the buffer is 637 MB, and a full-canvas folder (the S60 fixture's Texture
+            // group) hits this exactly: it was reading and writing the whole accumulator to hand it
+            // to itself. Identical by definition -- the copy's result is its source.
+            if (isIdentity(place) && local.width == w && local.height == h)
+                out = std::move(local);
+            else
+                out = transformImageF(local, place, w, h,
+                                      resolveFilter(rs.filter, place, rs.liveDrag));
         }
         if (written != nullptr) {
             const common::Rect reach{-kMaxFootprintRadius - 1.0, -kMaxFootprintRadius - 1.0,

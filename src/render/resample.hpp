@@ -48,6 +48,12 @@ namespace mosaic::render {
 // A non-Auto value is returned unchanged (the user's explicit pick is honoured).
 [[nodiscard]] ResampleFilter chooseAutoFilter(const common::Affine2D& t, bool liveDrag) noexcept;
 
+// A transform that maps every point to itself. Exposed because the compositor's group branch has
+// to ask the SAME question transformImageF asks internally -- a placed group buffer that is already
+// the target window is not a resample -- and two spellings of "identity" that could disagree would
+// mean the caller took a shortcut for a placement the callee would have resampled.
+[[nodiscard]] bool isIdentity(const common::Affine2D& t) noexcept;
+
 // A transform that maps the integer pixel grid onto itself: identity, an integer translation, an
 // integer scale (incl. flips) and/or a 90-degree.k rotation -- the lossless cases where Nearest is
 // exact (and keeps pixel art crisp). The linear part must be a signed integer scale on either the

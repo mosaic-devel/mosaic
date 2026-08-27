@@ -239,6 +239,76 @@ TEST_CASE("a group's opacity applies to the whole group") {
     CHECK(px(flatten(doc), 0, 0) == common::Color8{128, 128, 128, 255});
 }
 
+TEST_CASE("a full-canvas group placed 1:1 composites the same as its children do bare") {
+    // A group whose local extent already IS the target window, placed 1:1, is not a resample: the
+    // placed buffer is the composited buffer. renderLayerRaw MOVES it rather than copying, which
+    // at 39.8 MP saves reading and writing 637 MB to hand a buffer to itself -- and makes `local`
+    // a moved-from object for the rest of the function.
+    //
+    // So this pins the two things a move can break that a copy cannot: that the placed result is
+    // the children's composite (not an empty or garbage buffer), and that the mask fold applied to
+    // the local buffer BEFORE the move still reaches the output.
+    const auto build = [](bool wrapInGroup, bool masked) {
+        core::Document doc(24, 16);
+        auto base = doc.makeRaster("base", 24, 16);
+        for (std::uint32_t y = 0; y < 16; ++y)
+            for (std::uint32_t x = 0; x < 24; ++x) {
+                const std::size_t p = (static_cast<std::size_t>(y) * 24 + x) * 4;
+                base->image().rgba[p] = static_cast<std::uint8_t>(x * 10);
+                base->image().rgba[p + 1] = static_cast<std::uint8_t>(y * 15);
+                base->image().rgba[p + 2] = 200;
+                base->image().rgba[p + 3] = 255;
+            }
+        core::RasterMask mask; // opaque left half, transparent right half
+        mask.width = 24;
+        mask.height = 16;
+        mask.enabled = true;
+        mask.linked = true;
+        mask.coverage.assign(static_cast<std::size_t>(24) * 16, std::uint8_t{0});
+        for (std::uint32_t y = 0; y < 16; ++y)
+            for (std::uint32_t x = 0; x < 12; ++x)
+                mask.coverage[static_cast<std::size_t>(y) * 24 + x] = 255;
+        if (!wrapInGroup) {
+            if (masked)
+                base->setMask(mask);
+            doc.root().addOnTop(std::move(base));
+            return flatten(doc);
+        }
+        auto group = doc.makeGroup("grp");
+        group->addOnTop(std::move(base));
+        if (masked)
+            group->setMask(mask);
+        doc.root().addOnTop(std::move(group));
+        return flatten(doc);
+    };
+    // Unmasked: the group is pure packaging, so wrapping must change nothing at all.
+    CHECK(build(/*wrapInGroup=*/true, /*masked=*/false).rgba ==
+          build(/*wrapInGroup=*/false, /*masked=*/false).rgba);
+    // Masked: the fold happens on the local buffer, before the move. A move that lost it would
+    // leave the right half painted.
+    const common::Image maskedGroup = build(/*wrapInGroup=*/true, /*masked=*/true);
+    CHECK(maskedGroup.rgba == build(/*wrapInGroup=*/false, /*masked=*/true).rgba);
+    CHECK(px(maskedGroup, 3, 8).a == 255); // inside the mask
+    CHECK(px(maskedGroup, 20, 8).a == 0);  // outside it
+
+    // ⚠ IDENTITY DOES NOT IMPLY MATCHING SIZES, and the size check is what carries that. A group
+    // whose content starts AT THE ORIGIN but covers only part of the canvas gets a local extent of
+    // (0, 0, w', h'): the buffer->local map is a translation by zero, i.e. the identity, while the
+    // buffer is smaller than the target window. Moving there would hand back a buffer of the wrong
+    // size. This is the case that fails if the move is gated on the placement alone.
+    core::Document quadrant(24, 16);
+    auto small = quadrant.makeRaster("small", 12, 8);
+    small->image().fill({255, 0, 0, 255});
+    auto grp = quadrant.makeGroup("grp");
+    grp->addOnTop(std::move(small));
+    quadrant.root().addOnTop(std::move(grp));
+    const common::Image out = flatten(quadrant);
+    REQUIRE(out.width == 24);
+    REQUIRE(out.height == 16);
+    CHECK(px(out, 3, 3) == common::Color8{255, 0, 0, 255}); // the group's quadrant is painted
+    CHECK(px(out, 20, 12).a == 0);                          // and the rest of the canvas is not
+}
+
 TEST_CASE("an adjustment layer scopes to its group, not the layers outside it") {
     // 2x1 canvas. Red base everywhere; a group adds green to the left pixel only and inverts
     // INSIDE the group -> the invert touches the green, never the red base.
