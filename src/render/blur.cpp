@@ -267,8 +267,8 @@ void gatherKernel(ImageF& img, const Gather& gather) {
 // Each output is the spatial taper times a Gaussian on the luma difference to the centre,
 // normalised per pixel because the range term varies per pixel (unlike a fixed convolution).
 void bilateralPass(const Floats& src, const std::vector<float>& luma, Floats& dst,
-                   std::size_t start, std::size_t step, int len,
-                   const float* spatial, int r, float rangeCoeff) {
+                   std::size_t start, std::size_t step, int len, const float* spatial, int r,
+                   float rangeCoeff) {
     for (int i = 0; i < len; ++i) {
         const std::size_t centre = start + static_cast<std::size_t>(i) * step;
         const float centreLuma = luma[centre];

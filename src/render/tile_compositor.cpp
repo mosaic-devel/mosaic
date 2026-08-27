@@ -2290,12 +2290,12 @@ bool TileCompositor::ensureLayerResident(const core::Layer& layer, VkCommandBuff
         // gradient) and it is the same precision the accumulator itself already carries, which is
         // what the 1/255 parity bound was set against. Refusing instead would leave every sky
         // document on the CPU walk to dodge a rounding the accumulator applies one line later.
-        return uploadWith(src.pixels, static_cast<VkDeviceSize>(pixelBytes),
-                          [&](std::uint8_t* p) {
-                              const common::Floats& f = leaf.pixelsF->rgba;
-                              auto* h = reinterpret_cast<std::uint16_t*>(p);
-                              for (std::size_t i = 0; i < f.size(); ++i) h[i] = floatToHalf(f[i]);
-                          });
+        return uploadWith(src.pixels, static_cast<VkDeviceSize>(pixelBytes), [&](std::uint8_t* p) {
+            const common::Floats& f = leaf.pixelsF->rgba;
+            auto* h = reinterpret_cast<std::uint16_t*>(p);
+            for (std::size_t i = 0; i < f.size(); ++i)
+                h[i] = floatToHalf(f[i]);
+        });
     };
     if (leaf.width > 0 && !sendPixels()) {
         destroyImage(src.pixels);

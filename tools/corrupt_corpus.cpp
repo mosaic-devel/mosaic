@@ -38,10 +38,10 @@
 #include "io/mosaic/file.hpp"
 #include "io/mosaic/journal.hpp"
 #include "io/mosaic/journal_session.hpp"
+#include "io/mosaic/naming.hpp"
 #include "io/mosaic/records.hpp"
 #include "io/mosaic/reedsolomon.hpp"
 #include "io/mosaic/salvage.hpp"
-#include "io/mosaic/naming.hpp"
 #include "io/mosaic/save.hpp"
 #include "io/mosaic/tagscan.hpp"
 #include "io/mosaic/wire.hpp"
@@ -124,8 +124,8 @@ struct Rgb {
 // ⚠ This deliberately compares against scanChunks rather than against a hand-written expectation.
 // The corpus's whole method is that a fixture which drifts from the real reader fails loudly here;
 // pinning the tape's answers to constants would just add a second thing to drift.
-[[nodiscard]] std::optional<std::vector<std::uint8_t>> newestByScan(
-    const std::vector<std::uint8_t>& file, const io::ChunkTag& tag) {
+[[nodiscard]] std::optional<std::vector<std::uint8_t>>
+newestByScan(const std::vector<std::uint8_t>& file, const io::ChunkTag& tag) {
     // ⚠ NEWEST THAT DECODES, not newest-then-decode. A frame can verify and still be undecodable --
     // the decompression bound refuses a valid frame whose claimed size is impossible for its type
     // (fixture 21) -- and the walk being compared against falls back to the next candidate rather
@@ -173,8 +173,8 @@ void checkTapeMatchesScan(const fs::path& dir) {
         }
         for (std::size_t i = 0; i < tags.size(); ++i) {
             const auto want = newestByScan(bytes, tags[i]);
-            const bool agree = want.has_value() == tape[i].has_value() &&
-                               (!want.has_value() || *want == *tape[i]);
+            const bool agree =
+                want.has_value() == tape[i].has_value() && (!want.has_value() || *want == *tape[i]);
             check(agree, p.filename().string() + ": on-disk walk == in-memory scan for " +
                              io::detail::tagToString(tags[i]));
         }
@@ -611,15 +611,24 @@ bool skyGlowPresent(core::Document& doc) {
 // exact paths -- and ONLY these, so pointing the tool at a directory holding real documents can
 // never take their crash-restore data with it.
 constexpr const char* kFixtureNames[] = {
-    "00-pristine.mosaic",         "01-appended-saves.mosaic",
-    "02-repaired-by-parity.mosaic", "03-damaged-beyond-parity.mosaic",
-    "04-torn-last-save.mosaic",   "05-damaged-mid-history.mosaic",
-    "06-dual-writer.mosaic",      "07-structure-destroyed.mosaic",
-    "08-content-cratered.mosaic", "09-shredded.mosaic",
-    "10-journal-restore.mosaic",  "11-journal-orphan.mosaic",
-    "12-compacted.mosaic",        "13-compacted-history-rot.mosaic",
-    "14-compacted-then-appended.mosaic", "15-manifest-replica.mosaic",
-    "16-cas-folded.mosaic",       "17-cas-blob-rot.mosaic",
+    "00-pristine.mosaic",
+    "01-appended-saves.mosaic",
+    "02-repaired-by-parity.mosaic",
+    "03-damaged-beyond-parity.mosaic",
+    "04-torn-last-save.mosaic",
+    "05-damaged-mid-history.mosaic",
+    "06-dual-writer.mosaic",
+    "07-structure-destroyed.mosaic",
+    "08-content-cratered.mosaic",
+    "09-shredded.mosaic",
+    "10-journal-restore.mosaic",
+    "11-journal-orphan.mosaic",
+    "12-compacted.mosaic",
+    "13-compacted-history-rot.mosaic",
+    "14-compacted-then-appended.mosaic",
+    "15-manifest-replica.mosaic",
+    "16-cas-folded.mosaic",
+    "17-cas-blob-rot.mosaic",
     "18-cas-repaired-by-parity.mosaic",
     "19-adversarial-frame-skip.mosaic",
     "20-adversarial-embedded-magic.mosaic",
@@ -1495,7 +1504,8 @@ int main(int argc, char** argv) {
     }
 
     // Every fixture above verified the READER's verdict. This verifies the on-disk chunk walk
-    // against the same files -- the one reader in the tree that skips frames it has not checksummed.
+    // against the same files -- the one reader in the tree that skips frames it has not
+    // checksummed.
     std::printf("\n-- on-disk chunk walk vs in-memory scan --\n");
     checkTapeMatchesScan(out);
 

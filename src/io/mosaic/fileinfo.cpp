@@ -1,18 +1,16 @@
 #include "io/mosaic/fileinfo.hpp"
 
 #include "common/fs_path.hpp"
-
 #include "io/mosaic/chunk.hpp"
-#include "io/mosaic/manifest_tokens.hpp"
 #include "io/mosaic/format.hpp"
+#include "io/mosaic/manifest_tokens.hpp"
 #include "io/mosaic/preview.hpp"
 #include "io/mosaic/tagscan.hpp"
-
-#include <nlohmann/json.hpp>
 
 #include <array>
 #include <fstream>
 #include <iterator>
+#include <nlohmann/json.hpp>
 #include <vector>
 
 namespace mosaic::io::native {
@@ -26,8 +24,8 @@ constexpr std::uint32_t kMaxSurfaceDim = 30000; // docio.cpp's open-time sanity 
 namespace {
 // The manifest JSON -> DocumentFileInfo half, split out so the single-pass card reader below can
 // share it with documentInfoInFile rather than re-implementing the tolerance rules.
-[[nodiscard]] std::optional<DocumentFileInfo> parseManifestInfo(
-    std::span<const std::uint8_t> payload) {
+[[nodiscard]] std::optional<DocumentFileInfo>
+parseManifestInfo(std::span<const std::uint8_t> payload) {
     const json m = json::parse(payload.begin(), payload.end(), nullptr, false);
     if (m.is_discarded() || !m.is_object())
         return std::nullopt;

@@ -573,7 +573,8 @@ public:
     // TWO counters, because the pixels depend on two things that change independently: the BLOCK
     // (contentRevision, which is document content and undoable) and the reflection ENV (which is
     // render support the app rebuilds, with no undo and no effect on the layer's bounds). Keeping
-    // them apart is what stops a mirror swap from reading as a content edit -- see setReflectionEnv.
+    // them apart is what stops a mirror swap from reading as a content edit -- see
+    // setReflectionEnv.
     [[nodiscard]] bool cacheCurrent() const noexcept {
         return m_cacheRevision == m_contentRevision && m_cacheEnvRevision == m_envRevision;
     }
@@ -675,7 +676,7 @@ private:
     mutable common::Affine2D m_cacheImageToLayer = common::Affine2D::identity();
     mutable common::Affine2D m_cacheLinear = common::Affine2D::identity();  // baked linear (cache key)
     mutable std::uint64_t m_cacheRevision = static_cast<std::uint64_t>(-1);  // != revision => stale
-    mutable std::uint64_t m_cacheEnvRevision = static_cast<std::uint64_t>(-1);  // ... and the env's
+    mutable std::uint64_t m_cacheEnvRevision = static_cast<std::uint64_t>(-1); // ... and the env's
     mutable std::uint64_t m_cacheGeneration = 0;  // ++ per setCachedImage (see cacheGeneration())
     mutable bool m_cacheClipped = false;  // was the cache clipped to the Area box? (cache-validity key)
     mutable std::array<OverlayEffect, 3> m_cacheOverlays{};  // baked 3D overlays (cache-validity key)

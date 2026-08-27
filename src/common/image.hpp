@@ -7,10 +7,10 @@
 #include <cstdlib>
 #include <limits>
 #include <new>
-#include <type_traits>
-#include <utility>
 #include <optional>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace mosaic::common {
@@ -74,8 +74,7 @@ struct ColorF {
 // ImageF are sized once at construction and replaced wholesale, never shrunk and regrown, and
 // `assign()` fills explicitly on every path that reuses a buffer -- see render/compositor.cpp's
 // rasteriseLayerInto, which is the only reuse site in the tree.
-template <typename T>
-struct ZeroPageAllocator {
+template <typename T> struct ZeroPageAllocator {
     static_assert(std::is_trivially_default_constructible_v<T>,
                   "the no-op construct below is only sound for types whose value-init is all-bits-"
                   "zero -- which is what calloc hands back");
@@ -142,7 +141,7 @@ struct Image {
 struct ImageF {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
-    Floats rgba;  // size == width * height * 4
+    Floats rgba; // size == width * height * 4
 
     ImageF() = default;
     // ⚠ `rgba(n)`, NOT `rgba(n, 0.0f)`. The second form is a fill-construct and memsets the whole

@@ -1,16 +1,5 @@
 #include "render/compositor.hpp"
 
-#include <algorithm>
-#include <array>
-#include <cstdlib>
-#include <cmath>
-#include <cstddef>
-#include <functional>
-#include <memory>
-#include <numbers>
-#include <type_traits>
-#include <vector>
-
 #include "common/geometry.hpp"
 #include "common/log.hpp"
 #include "common/profiler.hpp"
@@ -20,16 +9,27 @@
 #include "core/document.hpp"
 #include "core/layer.hpp"
 #include "core/layer_effects.hpp"
-#include "core/vector/flatten.hpp"  // vec::contentBounds(Object) -- the merge-down vector route
+#include "core/vector/flatten.hpp" // vec::contentBounds(Object) -- the merge-down vector route
 #include "core/vector/raster.hpp"
-#include "core/vector/to_path.hpp"  // vec::pathFromGeometry / transformedPath (same route)
+#include "core/vector/to_path.hpp" // vec::pathFromGeometry / transformedPath (same route)
 #include "render/blend.hpp"
 #include "render/blur.hpp"
-#include "render/effect_primitives.hpp"  // fx::boxBlurApprox -- the S34 shadows/highlights mask
+#include "render/effect_primitives.hpp" // fx::boxBlurApprox -- the S34 shadows/highlights mask
 #include "render/gpu_compositor.hpp"
 #include "render/layer_effects_render.hpp"
 #include "render/resample.hpp"
-#include "render/stylize.hpp"  // the S35 artistic/stylize family (one branch, three functions)
+#include "render/stylize.hpp" // the S35 artistic/stylize family (one branch, three functions)
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <cstdlib>
+#include <functional>
+#include <memory>
+#include <numbers>
+#include <type_traits>
+#include <vector>
 
 namespace mosaic::render {
 namespace {
@@ -2138,13 +2138,27 @@ void walkStep(GroupWalk& st, const core::Layer& layer, const ImageF& src, const 
 [[nodiscard]] std::string layerRowName(const core::Layer& layer) {
     const char* kind = "?";
     switch (layer.kind()) {
-    case core::LayerKind::Group: kind = "group"; break;
-    case core::LayerKind::Raster: kind = "raster"; break;
-    case core::LayerKind::Vector: kind = "vector"; break;
-    case core::LayerKind::Text: kind = "text"; break;
-    case core::LayerKind::Adjustment: kind = "adjust"; break;
-    case core::LayerKind::Magic: kind = "magic"; break;
-    case core::LayerKind::Texture: kind = "texture"; break;
+    case core::LayerKind::Group:
+        kind = "group";
+        break;
+    case core::LayerKind::Raster:
+        kind = "raster";
+        break;
+    case core::LayerKind::Vector:
+        kind = "vector";
+        break;
+    case core::LayerKind::Text:
+        kind = "text";
+        break;
+    case core::LayerKind::Adjustment:
+        kind = "adjust";
+        break;
+    case core::LayerKind::Magic:
+        kind = "magic";
+        break;
+    case core::LayerKind::Texture:
+        kind = "texture";
+        break;
     }
     std::string name = layer.name();
     if (name.size() > 28)
@@ -2166,8 +2180,9 @@ public:
     ~LayerTimer() {
         if (!m_on)
             return;
-        const double ms = std::chrono::duration<double, std::milli>(
-                              std::chrono::steady_clock::now() - m_t0).count();
+        const double ms =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - m_t0)
+                .count();
         common::Profiler::instance().record(m_name, common::Lane::Cpu, ms);
     }
     LayerTimer(const LayerTimer&) = delete;

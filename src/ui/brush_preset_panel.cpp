@@ -1,10 +1,10 @@
-#include "common/fs_path.hpp"
 #include "ui/brush_preset_panel.hpp"
 
+#include "common/fs_path.hpp"
 #include "common/i18n.hpp"
 #include "common/log.hpp"
 #include "core/brush/stroke_preview.hpp" // the card's stroke, laid by the REAL engine
-#include "io/brush/kpp.hpp"     // readKppIcon: a LOOSE .kpp carries its own raster
+#include "io/brush/kpp.hpp"              // readKppIcon: a LOOSE .kpp carries its own raster
 #include "io/brush/library.hpp"
 #include "io/brush/preset.hpp"
 #include "io/brush/preset_brush.hpp" // presetBrushParams: once per preset, never per render
@@ -17,7 +17,6 @@
 #include <FL/Fl_RGB_Image.H>
 #include <FL/Fl_Scroll.H>
 #include <FL/fl_draw.H>
-
 #include <algorithm>
 #include <cctype>
 #include <chrono>

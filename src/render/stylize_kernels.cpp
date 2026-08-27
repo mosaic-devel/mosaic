@@ -56,7 +56,8 @@ struct Planes {
     pl.w = img.width;
     pl.h = img.height;
     const std::size_t n = img.pixelCount();
-    for (Plane& p : pl.c) p.resize(n);
+    for (Plane& p : pl.c)
+        p.resize(n);
     parallelFor(n, std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
         for (std::size_t i = i0; i < i1; ++i) {
             const std::size_t p = i * 4;
@@ -104,8 +105,7 @@ void release(Plane& v) {
 // idiom the compositor's localBoxMean uses, and for the same reason: O(1) per pixel, and the
 // add/remove pair uses the same clamped indices so multiple out-of-range taps collapse onto the
 // same edge pixel consistently (docs/blur-filters.md §5).
-[[nodiscard]] Plane boxMean(const Plane& src, std::uint32_t W,
-                                         std::uint32_t H, int r) {
+[[nodiscard]] Plane boxMean(const Plane& src, std::uint32_t W, std::uint32_t H, int r) {
     const std::size_t n = static_cast<std::size_t>(W) * H;
     const float inv = 1.0f / static_cast<float>(2 * r + 1);
     const int maxX = static_cast<int>(W) - 1;
@@ -143,8 +143,7 @@ void release(Plane& v) {
 // In-place separable Gaussian of a single plane, std-dev `sigma`, support `half` taps each side,
 // CLAMP-TO-EDGE. (effect_primitives' gaussianBlur is reflect-101 -- correct for the coverage
 // planes layer effects blur, wrong for content here, exactly the divergence blur.hpp documents.)
-void gaussianPlane(Plane& plane, std::uint32_t W, std::uint32_t H, float sigma,
-                   int half) {
+void gaussianPlane(Plane& plane, std::uint32_t W, std::uint32_t H, float sigma, int half) {
     MOSAIC_PERF_SCOPE("FX gaussian plane", mosaic::common::Lane::Cpu);
     if (sigma <= 0.0f || half < 1) return;
     std::vector<float> k(static_cast<std::size_t>(half) + 1); // the kernel, not a plane
@@ -211,7 +210,8 @@ void gaussianPlane(Plane& plane, std::uint32_t W, std::uint32_t H, float sigma,
                         const float ki = k[static_cast<std::size_t>(i)];
                         for (std::uint32_t x = xLo; x < xHi; ++x)
                             out[x] += (c[x - static_cast<std::uint32_t>(i)] +
-                                       c[x + static_cast<std::uint32_t>(i)]) * ki;
+                                       c[x + static_cast<std::uint32_t>(i)]) *
+                                      ki;
                     }
                 }
                 for (std::uint32_t x = std::max(xHi, xLo); x < W; ++x)
@@ -276,8 +276,8 @@ void gaussianPlane(Plane& plane, std::uint32_t W, std::uint32_t H, float sigma,
 // Bilinear plane read in INDEX space (integer coordinates land on pixel centres), clamp-to-edge.
 // An integer sample position reproduces the stored value exactly (the far weight is 0), which is
 // what makes the analytic kernel tests -- and an unrotated, whole-pixel displacement -- exact.
-[[nodiscard]] float samplePlane(const Plane& p, std::uint32_t W, std::uint32_t H,
-                                float x, float y) {
+[[nodiscard]] float samplePlane(const Plane& p, std::uint32_t W, std::uint32_t H, float x,
+                                float y) {
     const int maxX = static_cast<int>(W) - 1;
     const int maxY = static_cast<int>(H) - 1;
     const float cx = std::clamp(x, 0.0f, static_cast<float>(maxX));
@@ -426,7 +426,8 @@ void unsharpMaskImage(common::ImageF& img, float sigma, float amount, float thre
     // is the only draft lane the S35 family needs (every other kernel here is O(1) per pixel).
     const int half = std::max(1, static_cast<int>(std::ceil((draft ? 2.0f : 3.0f) * sigma)));
     std::array<Plane, 3> blurred{pl.c[0], pl.c[1], pl.c[2]};
-    for (Plane& b : blurred) gaussianPlane(b, pl.w, pl.h, sigma, half);
+    for (Plane& b : blurred)
+        gaussianPlane(b, pl.w, pl.h, sigma, half);
 
     parallelFor(pl.c[3].size(), std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
         for (std::size_t i = i0; i < i1; ++i) {
@@ -454,7 +455,8 @@ void highPassImage(common::ImageF& img, float sigma, bool draft) {
     // Gaussian difference, so a High Pass radius has to mean what an Unsharp radius means.
     const int half = std::max(1, static_cast<int>(std::ceil((draft ? 2.0f : 3.0f) * sigma)));
     std::array<Plane, 3> blurred{pl.c[0], pl.c[1], pl.c[2]};
-    for (Plane& b : blurred) gaussianPlane(b, pl.w, pl.h, sigma, half);
+    for (Plane& b : blurred)
+        gaussianPlane(b, pl.w, pl.h, sigma, half);
 
     parallelFor(pl.c[3].size(), std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
         for (std::size_t i = i0; i < i1; ++i) {

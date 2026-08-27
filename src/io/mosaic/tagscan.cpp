@@ -1,7 +1,6 @@
 #include "io/mosaic/tagscan.hpp"
 
 #include "common/fs_path.hpp"
-
 #include "io/mosaic/chunk.hpp"
 
 #include <algorithm>
@@ -17,11 +16,13 @@ constexpr std::size_t kResyncWindow = 1u << 16;
 
 // The offset of the next MAGIC at or after `from`, or `size` when there is none. Reads in
 // overlapping windows so a magic straddling a window boundary is still found.
-[[nodiscard]] std::uint64_t findNextMagic(std::ifstream& f, std::uint64_t size, std::uint64_t from) {
+[[nodiscard]] std::uint64_t findNextMagic(std::ifstream& f, std::uint64_t size,
+                                          std::uint64_t from) {
     const std::size_t overlap = kChunkMagic.size() - 1;
     std::vector<std::uint8_t> win;
     for (std::uint64_t pos = from; pos < size;) {
-        const auto want = static_cast<std::size_t>(std::min<std::uint64_t>(kResyncWindow, size - pos));
+        const auto want =
+            static_cast<std::size_t>(std::min<std::uint64_t>(kResyncWindow, size - pos));
         win.resize(want);
         f.seekg(static_cast<std::streamoff>(pos));
         if (!f.read(reinterpret_cast<char*>(win.data()), static_cast<std::streamsize>(want)))
@@ -38,8 +39,8 @@ constexpr std::size_t kResyncWindow = 1u << 16;
 
 } // namespace
 
-std::vector<std::optional<std::vector<std::uint8_t>>> readNewestChunkPayloads(
-    const std::string& path, std::span<const ChunkTag> tags) {
+std::vector<std::optional<std::vector<std::uint8_t>>>
+readNewestChunkPayloads(const std::string& path, std::span<const ChunkTag> tags) {
     std::vector<std::optional<std::vector<std::uint8_t>>> out(tags.size());
     std::vector<std::uint64_t> bestGeneration(tags.size(), 0);
     std::vector<bool> haveBest(tags.size(), false);
@@ -60,7 +61,8 @@ std::vector<std::optional<std::vector<std::uint8_t>>> readNewestChunkPayloads(
     std::uint64_t pos = 0;
     while (pos + kHeaderSize <= size) {
         f.seekg(static_cast<std::streamoff>(pos));
-        if (!f.read(reinterpret_cast<char*>(header.data()), static_cast<std::streamsize>(kHeaderSize)))
+        if (!f.read(reinterpret_cast<char*>(header.data()),
+                    static_cast<std::streamsize>(kHeaderSize)))
             break;
 
         const std::optional<ChunkHeaderView> head = parseChunkHeader(header);

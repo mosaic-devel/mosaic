@@ -37,6 +37,7 @@
 #include "common/image_svg.hpp"
 #include "io/exif.hpp"
 #include "io/io.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -64,19 +65,26 @@ ImageFormat sniffImageFormat(const std::uint8_t* d, std::size_t n) noexcept {
 } // namespace mosaic::io
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
-    if (size < 2) return 0;
+    if (size < 2)
+        return 0;
     const std::uint8_t which = data[0] % 4;
     const std::uint8_t* p = data + 1;
     const std::size_t n = size - 1;
     switch (which) {
-    case 0: (void)mosaic::io::parseExif(p, n); break;
+    case 0:
+        (void)mosaic::io::parseExif(p, n);
+        break;
     case 1: { // the JPEG APP1 / PNG eXIf CONTAINER walk that locates the payload
         std::vector<std::uint8_t> f(p, p + n);
         (void)mosaic::io::extractExif(f);
         break;
     }
-    case 2: (void)mosaic::common::svgIntrinsicSize(p, n); break;
-    case 3: (void)mosaic::common::rasterizeSvg(p, n, 64, 64, nullptr); break;
+    case 2:
+        (void)mosaic::common::svgIntrinsicSize(p, n);
+        break;
+    case 3:
+        (void)mosaic::common::rasterizeSvg(p, n, 64, 64, nullptr);
+        break;
     }
     return 0;
 }

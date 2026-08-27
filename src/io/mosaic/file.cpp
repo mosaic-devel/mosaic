@@ -138,8 +138,8 @@ public:
     explicit DecodeBudget(std::size_t fileBytes) noexcept
         : m_left(std::max(kFloorBytes, fileBytes * kRatio)) {}
 
-    [[nodiscard]] std::optional<std::vector<std::uint8_t>> take(
-        const ChunkRecord& rec, std::span<const std::uint8_t> file) noexcept {
+    [[nodiscard]] std::optional<std::vector<std::uint8_t>>
+    take(const ChunkRecord& rec, std::span<const std::uint8_t> file) noexcept {
         if (rec.uncompressedLen > m_left)
             return std::nullopt; // refuse BEFORE the decoder sizes a buffer from the claim
         std::optional<std::vector<std::uint8_t>> payload = decodeChunkPayload(rec, file);

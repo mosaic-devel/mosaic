@@ -53,8 +53,8 @@ CheckpointInput sampleInput(std::uint64_t generation, std::uint8_t manifestSeed)
     in.generation = generation;
     in.chunks.push_back({kTypeManifest, zeroKey(), generation, Profile::Balanced, kFlagCritical,
                          false, false, pattern(600, manifestSeed)});
-    in.chunks.push_back({kTypePreview, zeroKey(), generation, Profile::Balanced, 0, false, false,
-                         pattern(256, 2)});
+    in.chunks.push_back(
+        {kTypePreview, zeroKey(), generation, Profile::Balanced, 0, false, false, pattern(256, 2)});
     for (std::uint32_t i = 0; i < 8; ++i)
         in.chunks.push_back({kTypeTile, tileKey(7, i, 0), generation, Profile::Balanced,
                              kFlagCritical, true, false,

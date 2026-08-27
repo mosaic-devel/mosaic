@@ -57,7 +57,7 @@ namespace mosaic::io::native {
 //
 // Returns a vector of `tags.size()` entries. An unreadable file yields all-nullopt rather than an
 // error: every caller of this treats a missing chunk and an unreadable file the same way.
-[[nodiscard]] std::vector<std::optional<std::vector<std::uint8_t>>> readNewestChunkPayloads(
-    const std::string& path, std::span<const ChunkTag> tags);
+[[nodiscard]] std::vector<std::optional<std::vector<std::uint8_t>>>
+readNewestChunkPayloads(const std::string& path, std::span<const ChunkTag> tags);
 
 } // namespace mosaic::io::native

@@ -5,18 +5,18 @@
 #include "common/image.hpp"
 #include "common/image_svg.hpp"
 #include "common/log.hpp"
+#include "common/profiler.hpp" // the named-op perf collector + MOSAIC_PERF_SCOPE (runtime-gated)
 #include "common/recent_files.hpp" // the File -> Open Recent ring buffer (S55)
 #include "common/settings.hpp"
 #include "common/version.hpp"
-#include "core/clipboard.hpp"
-#include "core/adjustments.hpp" // the S32 typed adjustment-parameter schema
-#include "core/color_management.hpp"
-#include "core/arrange.hpp" // align + distribute geometry (Arrange menu)
+#include "core/adjustments.hpp"    // the S32 typed adjustment-parameter schema
+#include "core/arrange.hpp"        // align + distribute geometry (Arrange menu)
 #include "core/arrange_target.hpp" // ... and WHICH layers / WHICH box the menu acts on
+#include "core/clipboard.hpp"
+#include "core/color_management.hpp"
 #include "core/color_sample.hpp" // eyedropper colour sampling (S24)
 #include "core/command.hpp"
 #include "core/commands.hpp"
-#include "ui/loaded_history.hpp" // buildLoadedHistory: the loaded-save-history undo branch (spec 3.5)
 #include "core/document.hpp"
 #include "core/edge_grow.hpp" // the L1 edge brush's release-time geodesic grow
 #include "core/fill.hpp"
@@ -33,9 +33,9 @@
 #include "core/text/language.hpp" // detectSystemLanguage (spell-check default language, deferred §2)
 #include "core/text/spell_worker.hpp" // background spell-checker (deferred §2)
 #include "core/text/text_layer_render.hpp"
+#include "core/text/text_render.hpp"
 #include "core/texture/sky_estimate_commit.hpp" // the mask & harmonize commit shape (S55 phase 2)
 #include "core/texture/texture_layer_render.hpp"
-#include "core/text/text_render.hpp"
 #include "core/vector/boolean.hpp" // makeBooleanObject (Layer -> Combine Paths, S53-b)
 #include "core/vector/flatten.hpp" // flatten + contourLength (Type -> Text on Selected Path)
 #include "core/vector/to_path.hpp" // pathFromGeometry (Layer -> Convert to Path)
@@ -43,57 +43,57 @@
 #include "io/export_path.hpp"      // the export-path policy (§6): never the working directory
 #include "io/format_registry.hpp"  // the backend registry: one-click re-export to the last target
 #include "io/io.hpp"
-#include "io/mosaic/compaction.hpp" // history-preserving fold once the parity debt trips (S48)
-#include "io/mosaic/docio.hpp"      // .mosaic document bridge (S48): Save/Save As/Open
-#include "io/mosaic/file.hpp"       // buildCheckpoint + writeFileAtomic (the full write)
+#include "io/mosaic/compaction.hpp"      // history-preserving fold once the parity debt trips (S48)
+#include "io/mosaic/docio.hpp"           // .mosaic document bridge (S48): Save/Save As/Open
+#include "io/mosaic/file.hpp"            // buildCheckpoint + writeFileAtomic (the full write)
+#include "io/mosaic/fileinfo.hpp"        // light manifest reader: the recents cards' dims/colour
 #include "io/mosaic/journal_session.hpp" // recovery-journal autosave + crash restore (S48, flows 1/2)
-#include "io/mosaic/lock.hpp"            // §2.10 advisory lock (S48, flow 6: already-open-elsewhere)
+#include "io/mosaic/lock.hpp"    // §2.10 advisory lock (S48, flow 6: already-open-elsewhere)
 #include "io/mosaic/preview.hpp" // PRVW: the app supplies the composite, io stays render-free (S48-b)
+#include "io/mosaic/preview.hpp" // readNewestPreview: .mosaic cards' embedded PRVW (S48-b)
 #include "io/mosaic/salvage.hpp" // recovery past a gap (flows 3c/4): lineages + root conflict
-#include "ui/window_title.hpp"
 #include "platform/display_refresh.hpp"
 #include "platform/file_dialog.hpp"
 #include "platform/font_db.hpp"
 #include "platform/native_window.hpp"
 #include "platform/session_end.hpp" // block a Windows session end while work is unsaved
 #include "platform/system_theme.hpp"
+#include "render/blur_gpu.hpp" // the Vulkan lane for the S33 blur adjustments (§8)
 #include "render/compositor.hpp"
 #include "render/document_ops.hpp" // the Image menu's whole-document operations (S53-a)
-#include "render/blur_gpu.hpp"    // the Vulkan lane for the S33 blur adjustments (§8)
-#include "render/extrude_gpu.hpp" // the Vulkan lane for extruded text (S30-c §10.5)
-#include "render/texture_gpu.hpp" // the Vulkan lane for the Texture Generator (S55-h §8.4)
-#include "render/region_fill.hpp" // computeFill: the shared S39 fill core (bucket fill, S21)
+#include "render/extrude_gpu.hpp"  // the Vulkan lane for extruded text (S30-c §10.5)
+#include "render/region_fill.hpp"  // computeFill: the shared S39 fill core (bucket fill, S21)
+#include "render/texture_gpu.hpp"  // the Vulkan lane for the Texture Generator (S55-h §8.4)
 #include "ui/about_dialog.hpp"
-#include "ui/brush_preset_panel.hpp" // the dock's Brush-preset grid (S19 Arc D, §8.2)
-#include "ui/brush_editor.hpp" // the modal brush editor (S19 Arc D, §8.3)
-#include "ui/brush_presets.hpp" // the brush-preset library + the Brush tool's active preset (S19 Arc D)
+#include "ui/adjustment_panel.hpp"   // the S32 adjustment-layer param editor (pinned popover)
 #include "ui/ask_or_tell_dialog.hpp" // close-with-unsaved-changes (S49); debug Help-menu exerciser
-#include "ui/recovery_flow.hpp"      // open-time recovery classification (flows 3a-3e + 4)
-#include "ui/recovery_journal.hpp"   // crash-restore classification (flows 1/2)
-#include "ui/save_policy.hpp"        // the proactive early-fold decision (S48 Build 2)
+#include "ui/brush_editor.hpp"       // the modal brush editor (S19 Arc D, §8.3)
+#include "ui/brush_preset_panel.hpp" // the dock's Brush-preset grid (S19 Arc D, §8.2)
+#include "ui/brush_presets.hpp" // the brush-preset library + the Brush tool's active preset (S19 Arc D)
+#include "ui/channels_panel.hpp" // the dock's Channels tab (per-channel histogram) source wiring
 #include "ui/color_flyout.hpp" // the panels' colour line "Edit…" bubble (the Fill-dialog paradigm)
 #include "ui/color_picker.hpp"
 #include "ui/color_state.hpp"
 #include "ui/crop_gesture.hpp"
-#include "ui/channels_panel.hpp" // the dock's Channels tab (per-channel histogram) source wiring
 #include "ui/export_dialog.hpp"
-#include "io/mosaic/fileinfo.hpp" // light manifest reader: the recents cards' dims/colour
-#include "io/mosaic/preview.hpp"  // readNewestPreview: .mosaic cards' embedded PRVW (S48-b)
-#include "ui/xdg_thumbnails.hpp"  // read-only desktop thumbnail cache for plain-image recents
 #include "ui/fill_dialog.hpp"
 #include "ui/gradient_flyout.hpp" // the reusable stops/spread/blend-curve editor (S22 Gradient tool)
 #include "ui/history_panel.hpp"
-#include "ui/image_ops_panel.hpp"  // the S53 Image-menu corner panel (Size / Canvas / Rotate)
-#include "ui/pattern_flyout.hpp"   // the procedural-pattern editor (the Image-ops Fill = Pattern...)
-#include "ui/adjustment_panel.hpp" // the S32 adjustment-layer param editor (pinned popover)
-#include "ui/panel_arbiter.hpp"    // the unified corner-panel decision core (S32 round 5)
-#include "common/profiler.hpp" // the named-op perf collector + MOSAIC_PERF_SCOPE (runtime-gated)
-#include "ui/timing_graph_window.hpp" // the Help -> Timing Profiler window (see its header)
-#include "ui/layer_effects_dialog.hpp"
-#include "ui/texture_generator_dialog.hpp"
-#include "ui/layer_panel.hpp"
+#include "ui/image_ops_panel.hpp" // the S53 Image-menu corner panel (Size / Canvas / Rotate)
 #include "ui/keymap.hpp" // S51-b: the ONE source for every accelerator this window installs
+#include "ui/layer_effects_dialog.hpp"
+#include "ui/layer_panel.hpp"
+#include "ui/loaded_history.hpp" // buildLoadedHistory: the loaded-save-history undo branch (spec 3.5)
 #include "ui/menu_bar.hpp"
+#include "ui/panel_arbiter.hpp"  // the unified corner-panel decision core (S32 round 5)
+#include "ui/pattern_flyout.hpp" // the procedural-pattern editor (the Image-ops Fill = Pattern...)
+#include "ui/recovery_flow.hpp"  // open-time recovery classification (flows 3a-3e + 4)
+#include "ui/recovery_journal.hpp" // crash-restore classification (flows 1/2)
+#include "ui/save_policy.hpp"      // the proactive early-fold decision (S48 Build 2)
+#include "ui/texture_generator_dialog.hpp"
+#include "ui/timing_graph_window.hpp" // the Help -> Timing Profiler window (see its header)
+#include "ui/window_title.hpp"
+#include "ui/xdg_thumbnails.hpp" // read-only desktop thumbnail cache for plain-image recents
 #ifdef __APPLE__
 #  include "ui/sys_menu_macos.hpp" // the system menu bar's application menu (About / Settings)
 
@@ -3931,8 +3931,7 @@ public:
         const std::uint32_t longest = std::max(doc.width(), doc.height());
         if (longest == 0)
             return std::nullopt;
-        const double scale =
-            std::min(1.0, static_cast<double>(io::native::kPreviewEdge) / longest);
+        const double scale = std::min(1.0, static_cast<double>(io::native::kPreviewEdge) / longest);
         const auto outW = std::max<std::uint32_t>(
             1, static_cast<std::uint32_t>(std::lround(doc.width() * scale)));
         const auto outH = std::max<std::uint32_t>(

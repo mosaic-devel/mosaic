@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common/image.hpp"  // the card's preview bitmap
+#include "common/image.hpp" // the card's preview bitmap
 #include "core/document.hpp" // core::ColorSpace / core::Precision
 
 #include <cstdint>

@@ -1,6 +1,6 @@
-#include "common/fs_path.hpp"
 #include "io/brush/library.hpp"
 
+#include "common/fs_path.hpp"
 #include "common/image_svg.hpp"
 #include "io/brush/kpp.hpp"
 #include "io/brush/md5.hpp"
@@ -19,7 +19,6 @@ namespace mosaic::io::brush {
 namespace {
 
 namespace cb = mosaic::core::brush;
-
 
 [[nodiscard]] std::string lowerExtension(std::string_view fileName) {
     const std::size_t dot = fileName.rfind('.');

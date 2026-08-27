@@ -1,12 +1,11 @@
 #include "io/mosaic/chunk.hpp"
-#include "io/mosaic/docio.hpp"   // kTileSize -- the number chunk.cpp mirrors
-#include "io/mosaic/preview.hpp" // kPreviewEdge -- ditto
 #include "io/mosaic/codec.hpp"
+#include "io/mosaic/docio.hpp" // kTileSize -- the number chunk.cpp mirrors
 #include "io/mosaic/paeth.hpp"
-
-#include <doctest/doctest.h>
+#include "io/mosaic/preview.hpp" // kPreviewEdge -- ditto
 
 #include <cstdint>
+#include <doctest/doctest.h>
 #include <random>
 #include <vector>
 
@@ -225,8 +224,7 @@ TEST_CASE("mosaic codec: a chunk may not claim more than its type can hold") {
     SUBCASE("a tile is one cell, and the bound says so") {
         // chunk.cpp spells 64 and 256 out locally rather than including these headers, which sit
         // ABOVE the framing layer and include it. This is the pin that keeps the two in step.
-        CHECK(maxUncompressedFor(kTypeTile) ==
-              static_cast<std::size_t>(kTileSize) * kTileSize * 4);
+        CHECK(maxUncompressedFor(kTypeTile) == static_cast<std::size_t>(kTileSize) * kTileSize * 4);
         CHECK(maxUncompressedFor(kTypePreview) >=
               static_cast<std::size_t>(kPreviewEdge) * kPreviewEdge * 4);
         CHECK(maxUncompressedFor(kTypeTile) < kMaxUncompressedLen);
@@ -235,8 +233,8 @@ TEST_CASE("mosaic codec: a chunk may not claim more than its type can hold") {
     SUBCASE("types with no arithmetic bound keep the global ceiling") {
         // A manifest, directory, history table, vector or blob has no size this layer can derive,
         // so narrowing them would be a guess -- and a guess that refuses a legitimate document.
-        for (const ChunkTag& t : {kTypeManifest, kTypeRoot, kTypeDir, kTypeVector, kTypeHist,
-                                  kTypeBlob, kTypeCommit})
+        for (const ChunkTag& t :
+             {kTypeManifest, kTypeRoot, kTypeDir, kTypeVector, kTypeHist, kTypeBlob, kTypeCommit})
             CHECK(maxUncompressedFor(t) == kMaxUncompressedLen);
     }
     SUBCASE("a VERIFYING frame is still refused when its claim is impossible") {
@@ -245,19 +243,19 @@ TEST_CASE("mosaic codec: a chunk may not claim more than its type can hold") {
         // decline it -- before it allocates.
         const std::size_t tooBig = maxUncompressedFor(kTypeTile) + 1;
         std::vector<std::uint8_t> wire;
-        appendChunk(wire, kTypeTile, tileKey(1, 0, 0), 7,
-                    std::vector<std::uint8_t>(tooBig, 0), Profile::Max);
+        appendChunk(wire, kTypeTile, tileKey(1, 0, 0), 7, std::vector<std::uint8_t>(tooBig, 0),
+                    Profile::Max);
         const auto rec = parseChunkAt(wire, 0);
         REQUIRE(rec.has_value());
-        CHECK(rec->valid);                       // it is a perfectly well-formed frame
-        CHECK(rec->uncompressedLen == tooBig);   // that claims one byte too many
+        CHECK(rec->valid);                     // it is a perfectly well-formed frame
+        CHECK(rec->uncompressedLen == tooBig); // that claims one byte too many
         CHECK_FALSE(decodeChunkPayload(*rec, wire).has_value()); // and is refused anyway
     }
     SUBCASE("and one byte under the bound still decodes") {
         const std::size_t justFits = maxUncompressedFor(kTypeTile);
         std::vector<std::uint8_t> wire;
-        appendChunk(wire, kTypeTile, tileKey(1, 0, 0), 7,
-                    std::vector<std::uint8_t>(justFits, 0xAB), Profile::Max);
+        appendChunk(wire, kTypeTile, tileKey(1, 0, 0), 7, std::vector<std::uint8_t>(justFits, 0xAB),
+                    Profile::Max);
         const auto rec = parseChunkAt(wire, 0);
         REQUIRE(rec.has_value());
         REQUIRE(rec->valid);

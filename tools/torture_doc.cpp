@@ -48,8 +48,8 @@
 #include "io/mosaic/docio.hpp"
 #include "io/mosaic/file.hpp"
 #include "io/mosaic/journal_session.hpp"
-#include "io/mosaic/save.hpp"
 #include "io/mosaic/preview.hpp"
+#include "io/mosaic/save.hpp"
 #include "render/compositor.hpp"
 
 #include <algorithm>
@@ -163,10 +163,10 @@ int g_canvasH = 7728;
     if (longest == 0)
         return std::nullopt;
     const double scale = std::min(1.0, static_cast<double>(io::kPreviewEdge) / longest);
-    const auto w = std::max<std::uint32_t>(
-        1, static_cast<std::uint32_t>(std::lround(doc.width() * scale)));
-    const auto h = std::max<std::uint32_t>(
-        1, static_cast<std::uint32_t>(std::lround(doc.height() * scale)));
+    const auto w =
+        std::max<std::uint32_t>(1, static_cast<std::uint32_t>(std::lround(doc.width() * scale)));
+    const auto h =
+        std::max<std::uint32_t>(1, static_cast<std::uint32_t>(std::lround(doc.height() * scale)));
     const mosaic::render::CompositeResult r =
         mosaic::render::compositeScaled(doc, w, h, {}, mosaic::render::Backend::Cpu);
     if (!r.ok || r.image.empty())
@@ -1087,8 +1087,8 @@ int main(int argc, char** argv) {
         // building 39.8 MP to throw 99.8% of it away would be the same defect this fixture exists
         // to expose.
         const std::optional<common::Image> preview = previewComposite(*doc);
-        const auto input = io::buildDocumentCheckpoint(*doc, &err,
-                                                       preview.has_value() ? &*preview : nullptr);
+        const auto input =
+            io::buildDocumentCheckpoint(*doc, &err, preview.has_value() ? &*preview : nullptr);
         if (!input.has_value()) {
             fail("buildDocumentCheckpoint: " + err);
             return 1;

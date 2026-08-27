@@ -31,24 +31,40 @@
 #include "formats/pnm.hpp"
 #include "formats/qoi.hpp"
 #include "formats/tga.hpp"
-#include <cstdint>
+
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
-    if (size < 2) return 0;
+    if (size < 2)
+        return 0;
     const std::uint8_t which = data[0] % 7;
     const std::uint8_t* p = data + 1;
     const std::size_t n = size - 1;
     std::string err;
     switch (which) {
-    case 0: (void)mosaicfmt::decodeBmp(p, n, &err); break;
-    case 1: (void)mosaicfmt::decodeTga(p, n, &err); break;
-    case 2: (void)mosaicfmt::decodePnm(p, n, &err); break;
-    case 3: (void)mosaicfmt::decodeQoi(p, n, &err); break;
-    case 4: (void)mosaicfmt::decodeIco(p, n, &err); break;
-    case 5: (void)mosaicfmt::decodeHdr(p, n, &err); break;
-    case 6: (void)mosaicfmt::decodeDib(p, n, &err); break;
+    case 0:
+        (void)mosaicfmt::decodeBmp(p, n, &err);
+        break;
+    case 1:
+        (void)mosaicfmt::decodeTga(p, n, &err);
+        break;
+    case 2:
+        (void)mosaicfmt::decodePnm(p, n, &err);
+        break;
+    case 3:
+        (void)mosaicfmt::decodeQoi(p, n, &err);
+        break;
+    case 4:
+        (void)mosaicfmt::decodeIco(p, n, &err);
+        break;
+    case 5:
+        (void)mosaicfmt::decodeHdr(p, n, &err);
+        break;
+    case 6:
+        (void)mosaicfmt::decodeDib(p, n, &err);
+        break;
     }
     return 0;
 }

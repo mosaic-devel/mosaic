@@ -38,29 +38,49 @@
 #include "io/brush/preset_xml.hpp"
 #include "io/brush/tip_io.hpp"
 #include "io/brush/zip.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
-    if (size < 2) return 0;
+    if (size < 2)
+        return 0;
     const std::uint8_t which = data[0] % 9;
     const std::uint8_t* p = data + 1;
     const std::size_t n = size - 1;
     std::string err;
     switch (which) {
-    case 0: (void)mosaic::io::brush::readMyb(p, n, "fuzz", &err); break;
-    case 1: (void)mosaic::io::brush::readGbr(p, n, &err); break;
-    case 2: (void)mosaic::io::brush::readGih(p, n, &err); break;
-    case 3: (void)mosaic::io::brush::readAbr(p, n, &err); break;
-    case 4: (void)mosaic::io::brush::readPngTip(p, n, &err); break;
-    case 5: (void)mosaic::io::brush::readKpp(p, n, &err); break;
-    case 6: (void)mosaic::io::brush::readMbp(p, n, &err); break;
-    case 7: (void)mosaic::io::brush::parsePresetXml(
-                std::string_view(reinterpret_cast<const char*>(p), n), &err); break;
-    case 8: (void)mosaic::io::brush::parseTipXml(
-                std::string_view(reinterpret_cast<const char*>(p), n), &err); break;
+    case 0:
+        (void)mosaic::io::brush::readMyb(p, n, "fuzz", &err);
+        break;
+    case 1:
+        (void)mosaic::io::brush::readGbr(p, n, &err);
+        break;
+    case 2:
+        (void)mosaic::io::brush::readGih(p, n, &err);
+        break;
+    case 3:
+        (void)mosaic::io::brush::readAbr(p, n, &err);
+        break;
+    case 4:
+        (void)mosaic::io::brush::readPngTip(p, n, &err);
+        break;
+    case 5:
+        (void)mosaic::io::brush::readKpp(p, n, &err);
+        break;
+    case 6:
+        (void)mosaic::io::brush::readMbp(p, n, &err);
+        break;
+    case 7:
+        (void)mosaic::io::brush::parsePresetXml(
+            std::string_view(reinterpret_cast<const char*>(p), n), &err);
+        break;
+    case 8:
+        (void)mosaic::io::brush::parseTipXml(std::string_view(reinterpret_cast<const char*>(p), n),
+                                             &err);
+        break;
     }
     return 0;
 }
