@@ -41,7 +41,9 @@
 #include "io/mosaic/records.hpp"
 #include "io/mosaic/reedsolomon.hpp"
 #include "io/mosaic/salvage.hpp"
+#include "io/mosaic/naming.hpp"
 #include "io/mosaic/save.hpp"
+#include "io/mosaic/tagscan.hpp"
 
 #include <algorithm>
 #include <array>
@@ -104,6 +106,71 @@ constexpr int kCanvasH = 1080;
 struct Rgb {
     std::uint8_t r, g, b;
 };
+
+// ---- The on-disk chunk walk, against every damaged file in the corpus -------------------------
+//
+// tagscan (io/mosaic/tagscan.hpp) answers "the newest valid MFST / PRVW" by walking the frame chain
+// ON DISK: it reads a 46-byte header per frame and seeks past payloads nobody asked for. That means
+// it steps over frames on the strength of a LENGTH FIELD IT HAS NOT VERIFIED -- the checksum covers
+// the payload, so there is no other way to skip cheaply -- and recovers by resyncing when the
+// length turns out to be a lie.
+//
+// Which makes damaged files the only interesting test of it, and this corpus is a directory full of
+// them: rotted payloads, torn tails, killed roots, damaged parity, folded history. For every file
+// here the walk must return exactly what the in-memory scan returns. Not "something sensible" --
+// the SAME bytes, or the same nullopt.
+//
+// ⚠ This deliberately compares against scanChunks rather than against a hand-written expectation.
+// The corpus's whole method is that a fixture which drifts from the real reader fails loudly here;
+// pinning the tape's answers to constants would just add a second thing to drift.
+[[nodiscard]] std::optional<std::vector<std::uint8_t>> newestByScan(
+    const std::vector<std::uint8_t>& file, const io::ChunkTag& tag) {
+    std::optional<io::ChunkRecord> best;
+    for (const io::ChunkRecord& rec : io::scanChunks(file)) {
+        if (!rec.valid || rec.type != tag)
+            continue;
+        if (!best.has_value() || rec.generation >= best->generation)
+            best = rec;
+    }
+    if (!best.has_value())
+        return std::nullopt;
+    return io::decodeChunkPayload(*best, file);
+}
+
+void checkTapeMatchesScan(const fs::path& dir) {
+    std::vector<fs::path> files;
+    std::error_code ec;
+    for (const auto& entry : fs::directory_iterator(dir, ec))
+        if (entry.is_regular_file(ec) && entry.path().extension() == ".mosaic")
+            files.push_back(entry.path());
+    std::sort(files.begin(), files.end());
+    check(!files.empty(), "on-disk walk: the corpus has files to walk");
+
+    // ⚠ EVERY TAG THE CORPUS ACTUALLY CARRIES, not just the two the recents card wants. A
+    // comparison over a tag no fixture holds is nullopt == nullopt, which passes without testing
+    // anything -- PRVW is exactly that today (nothing here links render, so nothing writes one) and
+    // is listed anyway so it starts testing the moment that changes. TILE is the one that earns its
+    // place: hundreds to thousands of frames per file, which is what actually drives the walk's
+    // skip-and-resync path.
+    const std::array<io::ChunkTag, 9> tags{io::kTypeManifest, io::kTypePreview, io::kTypeRoot,
+                                           io::kTypeDir,      io::kTypeVector,  io::kTypeTile,
+                                           io::kTypeHist,     io::kTypeCommit,  io::kTypeParity};
+    for (const fs::path& p : files) {
+        const std::vector<std::uint8_t> bytes = readFile(p);
+        const auto tape = io::readNewestChunkPayloads(p.string(), tags);
+        if (tape.size() != tags.size()) {
+            check(false, p.filename().string() + ": on-disk walk returned the wrong arity");
+            continue;
+        }
+        for (std::size_t i = 0; i < tags.size(); ++i) {
+            const auto want = newestByScan(bytes, tags[i]);
+            const bool agree = want.has_value() == tape[i].has_value() &&
+                               (!want.has_value() || *want == *tape[i]);
+            check(agree, p.filename().string() + ": on-disk walk == in-memory scan for " +
+                             io::detail::tagToString(tags[i]));
+        }
+    }
+}
 
 std::uint8_t* pixel(common::Image& img, int x, int y) {
     return img.rgba.data() + (static_cast<std::size_t>(y) * img.width + x) * 4;
@@ -1209,6 +1276,11 @@ int main(int argc, char** argv) {
               "\"already open in another window\" ([Cancel] [Open read-only]); read-only routes Save to\n"
               "Save As. Kill the first window (a crash) and reopening acquires the stale lock cleanly.\n";
     }
+
+    // Every fixture above verified the READER's verdict. This verifies the on-disk chunk walk
+    // against the same files -- the one reader in the tree that skips frames it has not checksummed.
+    std::printf("\n-- on-disk chunk walk vs in-memory scan --\n");
+    checkTapeMatchesScan(out);
 
     std::printf("%s\n", g_failures == 0 ? "corpus OK" : "CORPUS BROKEN");
     return g_failures == 0 ? 0 : 1;

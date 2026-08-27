@@ -96,6 +96,11 @@ std::vector<std::optional<std::vector<std::uint8_t>>> readNewestChunkPayloads(
         if (!f.read(reinterpret_cast<char*>(frame.data()),
                     static_cast<std::streamsize>(frame.size())))
             break;
+        // ⚠ The checksum gate is decodeChunkPayload's -- it returns nullopt for any record that
+        // did not verify -- so `rec->valid` here is a local restatement of the contract, not the
+        // thing enforcing it. Dropping it changes no behaviour (verified: the corrupt corpus
+        // cannot tell the difference). It stays because a reader of this loop should not have to
+        // go one layer down to learn that an unverified frame is never returned.
         const std::optional<ChunkRecord> rec = parseChunkAt(frame, 0);
         if (rec.has_value() && rec->valid) {
             if (std::optional<std::vector<std::uint8_t>> payload = decodeChunkPayload(*rec, frame)) {
