@@ -2292,7 +2292,7 @@ bool TileCompositor::ensureLayerResident(const core::Layer& layer, VkCommandBuff
         // document on the CPU walk to dodge a rounding the accumulator applies one line later.
         return uploadWith(src.pixels, static_cast<VkDeviceSize>(pixelBytes),
                           [&](std::uint8_t* p) {
-                              const std::vector<float>& f = leaf.pixelsF->rgba;
+                              const common::Floats& f = leaf.pixelsF->rgba;
                               auto* h = reinterpret_cast<std::uint16_t*>(p);
                               for (std::size_t i = 0; i < f.size(); ++i) h[i] = floatToHalf(f[i]);
                           });

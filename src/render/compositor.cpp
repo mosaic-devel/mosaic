@@ -108,12 +108,21 @@ void rasteriseLayerInto(ImageF& dst, const SrcImage& src, const core::RasterMask
     {
         MOSAIC_PERF_SCOPE("Layer buffer clear", common::Lane::Cpu);
         if (dst.rgba.size() == n) {
+            // REUSED buffer (the drag replay re-rasterises one layer per frame into the same
+            // allocation): the previous layer's pixels are still in it, so it really must be
+            // written back to transparent.
             parallelFor(n, std::size_t{1} << 18, [&](std::size_t i0, std::size_t i1) {
                 std::fill(dst.rgba.begin() + static_cast<std::ptrdiff_t>(i0),
                           dst.rgba.begin() + static_cast<std::ptrdiff_t>(i1), 0.0f);
             });
         } else {
-            dst.rgba.assign(n, 0.0f);
+            // FRESH buffer -- the walk's case, once per leaf per composite. `assign(n, 0.0f)` was
+            // a 637 MB memset at 39.8 MP (75 ms, single-threaded, ~26 times per composite of the
+            // S60 fixture) writing zeros over memory the kernel had ALREADY zeroed. Constructing
+            // instead hands back calloc'd pages untouched, and they fault in only where this pass
+            // writes -- which is the destination window it computes three lines down, not the
+            // canvas. Same guarantee (all-zero, see ZeroPageAllocator), none of the traffic.
+            dst.rgba = common::Floats(n);
         }
     }
     if (src.empty()) return;

@@ -12,6 +12,7 @@ namespace mosaic::render::fx {
 
 namespace {
 
+using common::Floats;
 using common::ImageF;
 
 constexpr double kPi = 3.14159265358979323846;
@@ -191,7 +192,7 @@ void boxPassRgba(const float* src, float* dst, int len, std::ptrdiff_t stride, i
 template <typename Gather>
 void gatherKernel(ImageF& img, const Gather& gather) {
     premultiplyInPlace(img);
-    const std::vector<float> src = img.rgba;
+    const common::Floats src = img.rgba;
     const int w = static_cast<int>(img.width);
     const int h = static_cast<int>(img.height);
     parallelFor(static_cast<std::size_t>(h), kMinGatherRows,
@@ -221,7 +222,7 @@ void gatherKernel(ImageF& img, const Gather& gather) {
 // Premultiplied Rec.709 luma plane of an interleaved RGBA buffer. The bilateral's range term
 // runs on premultiplied luma so fully transparent pixels read as dark instead of as their
 // arbitrary straight RGB.
-[[nodiscard]] std::vector<float> premulLumaPlane(const std::vector<float>& rgba) {
+[[nodiscard]] std::vector<float> premulLumaPlane(const Floats& rgba) {
     std::vector<float> luma(rgba.size() / 4);
     parallelFor(luma.size(), kMinPixelsPerBand, [&](std::size_t i0, std::size_t i1) {
         for (std::size_t i = i0; i < i1; ++i) {
@@ -235,8 +236,8 @@ void gatherKernel(ImageF& img, const Gather& gather) {
 // One 1D bilateral line: `len` samples, `step` pixels apart, starting at pixel `start`.
 // Each output is the spatial taper times a Gaussian on the luma difference to the centre,
 // normalised per pixel because the range term varies per pixel (unlike a fixed convolution).
-void bilateralPass(const std::vector<float>& src, const std::vector<float>& luma,
-                   std::vector<float>& dst, std::size_t start, std::size_t step, int len,
+void bilateralPass(const Floats& src, const std::vector<float>& luma, Floats& dst,
+                   std::size_t start, std::size_t step, int len,
                    const float* spatial, int r, float rangeCoeff) {
     for (int i = 0; i < len; ++i) {
         const std::size_t centre = start + static_cast<std::size_t>(i) * step;
@@ -419,7 +420,7 @@ void surfaceBlurImage(common::ImageF& img, float radius, float threshold01) {
     const float sigmaR = std::max(threshold01, 1e-4f);
     const float rangeCoeff = -1.0f / (2.0f * sigmaR * sigmaR);
 
-    std::vector<float> tmp(img.rgba.size());
+    Floats tmp(img.rgba.size());
     {
         const std::vector<float> luma = premulLumaPlane(img.rgba);
         parallelFor(static_cast<std::size_t>(h), kMinLinesPerBand,

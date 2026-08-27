@@ -4,6 +4,11 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
+#include <limits>
+#include <new>
+#include <type_traits>
+#include <utility>
 #include <optional>
 #include <string>
 #include <vector>
@@ -45,6 +50,68 @@ struct ColorF {
     return {q(c.r), q(c.g), q(c.b), q(c.a)};
 }
 
+// ---- Zero-page pixel storage ------------------------------------------------------------------
+//
+// A calloc-backed allocator whose whole purpose is to stop WRITING zeros that are already zero.
+//
+// A 39.8 MP float working buffer is 637 MB. `std::vector<float>` value-initialises, so creating one
+// costs a 637 MB memset -- 75 ms on this machine, single-threaded, per buffer -- and a composite of
+// a big document creates dozens of them: one per leaf layer, one per group, one per vector
+// rasterisation. Measured at ~26 canvas-sized clears and ~2.0 s of the S60 fixture's open.
+//
+// Every one of those memsets is redundant. calloc of that size goes straight to mmap, and the
+// kernel's pages are ALREADY zero; the memset's only effect is to fault all 637 MB in and write
+// zeros over zeros. Handing back the mapping untouched costs 0.01 ms, and the pages then fault in
+// one by one as the caller actually writes them -- which, for a layer covering 2% of the canvas, is
+// 2% of the buffer. Measured on the same machine: 75.81 ms -> 1.50 ms for a fresh buffer whose
+// caller writes a 2% window.
+//
+// ⚠ THE CONTRACT IS "allocate() RETURNS ZEROED MEMORY", and `construct` is a no-op so the vector
+// does not overwrite it. That makes a default-init `resize()` equivalent to a value-init one --
+// but ONLY because every allocation comes from calloc. The one way to observe uninitialised bytes
+// is to grow back into capacity retained across a shrink (`clear()` / `resize(smaller)` then
+// `resize(bigger)`), because no new allocation happens and nothing re-zeroes the tail. Image /
+// ImageF are sized once at construction and replaced wholesale, never shrunk and regrown, and
+// `assign()` fills explicitly on every path that reuses a buffer -- see render/compositor.cpp's
+// rasteriseLayerInto, which is the only reuse site in the tree.
+template <typename T>
+struct ZeroPageAllocator {
+    static_assert(std::is_trivially_default_constructible_v<T>,
+                  "the no-op construct below is only sound for types whose value-init is all-bits-"
+                  "zero -- which is what calloc hands back");
+    using value_type = T;
+
+    ZeroPageAllocator() noexcept = default;
+    template <typename U> ZeroPageAllocator(const ZeroPageAllocator<U>&) noexcept {}
+
+    [[nodiscard]] T* allocate(std::size_t n) {
+        if (n > std::numeric_limits<std::size_t>::max() / sizeof(T))
+            throw std::bad_alloc();
+        void* p = std::calloc(n, sizeof(T));
+        if (p == nullptr)
+            throw std::bad_alloc();
+        return static_cast<T*>(p);
+    }
+    void deallocate(T* p, std::size_t) noexcept { std::free(p); }
+
+    // The point of the whole exercise: allocate() already zeroed this, so do not zero it again.
+    template <typename U> void construct(U* /*p*/) noexcept {}
+    template <typename U, typename... Args> void construct(U* p, Args&&... args) {
+        ::new (static_cast<void*>(p)) U(std::forward<Args>(args)...);
+    }
+
+    template <typename U> bool operator==(const ZeroPageAllocator<U>&) const noexcept {
+        return true;
+    }
+};
+
+// ⚠ THE FLOAT BUFFER ONLY, and deliberately not the 8-bit one. `Image` is layer STORAGE: its
+// pixels arrive from a decoder or a codec tile and are then fully written, so lazy zero pages buy
+// nothing -- while giving it a private allocator would turn every `img.rgba = std::move(decoded)`
+// in io/ into a 159 MB copy, which is a real cost paid for an imaginary one. `ImageF` is the
+// compositor's WORKING buffer, allocated per layer per composite and mostly never touched.
+using Floats = std::vector<float, ZeroPageAllocator<float>>;
+
 // A simple, tightly-packed 8-bit RGBA image buffer (row-major, 4 bytes per pixel).
 // This is the shared CPU-side pixel container produced by the renderer and (later)
 // consumed by the io module.
@@ -75,11 +142,17 @@ struct Image {
 struct ImageF {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
-    std::vector<float> rgba;  // size == width * height * 4
+    Floats rgba;  // size == width * height * 4
 
     ImageF() = default;
+    // ⚠ `rgba(n)`, NOT `rgba(n, 0.0f)`. The second form is a fill-construct and memsets the whole
+    // buffer -- 637 MB and 75 ms at 39.8 MP. The first is a default-construct, which
+    // ZeroPageAllocator turns into "calloc and touch nothing": still all-zero (that is the
+    // allocator's contract), but the pages arrive from the kernel already zeroed and fault in only
+    // where the caller actually writes. A transparent buffer is exactly what this always promised;
+    // the only thing that changed is that it no longer pays to write the zeros twice.
     ImageF(std::uint32_t w, std::uint32_t h)
-        : width(w), height(h), rgba(static_cast<std::size_t>(w) * h * 4, 0.0f) {}
+        : width(w), height(h), rgba(static_cast<std::size_t>(w) * h * 4) {}
 
     [[nodiscard]] std::size_t pixelCount() const noexcept {
         return static_cast<std::size_t>(width) * height;
