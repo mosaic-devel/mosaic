@@ -706,7 +706,16 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
 
     // Every effect attaches to the layer's coverage; nothing to do without any. One pass yields
     // both the extent and the phase anchor (see alphaBoxes).
-    const AlphaBoxes boxes = alphaBoxes(io);
+    //
+    // Scoped because it is the one pass here that is sized to the BUFFER rather than to the ROI:
+    // everything below works inside `content` dilated by the reach, but finding `content` means
+    // reading the whole alpha plane first. A group carrying effects over full-canvas children (the
+    // S60 fixture's Texture folder) pays it at 39.8 MP.
+    AlphaBoxes boxes;
+    {
+        MOSAIC_PERF_SCOPE("FX coverage scan", common::Lane::Cpu);
+        boxes = alphaBoxes(io);
+    }
     const Box content = boxes.any; // full extent: drives the ROI + the fill-opacity dim
     if (content.empty()) return;
 
@@ -742,11 +751,15 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
     // Capture the ORIGINAL coverage before fill-opacity dims it, so effects key off the full
     // shape (a dimmed fill must not shrink the stroke/shadow edge).
     std::vector<float> alpha(static_cast<std::size_t>(rw) * rh);
-    forEachRow(rh, [&](int y) {
-        for (int x = 0; x < rw; ++x)
-            alpha[static_cast<std::size_t>(y) * rw + x] =
-                io.at(static_cast<std::uint32_t>(rx0 + x), static_cast<std::uint32_t>(ry0 + y)).a;
-    });
+    {
+        MOSAIC_PERF_SCOPE("FX coverage capture", common::Lane::Cpu);
+        forEachRow(rh, [&](int y) {
+            for (int x = 0; x < rw; ++x)
+                alpha[static_cast<std::size_t>(y) * rw + x] =
+                    io.at(static_cast<std::uint32_t>(rx0 + x), static_cast<std::uint32_t>(ry0 + y))
+                        .a;
+        });
+    }
 
     // MID -- the layer's own pixels, dimmed by fill-opacity (straight alpha; colour intact).
     // Overlays / satin / inner shadow+glow / bevel (all clipped to the alpha) land here in LE-c..f.
@@ -790,7 +803,11 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
     // ROI-sized scratch (drop shadows in vector order, then the outer glow -- later over earlier),
     // then place io's own pixels OVER it so the effect shows through io's transparent + AA-rim areas.
     if (anyDropShadow || anyOuterGlow) {
-        std::vector<ColorF> below(static_cast<std::size_t>(rw) * rh, ColorF{0.0f, 0.0f, 0.0f, 0.0f});
+        std::vector<ColorF> below;
+        {
+            MOSAIC_PERF_SCOPE("FX below buffer", common::Lane::Cpu);
+            below.assign(static_cast<std::size_t>(rw) * rh, ColorF{0.0f, 0.0f, 0.0f, 0.0f});
+        }
         {
             MOSAIC_PERF_SCOPE("FX drop shadows", common::Lane::Cpu);
             applyDropShadows(below, fx.dropShadows, sdShadow, rw, rh);
@@ -800,6 +817,7 @@ void applyEffects(ImageF& io, const core::LayerEffects& fx, bool antialias,
             applyOuterGlow(below, fx.outerGlow, sdShadow, anchor, rx0, ry0, rw, rh, antialias,
                            bufferToLayer);
         }
+        MOSAIC_PERF_SCOPE("FX below composite", common::Lane::Cpu);
         forEachRow(rh, [&](int y) {
             for (int x = 0; x < rw; ++x) {
                 const std::size_t idx = static_cast<std::size_t>(y) * rw + x;

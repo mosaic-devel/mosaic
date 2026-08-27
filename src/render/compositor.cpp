@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
@@ -2604,11 +2605,23 @@ ImageF renderLayer(const core::Layer& layer, const common::Affine2D& pre, std::u
     // The GPU override is inside the scope on purpose: it is the same seam doing the same job, and
     // reading Gpu against Cpu for one name is how the lane earns its keep.
     {
-        MOSAIC_PERF_SCOPE("Layer effects",
-                          g_layerEffectsOverride ? common::Lane::Gpu : common::Lane::Cpu);
-        if (!(g_layerEffectsOverride &&
-              g_layerEffectsOverride(out, fx, fxAntialias, bufferToLayer)))
+        // ⚠ THE LANE IS DECIDED BY THE OUTCOME, not by whether an override is installed. The
+        // installed lane refuses PER STACK (a gradient paint, a bevel -- layer_effects_gpu.hpp
+        // names each reason), so with one line wired every effected layer in the document would
+        // otherwise have reported on the GPU lane whether the device drew it or the CPU did. That
+        // makes the one row that matters -- `Layer effects` on Gpu against the same name on Cpu,
+        // the diagnostic pair the lanes exist for -- say nothing at all.
+        const bool on = common::Profiler::enabled();
+        const auto t0 = std::chrono::steady_clock::now();
+        const bool served =
+            g_layerEffectsOverride && g_layerEffectsOverride(out, fx, fxAntialias, bufferToLayer);
+        if (!served)
             applyEffects(out, fx, fxAntialias, bufferToLayer);
+        if (on)
+            common::Profiler::instance().record(
+                "Layer effects", served ? common::Lane::Gpu : common::Lane::Cpu,
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                    .count());
     }
     if (!windowed) return out;
 
