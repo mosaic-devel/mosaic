@@ -160,6 +160,53 @@
 
 namespace mosaic::ui {
 namespace {
+// ---- Vulkan compute-lane teardown -----------------------------------------------------------
+//
+// ⚠ THESE LANES MUST NOT BE DESTROYED BY A STATIC DESTRUCTOR. Each is a magic static inside its
+// own override below, so left alone it is destroyed during exit() -- after main() has returned,
+// and therefore after the Vulkan loader's and the validation layer's own static destructors may
+// already have run. `BlurGpu::~Impl` calls vkDeviceWaitIdle, and opening a document that builds
+// the lane under VK_LAYER_KHRONOS_validation aborts exactly there:
+//
+//     abort()  <- libVkLayer_khronos_validation.so
+//     mosaic::render::VulkanContext::waitIdle()
+//     mosaic::render::BlurGpu::Impl::~Impl()
+//     __run_exit_handlers / exit()
+//
+// Without the layer the driver tolerates it and the process exits 0, which is what kept this
+// invisible. It is undefined behaviour either way -- the order between this translation unit's
+// static destructors and a shared library's is not something either side gets to pick.
+//
+// So a lane registers its teardown as it is built, and runApp() runs the list before returning,
+// while the window is already down and the loader, the device and the layer are all still alive.
+// The lanes hold the only strong references to the shared VulkanContext (its own cache is a
+// weak_ptr), so this takes the instance and device down with them, at a defined moment.
+[[nodiscard]] std::mutex& laneTeardownMutex() {
+    static std::mutex m;
+    return m;
+}
+[[nodiscard]] std::vector<std::function<void()>>& laneTeardowns() {
+    static std::vector<std::function<void()>> v;
+    return v;
+}
+void registerLaneTeardown(std::function<void()> fn) {
+    const std::lock_guard<std::mutex> lock(laneTeardownMutex());
+    laneTeardowns().push_back(std::move(fn));
+}
+void shutdownComputeLanes() {
+    // ⚠ THE SEAMS COME DOWN FIRST. Each override captures nothing but reaches its lane through a
+    // magic static that is about to dangle; clearing the seam is what guarantees no call can find
+    // it. Nothing should be compositing at this point anyway -- the window is destroyed -- but
+    // "should" is not a lifetime.
+    core::text::setExtrudeRenderOverride(nullptr);
+    core::texture::setTextureRenderOverride(nullptr);
+    render::setLayerEffectsRenderOverride(nullptr);
+    render::setBlurRenderOverride(nullptr);
+    const std::lock_guard<std::mutex> lock(laneTeardownMutex());
+    for (auto it = laneTeardowns().rbegin(); it != laneTeardowns().rend(); ++it)
+        (*it)(); // reverse of construction, as a scope would
+    laneTeardowns().clear();
+}
 
 // The globs the Open pickers offer, built from what this BUILD can actually decode. The four
 // M4 codecs (WebP/AVIF/TIFF/GIF) are optional dependencies -- their symbols always exist but
@@ -2738,12 +2785,18 @@ public:
             [](common::ImageF& dst, const core::text::ExtrudeMesh& mesh,
                const core::text::Extrude& ex, const common::Affine2D& toPixel, bool aa,
                const core::text::ExtrudeEnv* env, const core::text::ExtrudeOverlay* overlay) {
-                static const std::unique_ptr<render::ExtrudeGpu> gpu = [] {
+                static render::ExtrudeGpu* const gpu = []() -> render::ExtrudeGpu* {
                     std::string err;
-                    auto g = render::ExtrudeGpu::create(/*enableValidation=*/false, err);
-                    if (!g)
+                    std::unique_ptr<render::ExtrudeGpu> g =
+                        render::ExtrudeGpu::create(/*enableValidation=*/false, err);
+                    if (!g) {
                         uiLog().info("3D text: Vulkan lane unavailable ({}); CPU lane serves", err);
-                    return g;
+                        return nullptr;
+                    }
+                    // Owned by the teardown list, not by a static destructor (see it above).
+                    render::ExtrudeGpu* raw = g.release();
+                    registerLaneTeardown([raw] { delete raw; });
+                    return raw;
                 }();
                 MOSAIC_PERF_SCOPE("3D text raster", Lane::Gpu);
                 const bool served =
@@ -2767,15 +2820,19 @@ public:
                core::texture::TextureRenderResult& out) {
                 static std::mutex laneMutex;
                 const std::lock_guard<std::mutex> lock(laneMutex);
-                static const std::unique_ptr<render::TextureGpu> gpu = [] {
+                static render::TextureGpu* const gpu = []() -> render::TextureGpu* {
                     std::string err;
-                    auto g = render::TextureGpu::create(/*enableValidation=*/false, err);
-                    if (!g)
+                    std::unique_ptr<render::TextureGpu> g =
+                        render::TextureGpu::create(/*enableValidation=*/false, err);
+                    if (!g) {
                         uiLog().info("textures: Vulkan lane unavailable ({}); CPU lane serves",
                                      err);
-                    else
-                        uiLog().info("textures: Vulkan lane on {}", g->deviceName());
-                    return g;
+                        return nullptr;
+                    }
+                    uiLog().info("textures: Vulkan lane on {}", g->deviceName());
+                    render::TextureGpu* raw = g.release();
+                    registerLaneTeardown([raw] { delete raw; });
+                    return raw;
                 }();
                 MOSAIC_PERF_SCOPE("Texture generate", Lane::Gpu);
                 return gpu != nullptr && gpu->render(params, w, h, window, progress, out);
@@ -2788,14 +2845,18 @@ public:
         render::setBlurRenderOverride([](common::ImageF& img, const render::BlurOp& op) {
             static std::mutex laneMutex;
             const std::lock_guard<std::mutex> lock(laneMutex);
-            static const std::unique_ptr<render::BlurGpu> gpu = [] {
+            static render::BlurGpu* const gpu = []() -> render::BlurGpu* {
                 std::string err;
-                auto g = render::BlurGpu::create(/*enableValidation=*/false, err);
-                if (!g)
+                std::unique_ptr<render::BlurGpu> g =
+                    render::BlurGpu::create(/*enableValidation=*/false, err);
+                if (!g) {
                     uiLog().info("blur: Vulkan lane unavailable ({}); CPU lane serves", err);
-                else
-                    uiLog().info("blur: Vulkan lane on {}", g->deviceName());
-                return g;
+                    return nullptr;
+                }
+                uiLog().info("blur: Vulkan lane on {}", g->deviceName());
+                render::BlurGpu* raw = g.release();
+                registerLaneTeardown([raw] { delete raw; });
+                return raw;
             }();
             MOSAIC_PERF_SCOPE("Blur", Lane::Gpu);
             return gpu != nullptr && gpu->render(img, op);
@@ -14798,11 +14859,17 @@ int runApp(const RunOptions& options) {
     uiLog().info("theme: {} ({} mode), accent #{:02X}{:02X}{:02X}", pal.dark ? "dark" : "light",
                  themeModeKey(options.themeMode), pal.accent.r, pal.accent.g, pal.accent.b);
 
-    MainWindow win(1100, 720, options.autoQuitFrames);
-    win.configurePicker(options);
-    win.watchSystemTheme(options.themeMode); // live-follow the OS appearance while in System mode
-    win.run(options.openPaths);
-    return Fl::run();
+    int rc = 0;
+    {
+        MainWindow win(1100, 720, options.autoQuitFrames);
+        win.configurePicker(options);
+        win.watchSystemTheme(options.themeMode); // live-follow the OS appearance while in System
+                                                 // mode
+        win.run(options.openPaths);
+        rc = Fl::run();
+    } // the window, its renderer and the resident lane go down here...
+    shutdownComputeLanes(); // ...and the compute lanes here, while Vulkan is still valid
+    return rc;
 }
 
 } // namespace mosaic::ui
