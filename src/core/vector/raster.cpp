@@ -262,8 +262,18 @@ ColorF paintColorAt(const Paint& paint, Vec2 localPt, bool antialias = true,
 // Composite a (coverage x paint) layer source-over onto a straight-alpha float buffer. Only the
 // coverage buffer's sub-rect is visited (coverage is zero elsewhere) -- this is the bbox bound.
 void paintCoverageOver(common::ImageF& dst, const CoverageBuffer& cov, const Paint& paint,
-                       const std::optional<Affine2D>& invToPixel, bool antialias = true) {
+                       const std::optional<Affine2D>& invToPixel, bool antialias = true,
+                       common::Rect* written = nullptr) {
     if (std::holds_alternative<NoPaint>(paint)) return;
+    // The sub-rect this pass can touch, unioned for the caller. Every arm of rasterizeObjectF
+    // funnels through here, so accumulating it here is exact by construction rather than a second
+    // derivation of the geometry -- and a rect slightly too large only costs a few skipped texels
+    // downstream, where one slightly too small would drop them.
+    if (written != nullptr && cov.width > 0 && cov.height > 0) {
+        const common::Rect r{static_cast<double>(cov.ox), static_cast<double>(cov.oy),
+                             static_cast<double>(cov.width), static_cast<double>(cov.height)};
+        *written = written->empty() ? r : written->united(r);
+    }
     const bool solid = std::holds_alternative<SolidPaint>(paint);
     const ColorF solidColor = solid ? std::get<SolidPaint>(paint).color : ColorF{};
     // Banded over the bbox's ROWS. Every pixel here is computed from the coverage buffer, the
@@ -560,8 +570,11 @@ common::Image rasterizeFill(const Object& obj, std::uint32_t W, std::uint32_t H,
 }
 
 common::ImageF rasterizeObjectF(const Object& obj, std::uint32_t W, std::uint32_t H,
-                                const Affine2D& toPixel, double tolerancePx, bool antialias) {
+                                const Affine2D& toPixel, double tolerancePx, bool antialias,
+                                common::Rect* written) {
     common::ImageF img(W, H);
+    if (written != nullptr)
+        *written = {};
     if (W == 0 || H == 0) return img;
     const std::optional<Affine2D> invToPixel = toPixel.inverse();
 
@@ -622,10 +635,10 @@ common::ImageF rasterizeObjectF(const Object& obj, std::uint32_t W, std::uint32_
                 if (outlined) { // body in the line colour (stroke), ring in the border colour (fill)
                     CoverageBuffer body = innerCov;
                     harden(body);
-                    paintCoverageOver(img, body, obj.stroke.paint, invToPixel, antialias);
-                    paintCoverageOver(img, ring, obj.fill, invToPixel, antialias);
+                    paintCoverageOver(img, body, obj.stroke.paint, invToPixel, antialias, written);
+                    paintCoverageOver(img, ring, obj.fill, invToPixel, antialias, written);
                 } else { // Hollow: only the ring, in the line colour
-                    paintCoverageOver(img, ring, obj.stroke.paint, invToPixel, antialias);
+                    paintCoverageOver(img, ring, obj.stroke.paint, invToPixel, antialias, written);
                 }
             }
             return img;
@@ -641,7 +654,7 @@ common::ImageF rasterizeObjectF(const Object& obj, std::uint32_t W, std::uint32_
         if (!bbox) return;
         CoverageBuffer cov = rasterizeCoverage(cs, W, H, fillRuleOf(obj.geometry), 4, bbox);
         harden(cov);
-        paintCoverageOver(img, cov, obj.fill, invToPixel, antialias);
+        paintCoverageOver(img, cov, obj.fill, invToPixel, antialias, written);
     };
     const auto paintStroke = [&] {
         if (!obj.stroke.enabled || std::holds_alternative<NoPaint>(obj.stroke.paint) ||
@@ -677,7 +690,7 @@ common::ImageF rasterizeObjectF(const Object& obj, std::uint32_t W, std::uint32_
                                                            : std::min(scov.a[i], 1.0f - fcov.a[i]);
         }
         harden(scov);
-        paintCoverageOver(img, scov, obj.stroke.paint, invToPixel, antialias);
+        paintCoverageOver(img, scov, obj.stroke.paint, invToPixel, antialias, written);
     };
 
     if (obj.paintOrder == Object::PaintOrder::StrokeThenFill) {

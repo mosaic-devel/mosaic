@@ -1002,3 +1002,98 @@ TEST_CASE("rasterizeCoverage: the active-edge sweep matches the linear scan bit 
     }
     CHECK(compared > 100000);
 }
+
+TEST_CASE("rasterizeObjectF's reported rect bounds every texel it painted") {
+    // The rect is a CONTRACT, not a hint: the text renderer composites each styled run out of a
+    // full-window image and now walks only this rect, so a texel painted outside it would simply
+    // never reach the block. Checked the only way that means anything -- scan the whole image and
+    // require every non-transparent texel to fall inside.
+    using namespace mosaic::core::vec;
+    const auto probe = [](const Object& obj, std::uint32_t W, std::uint32_t H,
+                          const mosaic::common::Affine2D& toPixel, const char* what) {
+        mosaic::common::Rect written;
+        const mosaic::common::ImageF img =
+            rasterizeObjectF(obj, W, H, toPixel, 0.25, true, &written);
+        REQUIRE(img.width == W);
+        std::size_t painted = 0;
+        for (std::uint32_t y = 0; y < H; ++y)
+            for (std::uint32_t x = 0; x < W; ++x) {
+                if (img.at(x, y).a <= 0.0f)
+                    continue;
+                ++painted;
+                INFO("case=" << std::string(what) << " texel " << x << "," << y << " outside "
+                             << written.x << "," << written.y << " " << written.w << "x"
+                             << written.h);
+                REQUIRE(static_cast<double>(x) >= written.x);
+                REQUIRE(static_cast<double>(y) >= written.y);
+                REQUIRE(static_cast<double>(x) < written.right());
+                REQUIRE(static_cast<double>(y) < written.bottom());
+            }
+        return painted;
+    };
+
+    // A filled path well inside the window: the rect must be a real sub-rect, or the test would
+    // pass trivially on a rect that is just the whole image.
+    {
+        Object obj;
+        Path p;
+        SubPath sp;
+        sp.closed = true;
+        for (const mosaic::common::Vec2 v :
+             {mosaic::common::Vec2{20.0, 14.0}, mosaic::common::Vec2{44.0, 18.0},
+              mosaic::common::Vec2{38.0, 40.0}, mosaic::common::Vec2{18.0, 36.0}})
+            sp.nodes.push_back(Node{v, v, v});
+        p.subpaths.push_back(sp);
+        obj.geometry = p;
+        obj.fill = SolidPaint{mosaic::common::ColorF{1.0f, 0.2f, 0.1f, 1.0f}};
+        obj.stroke.enabled = false;
+        mosaic::common::Rect written;
+        const mosaic::common::ImageF img = rasterizeObjectF(
+            obj, 96, 64, mosaic::common::Affine2D::identity(), 0.25, true, &written);
+        (void)img;
+        CHECK(written.w < 96.0); // a real sub-rect...
+        CHECK(written.h < 64.0);
+        CHECK(probe(obj, 96, 64, mosaic::common::Affine2D::identity(), "fill") > 100);
+    }
+    // ... and with a STROKE on, which paints outside the fill's own bounds -- the arm where a rect
+    // derived from the fill geometry alone would be too small.
+    {
+        Object obj;
+        Path p;
+        SubPath sp;
+        sp.closed = true;
+        for (const mosaic::common::Vec2 v :
+             {mosaic::common::Vec2{30.0, 24.0}, mosaic::common::Vec2{50.0, 24.0},
+              mosaic::common::Vec2{50.0, 40.0}, mosaic::common::Vec2{30.0, 40.0}})
+            sp.nodes.push_back(Node{v, v, v});
+        p.subpaths.push_back(sp);
+        obj.geometry = p;
+        obj.fill = SolidPaint{mosaic::common::ColorF{0.1f, 0.9f, 0.2f, 1.0f}};
+        obj.stroke.enabled = true;
+        obj.stroke.width = 7.0;
+        obj.stroke.paint = SolidPaint{mosaic::common::ColorF{0.0f, 0.0f, 1.0f, 1.0f}};
+        CHECK(probe(obj, 96, 64, mosaic::common::Affine2D::identity(), "fill+stroke") > 100);
+    }
+    // An object that lands entirely off-canvas paints nothing and must report an EMPTY rect, not a
+    // stale or whole-image one -- the text renderer skips the run on exactly that test.
+    {
+        Object obj;
+        Path p;
+        SubPath sp;
+        sp.closed = true;
+        for (const mosaic::common::Vec2 v :
+             {mosaic::common::Vec2{500.0, 500.0}, mosaic::common::Vec2{520.0, 500.0},
+              mosaic::common::Vec2{520.0, 520.0}})
+            sp.nodes.push_back(Node{v, v, v});
+        p.subpaths.push_back(sp);
+        obj.geometry = p;
+        obj.fill = SolidPaint{mosaic::common::ColorF{1.0f, 1.0f, 1.0f, 1.0f}};
+        obj.stroke.enabled = false;
+        mosaic::common::Rect written{1.0, 2.0, 3.0,
+                                     4.0}; // pre-dirtied: it must be RESET, not left alone
+        const mosaic::common::ImageF img = rasterizeObjectF(
+            obj, 96, 64, mosaic::common::Affine2D::identity(), 0.25, true, &written);
+        (void)img;
+        CHECK(written.empty());
+    }
+}

@@ -82,6 +82,13 @@ struct CoverageBuffer {
 // when the user picks the Nearest resample filter, so the AA combo governs vector edges too (S26).
 [[nodiscard]] common::ImageF rasterizeObjectF(const Object& obj, std::uint32_t width,
                                               std::uint32_t height, const common::Affine2D& toPixel,
-                                              double tolerancePx = 0.25, bool antialias = true);
+                                              double tolerancePx = 0.25, bool antialias = true,
+                                              // The pixel sub-rect the pass actually painted (the
+                                              // union of its coverage buffers' extents), or empty
+                                              // when nothing was drawn. Lets a caller compositing
+                                              // the result skip the rest of a full-window image
+                                              // instead of walking it -- the text renderer builds
+                                              // one of these PER RUN.
+                                              common::Rect* written = nullptr);
 
 }  // namespace mosaic::core::vec

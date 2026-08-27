@@ -4,36 +4,57 @@
 // it is a producer of the existing Contours seam (§5.1), not a new rendering primitive.
 #include "core/text/text_render.hpp"
 
-#include <algorithm>
-#include <cmath>
-#include <vector>
-
+#include "common/profiler.hpp"
 #include "core/text/extrude_mesh.hpp"
 #include "core/text/extrude_overlay.hpp"
 #include "core/text/extrude_render.hpp"
 #include "core/vector/object.hpp"
 #include "core/vector/raster.hpp"
 
+#include <algorithm>
+#include <cmath>
+#include <vector>
+
 namespace mosaic::core::text {
 namespace {
 
 // Source-over composite `src` onto `dst` (same dims; straight-alpha float RGBA).
-void compositeOver(common::ImageF& dst, const common::ImageF& src) {
-    const std::size_t n = dst.rgba.size();
-    for (std::size_t p = 0; p < n; p += 4) {
-        const float sa = src.rgba[p + 3];
-        if (sa <= 0.0f) continue;
-        const float da = dst.rgba[p + 3];
-        const float outA = sa + da * (1.0f - sa);
-        if (outA <= 0.0f) {
-            dst.rgba[p + 0] = dst.rgba[p + 1] = dst.rgba[p + 2] = dst.rgba[p + 3] = 0.0f;
-            continue;
+// Source-over `src` onto `dst`, both full-window, over `box` only (empty box == the whole image).
+//
+// ⚠ THE BOX IS THE WHOLE POINT ON A STYLED BLOCK. Each RUN is rasterised into its own full-window
+// image and composited here, so a block with one italic emphasis and one coloured lead-in per
+// paragraph -- which is what body copy looks like -- ran this over every texel of the cache once
+// per run. The fixture's body copy is a 2679x1854 cache with seventeen runs: five million texels
+// walked seventeen times to composite a few thousand each. `rasterizeObjectF` now reports the
+// sub-rect it painted, and outside it `src` is untouched calloc'd zero, which this loop skips
+// anyway -- so bounding the walk changes nothing it would have written.
+void compositeOver(common::ImageF& dst, const common::ImageF& src, const common::Rect& box = {}) {
+    const std::uint32_t x0 = box.empty() ? 0u : static_cast<std::uint32_t>(std::max(0.0, box.x));
+    const std::uint32_t y0 = box.empty() ? 0u : static_cast<std::uint32_t>(std::max(0.0, box.y));
+    const std::uint32_t x1 =
+        box.empty() ? dst.width
+                    : std::min(dst.width, static_cast<std::uint32_t>(std::max(0.0, box.right())));
+    const std::uint32_t y1 =
+        box.empty() ? dst.height
+                    : std::min(dst.height, static_cast<std::uint32_t>(std::max(0.0, box.bottom())));
+    for (std::uint32_t y = y0; y < y1; ++y) {
+        for (std::uint32_t x = x0; x < x1; ++x) {
+            const std::size_t p = (static_cast<std::size_t>(y) * dst.width + x) * 4;
+            const float sa = src.rgba[p + 3];
+            if (sa <= 0.0f)
+                continue;
+            const float da = dst.rgba[p + 3];
+            const float outA = sa + da * (1.0f - sa);
+            if (outA <= 0.0f) {
+                dst.rgba[p + 0] = dst.rgba[p + 1] = dst.rgba[p + 2] = dst.rgba[p + 3] = 0.0f;
+                continue;
+            }
+            for (int c = 0; c < 3; ++c) {
+                dst.rgba[p + c] =
+                    (src.rgba[p + c] * sa + dst.rgba[p + c] * da * (1.0f - sa)) / outA;
+            }
+            dst.rgba[p + 3] = outA;
         }
-        for (int c = 0; c < 3; ++c) {
-            dst.rgba[p + c] =
-                (src.rgba[p + c] * sa + dst.rgba[p + c] * da * (1.0f - sa)) / outA;
-        }
-        dst.rgba[p + 3] = outA;
     }
 }
 
@@ -122,7 +143,14 @@ common::ImageF renderTextF(TextShaper& shaper, const TextBlock& block, const Fon
     common::ImageF result(width, height);  // transparent
     if (width == 0 || height == 0 || block.runs.empty()) return result;
 
-    const ShapedBlock sb = shaper.layout(block, fonts);
+    // The text cache refresh had ONE row for everything below -- shaping, outline extraction, the
+    // 2D fill, and the whole 3D lane -- which on a document with a 3D headline is a sum with no
+    // addends. These are the stages.
+    ShapedBlock sb;
+    {
+        MOSAIC_PERF_SCOPE("Text shaping", common::Lane::Cpu);
+        sb = shaper.layout(block, fonts);
+    }
 
     // Item 8 bakes the layer transform's scale into `toPixel`, so the glyph curves must be flattened
     // in DEVICE space: tolerate `tolerancePx` AFTER the bake, not at the (possibly tiny) point size.
@@ -141,11 +169,19 @@ common::ImageF renderTextF(TextShaper& shaper, const TextBlock& block, const Fon
     if (block.extrude) {
         std::vector<GlyphSolidInput> solids;
         solids.reserve(sb.glyphs.size());
-        for (const ShapedGlyph& g : sb.glyphs) {
-            if (g.whitespace || g.colorGlyph) continue;
-            solids.push_back({shaper.glyphContours(g, glyphTol), g.runIndex});
+        {
+            MOSAIC_PERF_SCOPE("Text glyph outlines", common::Lane::Cpu);
+            for (const ShapedGlyph& g : sb.glyphs) {
+                if (g.whitespace || g.colorGlyph)
+                    continue;
+                solids.push_back({shaper.glyphContours(g, glyphTol), g.runIndex});
+            }
         }
-        ExtrudeMesh mesh = buildExtrudeMesh(solids, *block.extrude);
+        ExtrudeMesh mesh;
+        {
+            MOSAIC_PERF_SCOPE("3D text mesh", common::Lane::Cpu);
+            mesh = buildExtrudeMesh(solids, *block.extrude);
+        }
         // The UVs' sampling domain (§12) is the ink bbox the mesh was BUILT over -- capture it
         // before the camera re-base below swaps designBounds for the shaped bounds.
         const common::Rect uvDomain = mesh.designBounds;
@@ -157,12 +193,16 @@ common::ImageF renderTextF(TextShaper& shaper, const TextBlock& block, const Fon
         // Layer-Effects overlays mapped per face (§12, S30-e): bake them into design-space albedo
         // maps at the device texel density (bakeScale), pattern edges following the block's AA.
         ExtrudeOverlay overlay;
-        if (effects != nullptr && extrudeOverlaysActive(*effects))
+        if (effects != nullptr && extrudeOverlaysActive(*effects)) {
+            MOSAIC_PERF_SCOPE("3D text overlay bake", common::Lane::Cpu);
             overlay = buildExtrudeOverlay(*effects, mesh, *block.extrude, uvDomain, bakeScale,
                                           block.aa != AntiAlias::None);
-        renderExtrudeMeshF(result, mesh, *block.extrude, toPixel,
-                           block.aa != AntiAlias::None, env,
-                           overlay.empty() ? nullptr : &overlay);
+        }
+        {
+            MOSAIC_PERF_SCOPE("3D text mesh render", common::Lane::Cpu);
+            renderExtrudeMeshF(result, mesh, *block.extrude, toPixel, block.aa != AntiAlias::None,
+                               env, overlay.empty() ? nullptr : &overlay);
+        }
         return result;
     }
 
@@ -171,14 +211,20 @@ common::ImageF renderTextF(TextShaper& shaper, const TextBlock& block, const Fon
     std::vector<vec::Path> runPaths(block.runs.size());
     std::vector<TextShaper::ColorGlyphTile> colorTiles;
 
-    for (const ShapedGlyph& g : sb.glyphs) {
-        if (g.runIndex >= runPaths.size()) continue;
-        if (g.colorGlyph) {
-            if (auto tile = shaper.colorGlyphTile(g)) colorTiles.push_back(std::move(*tile));
-            continue;
+    {
+        MOSAIC_PERF_SCOPE("Text glyph outlines", common::Lane::Cpu);
+        for (const ShapedGlyph& g : sb.glyphs) {
+            if (g.runIndex >= runPaths.size())
+                continue;
+            if (g.colorGlyph) {
+                if (auto tile = shaper.colorGlyphTile(g))
+                    colorTiles.push_back(std::move(*tile));
+                continue;
+            }
+            if (g.whitespace)
+                continue;
+            appendContours(runPaths[g.runIndex], shaper.glyphContours(g, glyphTol));
         }
-        if (g.whitespace) continue;
-        appendContours(runPaths[g.runIndex], shaper.glyphContours(g, glyphTol));
     }
 
     // Underline / strikethrough: one bar per maximal same-run span on each line.
@@ -217,6 +263,7 @@ common::ImageF renderTextF(TextShaper& shaper, const TextBlock& block, const Fon
     }
 
     const bool antialias = block.aa != AntiAlias::None;  // Subpixel degrades to Grayscale in S29-a
+    MOSAIC_PERF_SCOPE("Text fill (per run)", common::Lane::Cpu);
     for (std::size_t ri = 0; ri < block.runs.size(); ++ri) {
         if (runPaths[ri].subpaths.empty()) continue;
         if (std::holds_alternative<vec::NoPaint>(block.runs[ri].style.paint)) continue;
@@ -224,9 +271,12 @@ common::ImageF renderTextF(TextShaper& shaper, const TextBlock& block, const Fon
         obj.geometry = std::move(runPaths[ri]);
         obj.fill = block.runs[ri].style.paint;
         obj.stroke.enabled = false;
+        common::Rect runBox;
         const common::ImageF runImg =
-            vec::rasterizeObjectF(obj, width, height, toPixel, tolerancePx, antialias);
-        compositeOver(result, runImg);
+            vec::rasterizeObjectF(obj, width, height, toPixel, tolerancePx, antialias, &runBox);
+        if (runBox.empty())
+            continue; // the run painted nothing at all
+        compositeOver(result, runImg, runBox);
     }
 
     for (const auto& tile : colorTiles) blitColorTile(result, tile, toPixel);
