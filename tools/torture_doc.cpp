@@ -49,6 +49,8 @@
 #include "io/mosaic/file.hpp"
 #include "io/mosaic/journal_session.hpp"
 #include "io/mosaic/save.hpp"
+#include "io/mosaic/preview.hpp"
+#include "render/compositor.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -152,6 +154,25 @@ int g_canvasW = 5152;
 int g_canvasH = 7728;
 
 // ---- paints ------------------------------------------------------------------------------------
+
+// The document at preview resolution -- what buildDocumentCheckpoint turns into the PRVW chunk.
+// compositeScaled rather than composite: the preview is 256 px on its longest edge, and the
+// bounded walk costs output pixels rather than canvas pixels.
+[[nodiscard]] std::optional<common::Image> previewComposite(const core::Document& doc) {
+    const std::uint32_t longest = std::max(doc.width(), doc.height());
+    if (longest == 0)
+        return std::nullopt;
+    const double scale = std::min(1.0, static_cast<double>(io::kPreviewEdge) / longest);
+    const auto w = std::max<std::uint32_t>(
+        1, static_cast<std::uint32_t>(std::lround(doc.width() * scale)));
+    const auto h = std::max<std::uint32_t>(
+        1, static_cast<std::uint32_t>(std::lround(doc.height() * scale)));
+    const mosaic::render::CompositeResult r =
+        mosaic::render::compositeScaled(doc, w, h, {}, mosaic::render::Backend::Cpu);
+    if (!r.ok || r.image.empty())
+        return std::nullopt;
+    return r.image;
+}
 
 vec::Gradient ramp(vec::GradientType type, std::initializer_list<ColorF> colors,
                    vec::DitherKind dither = vec::DitherKind::BlueNoise) {
@@ -379,9 +400,7 @@ vec::Object booleanBadge() {
     comp.children.push_back(std::move(c));
 
     host.geometry = std::move(comp);
-    host.fill = ramp(vec::GradientType::Radial,
-                     {ColorF{0.98f, 0.86f, 0.45f, 0.92f}, ColorF{0.85f, 0.28f, 0.42f, 0.85f},
-                      ColorF{0.24f, 0.16f, 0.42f, 0.75f}});
+    host.fill = vec::SolidPaint{ColorF{0.92f, 0.62f, 0.44f, 0.9f}}; // solid: see the Shape N note
     host.stroke.enabled = true;
     host.stroke.width = 14.0;
     host.stroke.align = vec::StrokeAlign::Outside;
@@ -645,13 +664,30 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
         badge->setBlendMode(core::BlendMode::Screen);
         vg->addOnTop(std::move(badge));
 
+        // A REAL gradient layer -- the shape the gradient tool actually produces
+        // (ui/gradient_gesture.cpp): a full-bleed, document-sized rect whose fill is a
+        // vec::Gradient. This is what carries the fixture's gradient-rasterisation coverage now
+        // that the shapes above are solid, and unlike them it is a state a user can reach. Multi-
+        // stop and dithered, because that is the expensive path.
+        {
+            auto grad = doc->makeVector("Gradient");
+            vec::Object o;
+            o.geometry = vec::ParametricShape{vec::RectShape{
+                {static_cast<double>(doc->width()), static_cast<double>(doc->height())}, 0.0}};
+            o.fill = ramp(vec::GradientType::Linear,
+                          {ColorF{0.98f, 0.86f, 0.45f, 0.55f}, ColorF{0.85f, 0.28f, 0.42f, 0.5f},
+                           ColorF{0.24f, 0.16f, 0.42f, 0.45f}});
+            grad->setObject(std::move(o));
+            grad->setBlendMode(core::BlendMode::SoftLight);
+            grad->setOpacity(0.8f);
+            vg->addOnTop(std::move(grad));
+        }
+
         auto rose = doc->makeVector("Rosette");
         {
             vec::Object o;
             o.geometry = rosette(29, 900.0, 520.0);
-            o.fill = ramp(vec::GradientType::Conic,
-                          {ColorF{0.98f, 0.42f, 0.3f, 0.55f}, ColorF{0.3f, 0.75f, 0.95f, 0.55f},
-                           ColorF{0.95f, 0.85f, 0.4f, 0.55f}, ColorF{0.98f, 0.42f, 0.3f, 0.55f}});
+            o.fill = vec::SolidPaint{ColorF{0.86f, 0.55f, 0.42f, 0.55f}}; // solid: see above
             o.stroke.enabled = true;
             o.stroke.width = 9.0;
             o.stroke.align = vec::StrokeAlign::Inside;
@@ -713,9 +749,17 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
                 break;
             }
             }
-            o.fill = ramp(vec::GradientType::Linear,
-                          {ColorF{0.2f + 0.05f * (i % 6), 0.5f, 0.9f - 0.04f * i, 0.8f},
-                           ColorF{0.95f, 0.4f + 0.03f * i, 0.25f, 0.8f}});
+            // ⚠ A SOLID FILL, not a gradient one. A gradient fill on a parametric SHAPE is a
+            // state the application cannot produce: the gradient tool makes a full-bleed rect
+            // (ui/gradient_gesture.cpp) and nothing else ever writes a vec::Gradient into an
+            // Object's fill, so "star with a gradient fill" exists only in files assembled by
+            // hand -- like this one used to be. It cost a real investigation: the layer panel's
+            // badge rule keys on the fill, so fourteen layers named "Shape N" wore the gradient
+            // chip and the shape tool declined to bind them, and the fixture looked like evidence
+            // of a product bug that did not exist. A fixture must torture the app with things the
+            // app can actually make. Shapes get gradients through the layer-effects overlay, which
+            // is the supported route and which this document already exercises elsewhere.
+            o.fill = vec::SolidPaint{ColorF{0.2f + 0.05f * (i % 6), 0.5f, 0.9f - 0.04f * i, 0.8f}};
             o.stroke.enabled = (i % 3) != 0;
             o.stroke.width = 4.0 + i % 5;
             o.stroke.paint = vec::SolidPaint{ColorF{0.05f, 0.05f, 0.08f, 0.9f}};
@@ -1038,7 +1082,13 @@ int main(int argc, char** argv) {
     {
         Stage s("serialising the checkpoint");
         std::string err;
-        const auto input = io::buildDocumentCheckpoint(*doc, &err);
+        // The PRVW the real save path always writes (S48-b). Composited AT preview size, exactly
+        // as ui::compositeForPreview does: makePreviewChunk keeps 256 px on the longest edge, so
+        // building 39.8 MP to throw 99.8% of it away would be the same defect this fixture exists
+        // to expose.
+        const std::optional<common::Image> preview = previewComposite(*doc);
+        const auto input = io::buildDocumentCheckpoint(*doc, &err,
+                                                       preview.has_value() ? &*preview : nullptr);
         if (!input.has_value()) {
             fail("buildDocumentCheckpoint: " + err);
             return 1;

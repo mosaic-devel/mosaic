@@ -121,7 +121,13 @@ option(MOSAIC_BUILD_TORTURE_DOC "Build the .mosaic performance-fixture generator
 
 if(MOSAIC_BUILD_TORTURE_DOC)
     add_executable(torture_doc torture_doc.cpp)
-    target_link_libraries(torture_doc PRIVATE mosaic::core mosaic::common mosaic::io)
+    # ⚠ AND mosaic::render, for ONE reason: the PRVW chunk. buildDocumentCheckpoint takes the
+    # preview as a PARAMETER because io must not depend on render -- so a generator that does not
+    # composite writes no preview, and this fixture never had one. A fixture that is missing a
+    # chunk the real save path always writes cannot torture-test that chunk, and it sent someone
+    # hunting a New Document thumbnail bug that did not exist. The composite is bounded to preview
+    # size, so it costs milliseconds, not a full canvas walk.
+    target_link_libraries(torture_doc PRIVATE mosaic::core mosaic::common mosaic::io mosaic::render)
     mosaic_apply_warnings(torture_doc)
     mosaic_apply_sanitizers(torture_doc)
 endif()
