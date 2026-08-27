@@ -238,6 +238,76 @@ TEST_CASE("stylize: opacity 0 composites byte-identically to no layer") {
     }
 }
 
+TEST_CASE("stylize: the in-place arm and the copy-and-blend arm agree byte for byte") {
+    // applyStylizeAdjustment has two arms. UNMODULATED -- full opacity, no mask, not clipped --
+    // runs the kernel straight into the accumulator, because `amt` is then >= 1 everywhere and the
+    // blend would only copy the scratch back over the original. Anything else copies the
+    // accumulator, transforms the copy, and lerps it back under the coverage.
+    //
+    // A FULLY WHITE mask is what puts the two side by side: adjustmentMaskAt divides the 255 by
+    // 255.0f, which is exactly 1.0f, so `amt` is exactly 1.0f at every pixel and the modulated arm
+    // is forced to take the same picture the in-place arm produces directly. If the fast arm is
+    // ever entered for a case the blend would have changed, or the kernels stop being pure
+    // in-place transforms, these two stop matching.
+    //
+    // Every kind, because the split is in the seam and not in any one kernel.
+    for (const core::AdjustmentKind kind : kStylizeKinds) {
+        const int kindId = static_cast<int>(kind);
+        CAPTURE(kindId);
+
+        core::Document inPlace(24, 16);
+        seedPattern(inPlace, 24, 16);
+        core::AdjustmentLayer* a = addAdjustment(inPlace, kind, {});
+        core::seedAdjustmentDefaults(*a);
+        a->setOpacity(1.0f);
+
+        core::Document blended(24, 16);
+        seedPattern(blended, 24, 16);
+        core::AdjustmentLayer* b = addAdjustment(blended, kind, {});
+        core::seedAdjustmentDefaults(*b);
+        b->setOpacity(1.0f);
+        core::RasterMask mask;
+        mask.width = 24;
+        mask.height = 16;
+        mask.enabled = true;
+        mask.coverage.assign(static_cast<std::size_t>(24) * 16, std::uint8_t{255});
+        b->setMask(std::move(mask));
+
+        const common::Image direct = flatten(inPlace);
+        checkIdentical(flatten(blended), direct);
+
+        // ... and the equality above is NOT enough on its own: it holds for any predicate that
+        // sends this case either way, so it cannot catch one that takes the fast arm when the
+        // coverage really does modulate. These two do. A HALF mask and a HALF opacity each have to
+        // land somewhere the raw kernel output is not -- which is only possible if the blend ran.
+        core::Document bareDoc(24, 16);
+        seedPattern(bareDoc, 24, 16);
+        const common::Image bare = flatten(bareDoc);
+        if (direct.rgba == bare.rgba)
+            continue; // this kind's defaults are the identity: nothing to modulate
+
+        core::Document halfMask(24, 16);
+        seedPattern(halfMask, 24, 16);
+        core::AdjustmentLayer* c = addAdjustment(halfMask, kind, {});
+        core::seedAdjustmentDefaults(*c);
+        c->setOpacity(1.0f);
+        core::RasterMask grey;
+        grey.width = 24;
+        grey.height = 16;
+        grey.enabled = true;
+        grey.coverage.assign(static_cast<std::size_t>(24) * 16, std::uint8_t{128});
+        c->setMask(std::move(grey));
+        CHECK(flatten(halfMask).rgba != direct.rgba);
+
+        core::Document halfOpacity(24, 16);
+        seedPattern(halfOpacity, 24, 16);
+        core::AdjustmentLayer* d = addAdjustment(halfOpacity, kind, {});
+        core::seedAdjustmentDefaults(*d);
+        d->setOpacity(0.5f);
+        CHECK(flatten(halfOpacity).rgba != direct.rgba);
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Per-filter analytic behaviour
 // ---------------------------------------------------------------------------------------------

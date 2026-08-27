@@ -277,6 +277,39 @@ void applyStylizeAdjustment(ImageF& acc, const core::AdjustmentLayer& adj,
     const StylizeOp op = resolveStylizeOp(adj, pre, liveDrag);
     if (!op.effective) return;  // identity params: a byte-level no-op (the §1 identity rule)
 
+    const float layerOpacity = adj.opacity();
+    const core::RasterMask* mk = (adj.hasMask() && adj.mask()->enabled) ? adj.mask() : nullptr;
+    const common::Rect maskDom = mk ? adjustmentMaskDomain(adj, *mk, maskDomain) : maskDomain;
+    const std::optional<common::Affine2D> preInv = pre.inverse();
+
+    // ---- The UNMODULATED case runs the kernel straight into the accumulator --------------------
+    //
+    // The blend below needs the ORIGINAL to lerp against, which is why the kernel gets a copy. But
+    // when nothing modulates it -- full opacity, no mask, not clipped -- `amt` is >= 1 at every
+    // pixel, the blend loop's own fast arm writes `out` into `acc` unchanged, and the copy was
+    // round-tripping the accumulator for nothing.
+    //
+    // At 39.8 MP the accumulator is 637 MB, so that round trip is the whole cost of a cheap kernel:
+    // the copy reads and writes it once, the blend reads BOTH buffers and writes one, and a
+    // per-pixel stylize kind therefore moved ~5 GB where the scalar adjustment loop beside it moves
+    // 1.27 GB. Vignette and Add Noise are per-pixel kinds with reach 0 and were costing ~970 ms
+    // each against the ~320 ms that Levels, Vibrance and Hue/Saturation cost for the same walk over
+    // the same buffer -- a 3x gap that was entirely this.
+    //
+    // Byte-identical by construction, not by tolerance: `out = acc; kernel(out); acc = out` IS
+    // `kernel(acc)`. The kernels transform in place and read nothing else.
+    //
+    // ⚠ `preInv` is part of the test because the loop is: a mask is only ever applied
+    // `if (mk && preInv)`, so a singular placement means an un-applied mask, which is un-modulated.
+    // Reading `mk != nullptr` alone would send that case down the slow path to compute the same
+    // answer.
+    const bool modulated =
+        layerOpacity < 1.0f || coverage != nullptr || (mk != nullptr && preInv.has_value());
+    if (!modulated) {
+        runStylizeKernel(acc, op, pre);
+        return;
+    }
+
     ImageF out = acc;  // straight copy; the kernel transforms it in place
     runStylizeKernel(out, op, pre);
 
@@ -288,10 +321,6 @@ void applyStylizeAdjustment(ImageF& acc, const core::AdjustmentLayer& adj,
     // Kernels that do not touch alpha come out of this loop with ab == ao, so the premultiplied
     // form collapses to a plain RGB lerp for them; the ones that resample coverage (pixelate,
     // oil paint, wave) get the full treatment, exactly like a blur.
-    const float layerOpacity = adj.opacity();
-    const core::RasterMask* mk = (adj.hasMask() && adj.mask()->enabled) ? adj.mask() : nullptr;
-    const common::Rect maskDom = mk ? adjustmentMaskDomain(adj, *mk, maskDomain) : maskDomain;
-    const std::optional<common::Affine2D> preInv = pre.inverse();
     parallelFor(acc.height, 64, [&](std::size_t row0, std::size_t row1) {
         for (std::uint32_t y = static_cast<std::uint32_t>(row0); y < row1; ++y) {
             std::size_t idx = static_cast<std::size_t>(y) * acc.width;
