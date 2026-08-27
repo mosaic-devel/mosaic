@@ -1,3 +1,4 @@
+#include "common/fs_path.hpp"
 #include "ui/brush_preset_panel.hpp"
 
 #include "common/i18n.hpp"
@@ -42,8 +43,8 @@ namespace {
             *error = "cannot open " + path;
         return std::nullopt;
     }
-    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)),
-                                          std::istreambuf_iterator<char>());
+    std::vector<std::uint8_t> bytes;
+    (void)common::readWholeFile(path, bytes); // the empty check below is the failure path
     if (bytes.empty()) {
         if (error != nullptr)
             *error = "empty file";

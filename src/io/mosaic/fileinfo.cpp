@@ -70,11 +70,9 @@ std::optional<DocumentFileInfo> documentInfoInFile(std::span<const std::uint8_t>
 }
 
 std::optional<DocumentFileInfo> readDocumentInfo(const std::string& path) {
-    std::ifstream f(common::pathFromUtf8(path), std::ios::binary);
-    if (!f)
+    std::vector<std::uint8_t> bytes;
+    if (!common::readWholeFile(path, bytes))
         return std::nullopt;
-    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(f)),
-                                          std::istreambuf_iterator<char>());
     return documentInfoInFile(bytes);
 }
 

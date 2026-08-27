@@ -1,3 +1,4 @@
+#include "common/fs_path.hpp"
 #include "io/brush/library.hpp"
 
 #include "common/image_svg.hpp"
@@ -19,33 +20,6 @@ namespace {
 
 namespace cb = mosaic::core::brush;
 
-// Slurp a file. ⚠ NOT via istreambuf_iterator: that is an INPUT iterator, so the vector range-ctor
-// cannot size the buffer up front and degrades to a byte-at-a-time sbumpc loop with geometric
-// regrowth -- the slowest way there is to read the 17.5 MB bundle this library exists to read.
-[[nodiscard]] bool readWholeFile(const std::string& path, std::vector<std::uint8_t>& out,
-                                 std::string* error) {
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
-    if (!file) {
-        if (error != nullptr)
-            *error = "cannot open " + path;
-        return false;
-    }
-    const std::streamoff size = file.tellg();
-    if (size < 0) {
-        if (error != nullptr)
-            *error = "cannot size " + path;
-        return false;
-    }
-    out.resize(static_cast<std::size_t>(size));
-    file.seekg(0, std::ios::beg);
-    if (size > 0 && !file.read(reinterpret_cast<char*>(out.data()), size)) {
-        if (error != nullptr)
-            *error = "cannot read " + path;
-        out = {};
-        return false;
-    }
-    return true;
-}
 
 [[nodiscard]] std::string lowerExtension(std::string_view fileName) {
     const std::size_t dot = fileName.rfind('.');
@@ -485,7 +459,7 @@ int PresetLibrary::addBundle(const std::uint8_t* data, std::size_t size,
 
 int PresetLibrary::addBundleFile(const std::filesystem::path& path, std::string* error) {
     std::vector<std::uint8_t> data;
-    if (!readWholeFile(path.string(), data, error))
+    if (!common::readWholeFile(path.string(), data, error))
         return 0;
     return addBundle(data.data(), data.size(), path.string(), error);
 }
@@ -502,7 +476,7 @@ const ZipReader* PresetLibrary::openSource(const std::string& path, std::string*
     auto open = std::make_unique<OpenSource>();
     open->path = path;
     ++m_archiveOpens; // an attempt is an open: a source that fails cost the read all the same
-    if (readWholeFile(path, open->bytes, error))
+    if (common::readWholeFile(path, open->bytes, error))
         open->zip = ZipReader::open(open->bytes.data(), open->bytes.size(), error);
     if (!open->zip)
         open->bytes = {}; // a failed open holds no bytes hostage

@@ -1,9 +1,11 @@
 #pragma once
 
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <vector>
 
 // The ONE conversion between Mosaic's UTF-8 `std::string` paths and `std::filesystem::path`.
 //
@@ -55,5 +57,25 @@ namespace mosaic::common {
 // the only entry point that can open a path outside the active code page is `_wfopen`, and passing
 // UTF-8 bytes to narrow `fopen` is precisely why "export a PNG into an accented folder" failed.
 [[nodiscard]] std::FILE* fopenUtf8(std::string_view utf8, const char* mode);
+
+// Read a whole file into `out`. Returns false (with `*error` set, when non-null) if it cannot be
+// opened, sized or read; `out` is left empty on failure.
+//
+// ⚠ USE THIS, NOT `vector<uint8_t> b((istreambuf_iterator<char>(f)), {})`. That idiom reads through
+// an INPUT iterator, so the vector's range constructor cannot size the buffer up front and degrades
+// to a byte-at-a-time sbumpc loop with geometric regrowth. It is the slowest way there is to read a
+// file, and the cost is invisible until someone opens a big one:
+//
+//     harbinger.mosaic, 302 MB   istreambuf_iterator  730 ms   seek + bulk read  85 ms   (8.6x)
+//
+// That was 1.4 s of the New Document dialog's ~1.5 s stall -- it reads a preview and a doc-info
+// header for every recent file, and paid the slurp twice per file -- plus ~0.7 s of every document
+// open and every incremental save. io/brush/library.cpp had already worked this out privately for
+// the 17.5 MB preset bundle; this is that helper, promoted so the next caller inherits it.
+//
+// Going through pathFromUtf8 also means these call sites stop constructing a path from a narrow
+// std::string, which is the Windows code-page bug this header exists to prevent.
+[[nodiscard]] bool readWholeFile(std::string_view utf8Path, std::vector<std::uint8_t>& out,
+                                 std::string* error = nullptr);
 
 } // namespace mosaic::common

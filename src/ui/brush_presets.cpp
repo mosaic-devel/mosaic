@@ -1,3 +1,4 @@
+#include "common/fs_path.hpp"
 #include "ui/brush_presets.hpp"
 
 #include "common/log.hpp"
@@ -31,8 +32,8 @@ namespace {
             *error = "cannot open " + path.filename().string();
         return {};
     }
-    std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)),
-                                    std::istreambuf_iterator<char>());
+    std::vector<std::uint8_t> bytes;
+    (void)common::readWholeFile(common::utf8FromPath(path), bytes);
     if (bytes.empty() && error != nullptr)
         *error = path.filename().string() + " is empty";
     return bytes;

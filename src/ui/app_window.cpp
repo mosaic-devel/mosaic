@@ -1,5 +1,6 @@
 #include "ui/app_window.hpp"
 
+#include "common/fs_path.hpp"
 #include "common/i18n.hpp"
 #include "common/image.hpp"
 #include "common/image_svg.hpp"
@@ -3162,9 +3163,12 @@ public:
     // Instantiate a template: the document loads from the file but binds to NOTHING -- untitled,
     // unsaved, no path/lock/anchor -- so saving it can never write back into the template.
     void openTemplateAtPath(const std::string& path, const std::string& title) {
-        std::ifstream f(path, std::ios::binary);
-        std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(f)),
-                                        std::istreambuf_iterator<char>());
+        std::vector<std::uint8_t> bytes;
+        // (void): an unreadable file leaves `bytes` empty and the container reader below reports
+        // the damage through the recovery flows -- exactly what the previous istreambuf_iterator
+        // slurp did on a failed open. Preserved deliberately; wiring the bool into those flows is
+        // a behaviour change, not a read-speed one.
+        (void)common::readWholeFile(path, bytes);
         if (bytes.empty()) {
             tellError(_("Could not open the template"), _("The file could not be read."), path);
             return;
@@ -3611,9 +3615,10 @@ public:
     // (and, for 4, saves the other writer's version off first). Journal flows (1/2) arrive with
     // the journal-autosave slice; the conservative open is the safe default under all of them.
     void openMosaicAtPath(const std::string& path) {
-        std::ifstream f(path, std::ios::binary);
-        std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(f)),
-                                        std::istreambuf_iterator<char>());
+        std::vector<std::uint8_t> bytes;
+        // (void) for the reason openTemplateAtPath gives: an empty buffer is how a failed
+        // open has always reached the reader, and the recovery flows below read it there.
+        (void)common::readWholeFile(path, bytes);
         if (bytes.empty()) {
             tellError(_("Could not open the document"), _("The file could not be read."),
                             path);
@@ -4408,9 +4413,8 @@ public:
                 publish(static_cast<float>(f) * 0.95f, "Saving");
             });
         } else {
-            std::ifstream f(j->sourcePath, std::ios::binary);
-            std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(f)),
-                                            std::istreambuf_iterator<char>());
+            std::vector<std::uint8_t> bytes;
+            (void)common::readWholeFile(j->sourcePath, bytes);
             if (bytes.empty()) {
                 j->foldFailed = true;
                 j->error = "could not re-read the file to fold it";
@@ -4804,9 +4808,8 @@ public:
         if (!std::filesystem::exists(jpath, ec))
             return false;
 
-        std::ifstream jf(jpath, std::ios::binary);
-        const std::vector<std::uint8_t> jbytes((std::istreambuf_iterator<char>(jf)),
-                                               std::istreambuf_iterator<char>());
+        std::vector<std::uint8_t> jbytes;
+        (void)common::readWholeFile(jpath, jbytes);
         const nio::JournalBinding binding = nio::bindingForTip(uuid, canonical, report.tip);
         const nio::JournalReplay replay = nio::replayJournal(jbytes, binding);
         const JournalRecoveryDecision decision =
@@ -4915,9 +4918,8 @@ public:
             // the same document twice.
             if (entry.path().extension() == io::native::kJournalCompactSuffix)
                 continue;
-            std::ifstream f(entry.path(), std::ios::binary);
-            const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(f)),
-                                                  std::istreambuf_iterator<char>());
+            std::vector<std::uint8_t> bytes;
+            (void)common::readWholeFile(common::utf8FromPath(entry.path()), bytes);
             const auto info = nio::readJournalHeader(bytes);
             if (!info.has_value() || !info->documentPath.empty())
                 continue; // not a readable untitled journal
@@ -4934,9 +4936,8 @@ public:
     // a document was restored and shown. A declined or contentless journal is discarded.
     bool offerUntitledRestore(const std::string& jpath) {
         namespace nio = io::native;
-        std::ifstream f(jpath, std::ios::binary);
-        const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(f)),
-                                              std::istreambuf_iterator<char>());
+        std::vector<std::uint8_t> bytes;
+        (void)common::readWholeFile(jpath, bytes);
         const auto info = nio::readJournalHeader(bytes);
         if (!info.has_value()) {
             std::remove(jpath.c_str());

@@ -1,5 +1,7 @@
 #include "common/fs_path.hpp"
 
+#include <fstream>
+
 namespace mosaic::common {
 
 std::filesystem::path pathFromUtf8(std::string_view utf8) {
@@ -51,6 +53,33 @@ std::FILE* fopenUtf8(std::string_view utf8, const char* mode) {
     // std::string is needed only because string_view carries no terminator.
     return std::fopen(std::string(utf8).c_str(), mode);
 #endif
+}
+
+bool readWholeFile(std::string_view utf8Path, std::vector<std::uint8_t>& out, std::string* error) {
+    out.clear();
+    const std::filesystem::path p = pathFromUtf8(utf8Path);
+    // `ate` so tellg() is the size without a second seek; the read below rewinds.
+    std::ifstream file(p, std::ios::binary | std::ios::ate);
+    if (!file) {
+        if (error != nullptr)
+            *error = "cannot open " + std::string(utf8Path);
+        return false;
+    }
+    const std::streamoff size = file.tellg();
+    if (size < 0) {
+        if (error != nullptr)
+            *error = "cannot size " + std::string(utf8Path);
+        return false;
+    }
+    out.resize(static_cast<std::size_t>(size));
+    file.seekg(0, std::ios::beg);
+    if (size > 0 && !file.read(reinterpret_cast<char*>(out.data()), size)) {
+        if (error != nullptr)
+            *error = "cannot read " + std::string(utf8Path);
+        out = {};
+        return false;
+    }
+    return true;
 }
 
 } // namespace mosaic::common

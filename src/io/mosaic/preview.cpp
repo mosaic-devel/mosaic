@@ -147,14 +147,9 @@ std::optional<common::Image> newestPreviewInFile(std::span<const std::uint8_t> f
 }
 
 std::optional<common::Image> readNewestPreview(const std::string& path, std::string* error) {
-    std::ifstream f(common::pathFromUtf8(path), std::ios::binary);
-    if (!f) {
-        if (error != nullptr)
-            *error = "could not open the file";
+    std::vector<std::uint8_t> bytes;
+    if (!common::readWholeFile(path, bytes, error))
         return std::nullopt;
-    }
-    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(f)),
-                                          std::istreambuf_iterator<char>());
     auto img = newestPreviewInFile(bytes);
     if (!img.has_value() && error != nullptr)
         *error = "the file carries no readable preview";
