@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/image.hpp"  // the card's preview bitmap
 #include "core/document.hpp" // core::ColorSpace / core::Precision
 
 #include <cstdint>
@@ -30,5 +31,18 @@ struct DocumentFileInfo {
 
 // File variant: reads `path` fully (the scan needs the frame walk) and defers to the above.
 [[nodiscard]] std::optional<DocumentFileInfo> readDocumentInfo(const std::string& path);
+
+// Both halves of a recents/template card, from ONE read and ONE chunk walk.
+//
+// The dialog needs a manifest AND a preview per file, and asking readDocumentInfo and
+// readNewestPreview separately reads the file twice and walks every chunk frame twice. The frames
+// are the cost -- 33,664 of them in a 302 MB document -- not the selecting, so doing both
+// selections in one pass halves the card. Either half is nullopt when the file does not carry it:
+// a document saved before previews existed, or one written by a tool that emits no PRVW.
+struct DocumentCard {
+    std::optional<DocumentFileInfo> info;
+    std::optional<common::Image> preview;
+};
+[[nodiscard]] DocumentCard readDocumentCard(const std::string& path);
 
 } // namespace mosaic::io::native

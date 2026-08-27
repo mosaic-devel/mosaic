@@ -3016,12 +3016,14 @@ public:
         const bool isMosaic =
             std::filesystem::path(card.path).extension() == ".mosaic";
         if (isMosaic) {
-            if (const auto prvw = io::native::readNewestPreview(card.path))
-                card.thumb = fitCardThumb(checkerCompose(*prvw));
-            const auto info = io::native::readDocumentInfo(card.path);
-            if (info.has_value())
-                card.detail = pixelSizeSubtitle(info->width, info->height);
-            card.values = specFromInfo(info);
+            // ONE read + ONE chunk walk for both halves: asking the two readers separately walked
+            // every frame of the file twice, which is 231 ms per card on a 302 MB document.
+            const io::native::DocumentCard data = io::native::readDocumentCard(card.path);
+            if (data.preview.has_value())
+                card.thumb = fitCardThumb(checkerCompose(*data.preview));
+            if (data.info.has_value())
+                card.detail = pixelSizeSubtitle(data.info->width, data.info->height);
+            card.values = specFromInfo(data.info);
         } else {
             if (const auto thumb = loadXdgThumbnail(card.path))
                 card.thumb = fitCardThumb(checkerCompose(*thumb));
