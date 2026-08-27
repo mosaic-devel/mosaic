@@ -251,6 +251,82 @@ TEST_CASE("Levels: input window, gamma, and output remap") {
     CHECK(std::abs(static_cast<int>(px(out, 1, 0).r) - 191) <= 1);
 }
 
+TEST_CASE("blur adjustment: the in-place arm and the copy-and-blend arm agree byte for byte") {
+    // applyBlurAdjustment has the same two arms the stylize seam has (see the twin case in
+    // test_stylize.cpp). UNMODULATED -- full opacity, no mask, not clipped -- blurs the
+    // accumulator directly, because `amt` is then >= 1 everywhere and the blend would only copy
+    // the scratch back over the original. Anything else copies, blurs the copy, and lerps it back.
+    //
+    // A FULLY WHITE mask forces the modulated arm onto the same picture: adjustmentMaskAt divides
+    // the 255 by 255.0f, which is exactly 1.0f. A blur is the sharpest case for this because the
+    // kernel READS NEIGHBOURS -- running it in place is only sound because runBlurCpu keeps its
+    // own scratch, and if that ever stopped being true these two would diverge immediately.
+    //
+    // A structured pattern, not the 6x1 test card: a blur over a flat or one-pixel-tall image
+    // cannot show a source/destination aliasing bug.
+    const auto seedField = [](core::Document& doc, std::uint32_t w, std::uint32_t h) {
+        auto base = doc.makeRaster("base", w, h);
+        common::Image& img = base->image();
+        for (std::uint32_t y = 0; y < h; ++y)
+            for (std::uint32_t x = 0; x < w; ++x) {
+                const std::size_t p = (static_cast<std::size_t>(y) * w + x) * 4;
+                img.rgba[p] = static_cast<std::uint8_t>((x * 11 + y * 5) & 0xFF);
+                img.rgba[p + 1] = static_cast<std::uint8_t>((x * 3 + y * 17) & 0xFF);
+                img.rgba[p + 2] = static_cast<std::uint8_t>((x * 7 + y * 2 + 60) & 0xFF);
+                img.rgba[p + 3] = static_cast<std::uint8_t>(x < w / 2 ? 255 : 190);
+            }
+        doc.root().addOnTop(std::move(base));
+    };
+    constexpr std::uint32_t kW = 40, kH = 28;
+    for (const core::AdjustmentKind kind :
+         {core::AdjustmentKind::GaussianBlur, core::AdjustmentKind::LensBlur}) {
+        const int kindId = static_cast<int>(kind);
+        CAPTURE(kindId);
+
+        core::Document inPlace(kW, kH);
+        seedField(inPlace, kW, kH);
+        core::AdjustmentLayer* a = addAdjustment(inPlace, kind, {{"radius", 5.0}});
+        a->setOpacity(1.0f);
+        const common::Image direct = flatten(inPlace);
+
+        core::Document blended(kW, kH);
+        seedField(blended, kW, kH);
+        core::AdjustmentLayer* b = addAdjustment(blended, kind, {{"radius", 5.0}});
+        b->setOpacity(1.0f);
+        core::RasterMask white;
+        white.width = kW;
+        white.height = kH;
+        white.enabled = true;
+        white.coverage.assign(static_cast<std::size_t>(kW) * kH, std::uint8_t{255});
+        b->setMask(std::move(white));
+        CHECK(flatten(blended).rgba == direct.rgba);
+
+        // The equality above holds for ANY predicate that sends this case either way, so it cannot
+        // catch one that takes the fast arm when the coverage really modulates. These can.
+        core::Document bareDoc(kW, kH);
+        seedField(bareDoc, kW, kH);
+        REQUIRE(direct.rgba != flatten(bareDoc).rgba); // the blur does something to begin with
+
+        core::Document halfMask(kW, kH);
+        seedField(halfMask, kW, kH);
+        core::AdjustmentLayer* c = addAdjustment(halfMask, kind, {{"radius", 5.0}});
+        c->setOpacity(1.0f);
+        core::RasterMask grey;
+        grey.width = kW;
+        grey.height = kH;
+        grey.enabled = true;
+        grey.coverage.assign(static_cast<std::size_t>(kW) * kH, std::uint8_t{128});
+        c->setMask(std::move(grey));
+        CHECK(flatten(halfMask).rgba != direct.rgba);
+
+        core::Document halfOpacity(kW, kH);
+        seedField(halfOpacity, kW, kH);
+        core::AdjustmentLayer* d = addAdjustment(halfOpacity, kind, {{"radius", 5.0}});
+        d->setOpacity(0.5f);
+        CHECK(flatten(halfOpacity).rgba != direct.rgba);
+    }
+}
+
 TEST_CASE("Levels at gamma 1 is exactly the linear range remap, pow or no pow") {
     // The gamma slider is the one most people leave alone, so `pow(t, 1)` was the everyday case --
     // three powf calls per pixel to multiply by one. The guard that skips them is only sound

@@ -1196,6 +1196,29 @@ void applyBlurAdjustment(ImageF& acc, const core::AdjustmentLayer& adj,
     if (acc.empty()) return;
     const std::optional<BlurOp> blurOp = resolveBlurOp(adj, pre, liveDrag);
     if (!blurOp) return;  // zero-amount params: a byte-level no-op (the §1 identity rule)
+    const float op = adj.opacity();
+    const core::RasterMask* mk = (adj.hasMask() && adj.mask()->enabled) ? adj.mask() : nullptr;
+    const common::Rect maskDom = mk ? adjustmentMaskDomain(adj, *mk, maskDomain) : maskDomain;
+    const std::optional<common::Affine2D> preInv = pre.inverse();
+
+    // The UNMODULATED case blurs the accumulator directly -- the same elision the stylize seam
+    // makes (render/stylize.cpp), for the same reason and with the same proof. Full opacity, no
+    // mask, not clipped => `amt` is >= 1 at every pixel, the blend loop's own fast arm writes the
+    // scratch back into `acc` unchanged, and the copy round-tripped the whole buffer for nothing.
+    // At 39.8 MP that buffer is 637 MB, and an adjustment layer left at 100% with no mask is the
+    // ordinary way to use this control.
+    //
+    // Both lanes transform in place -- runBlurCpu manages its own scratch, and the Vulkan override
+    // uploads and reads back through the buffer it was handed -- so `blurred = acc;
+    // kernel(blurred); acc = blurred` IS `kernel(acc)`, byte for byte.
+    const bool modulated =
+        op < 1.0f || coverage != nullptr || (mk != nullptr && preInv.has_value());
+    if (!modulated) {
+        if (!(g_blurOverride && g_blurOverride(acc, *blurOp)))
+            runBlurCpu(acc, *blurOp);
+        return;
+    }
+
     ImageF blurred = acc;  // straight copy; the kernels transform it in place
     if (!(g_blurOverride && g_blurOverride(blurred, *blurOp)))
         runBlurCpu(blurred, *blurOp);
@@ -1204,10 +1227,6 @@ void applyBlurAdjustment(ImageF& acc, const core::AdjustmentLayer& adj,
     // premultiplied space -- lerping straight RGB across differing alphas is not physical. The
     // amt == 1 fast path keeps the unmodulated case byte-equal to the raw kernel output (the
     // plateau/full-blur test pins rely on it).
-    const float op = adj.opacity();
-    const core::RasterMask* mk = (adj.hasMask() && adj.mask()->enabled) ? adj.mask() : nullptr;
-    const common::Rect maskDom = mk ? adjustmentMaskDomain(adj, *mk, maskDomain) : maskDomain;
-    const std::optional<common::Affine2D> preInv = pre.inverse();
     parallelFor(acc.height, 64, [&](std::size_t row0, std::size_t row1) {
         for (std::uint32_t y = static_cast<std::uint32_t>(row0); y < row1; ++y) {
             std::size_t idx = static_cast<std::size_t>(y) * acc.width;
