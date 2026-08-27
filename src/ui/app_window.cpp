@@ -3916,13 +3916,34 @@ public:
     // failed composite just means this save writes no preview (never a failed save), and the
     // file keeps the one it has.
     static std::optional<common::Image> compositeForPreview(const core::Document& doc) {
-        const render::CompositeResult full =
-            render::composite(doc, render::CompositeOptions{}, render::Backend::Cpu);
-        if (!full.ok || full.image.empty()) {
-            uiLog().warn("preview composite failed: {}", full.error);
+        // ⚠ compositeScaled, NOT composite-then-downscale. makePreviewChunk keeps 256 px on the
+        // longest edge, so a full-resolution composite builds 39.8 MP to throw ~99.8% of it away --
+        // the 31,717:1 shape MOSAIC-PERF.md §1 is entirely about, on the SAVE path, synchronously
+        // on the UI thread (the snapshot half of a save is not on the worker). compositing AT the
+        // target size is also better filtered: each layer's kernel resolves from its composed
+        // placement, so the reduction is a real per-layer minification instead of one box filter
+        // over straight-alpha RGBA afterwards.
+        //
+        // downscalePreview never upscales and returns its input unchanged when the longest edge is
+        // already within budget, so handing it this image is a pass-through rather than a second
+        // resample. Determinism -- which is what lets the differ skip an unchanged preview
+        // byte-for-byte -- is unaffected: the same document still composites to the same bytes.
+        const std::uint32_t longest = std::max(doc.width(), doc.height());
+        if (longest == 0)
+            return std::nullopt;
+        const double scale =
+            std::min(1.0, static_cast<double>(io::native::kPreviewEdge) / longest);
+        const auto outW = std::max<std::uint32_t>(
+            1, static_cast<std::uint32_t>(std::lround(doc.width() * scale)));
+        const auto outH = std::max<std::uint32_t>(
+            1, static_cast<std::uint32_t>(std::lround(doc.height() * scale)));
+        const render::CompositeResult small = render::compositeScaled(
+            doc, outW, outH, render::CompositeOptions{}, render::Backend::Cpu);
+        if (!small.ok || small.image.empty()) {
+            uiLog().warn("preview composite failed: {}", small.error);
             return std::nullopt;
         }
-        return full.image;
+        return small.image;
     }
 
     // ---- Background full write, types (S48 Build 2, docs/async-save-design.md) ----------------
