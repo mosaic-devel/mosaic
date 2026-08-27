@@ -1698,9 +1698,22 @@ void applyAdjustment(ImageF& acc, const core::AdjustmentLayer& adj,
                 case Levels: {
                     // Classic input-range remap + gamma + output-range remap, per channel in
                     // the encoded working space. Levels inherently clamps its input window.
+                    //
+                    // ⚠ `pow(t, 1)` IS `t`, and it is not free: gamma sits at its default far more
+                    // often than the two range pairs do (dragging the black and white points is
+                    // the everyday use of this adjustment, and the middle slider is the one most
+                    // people leave alone), so the common Levels layer paid three `powf` calls per
+                    // pixel to multiply by one. On the 2 MP adjustment-live shape that is the whole
+                    // difference between the `levels` row at 36.1 ms and the `brightness` row --
+                    // the same loop without a pow -- at 21.8 ms.
+                    //
+                    // Exposure, ten lines below, has guarded its identical call since it was
+                    // written; this only brings Levels into line with it. Bit-identical by the
+                    // standard: `powf(t, 1.0f)` is exactly `t`.
                     const auto f = [&](float v) {
                         const float t = clamp01((v - sc.inB) * sc.invRange);
-                        return sc.outB + (sc.outW - sc.outB) * std::pow(t, sc.invGamma);
+                        const float g = sc.invGamma == 1.0f ? t : std::pow(t, sc.invGamma);
+                        return sc.outB + (sc.outW - sc.outB) * g;
                     };
                     adjusted = {f(c.r), f(c.g), f(c.b)};
                     break;

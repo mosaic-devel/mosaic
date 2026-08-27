@@ -251,6 +251,45 @@ TEST_CASE("Levels: input window, gamma, and output remap") {
     CHECK(std::abs(static_cast<int>(px(out, 1, 0).r) - 191) <= 1);
 }
 
+TEST_CASE("Levels at gamma 1 is exactly the linear range remap, pow or no pow") {
+    // The gamma slider is the one most people leave alone, so `pow(t, 1)` was the everyday case --
+    // three powf calls per pixel to multiply by one. The guard that skips them is only sound
+    // because pow(x, 1) IS x (C99 F.10.4.4), which makes the whole adjustment a straight-line map
+    // from the input window onto the output window. Checked against that closed form rather than
+    // against the pow path, so it pins what the adjustment MEANS at gamma 1 and would catch a
+    // guard that skipped the wrong term.
+    const double inB = 0.2, inW = 0.9, outB = 0.1, outW = 0.8;
+    core::Document doc(6, 1);
+    seedTestCard(doc);
+    addAdjustment(doc, core::AdjustmentKind::Levels,
+                  {{"in_black", inB}, {"in_white", inW}, {"gamma", 1.0},
+                   {"out_black", outB}, {"out_white", outW}});
+    const common::Image out = flatten(doc);
+    const common::Image before = [] {
+        core::Document d(6, 1);
+        seedTestCard(d);
+        return flatten(d);
+    }();
+    for (std::uint32_t x = 0; x < 6; ++x) {
+        const double v = px(before, x, 0).r / 255.0;
+        const double t = std::clamp((v - inB) / (inW - inB), 0.0, 1.0);
+        const int want = static_cast<int>(std::lround((outB + (outW - outB) * t) * 255.0));
+        INFO("x=" << x << " in=" << v);
+        CHECK(std::abs(static_cast<int>(px(out, x, 0).r) - want) <= 1);
+    }
+    // ... and gamma exactly 1 must not be a different picture from gamma one-ULP away being
+    // rounded to it: the guard tests the float, so 1.0 takes the fast arm and nothing else does.
+    core::Document doc2(6, 1);
+    seedTestCard(doc2);
+    addAdjustment(doc2, core::AdjustmentKind::Levels,
+                  {{"in_black", inB}, {"in_white", inW}, {"gamma", 1.0000001},
+                   {"out_black", outB}, {"out_white", outW}});
+    const common::Image nearOne = flatten(doc2);
+    for (std::uint32_t x = 0; x < 6; ++x)
+        CHECK(std::abs(static_cast<int>(px(nearOne, x, 0).r) -
+                       static_cast<int>(px(out, x, 0).r)) <= 1);
+}
+
 TEST_CASE("Exposure: +1 EV doubles linear light (through the sRGB curve)") {
     core::Document doc(6, 1);
     seedTestCard(doc);
