@@ -266,34 +266,51 @@ void paintCoverageOver(common::ImageF& dst, const CoverageBuffer& cov, const Pai
     if (std::holds_alternative<NoPaint>(paint)) return;
     const bool solid = std::holds_alternative<SolidPaint>(paint);
     const ColorF solidColor = solid ? std::get<SolidPaint>(paint).color : ColorF{};
-    for (std::uint32_t y = cov.oy; y < cov.oy + cov.height; ++y)
-        for (std::uint32_t x = cov.ox; x < cov.ox + cov.width; ++x) {
-            const float c = std::min(1.0f, cov.at(x, y));
-            if (c <= 0.0f) continue;
-            // (x,y) is the TARGET pixel, which is exactly the dither key a gradient wants: stable
-            // under tiling / threading, and independent of the layer's own transform.
-            const ColorF s =
-                solid ? solidColor
-                      : paintColorAt(paint,
-                                     invToPixel ? invToPixel->apply({x + 0.5, y + 0.5})
-                                                : Vec2{static_cast<double>(x),
-                                                       static_cast<double>(y)},
-                                     antialias,
-                                     SamplePixel{static_cast<std::int32_t>(x),
-                                                 static_cast<std::int32_t>(y), true});
-            const float sa = s.a * c;
-            if (sa <= 0.0f) continue;
-            const ColorF d = dst.at(x, y);
-            const float outA = sa + d.a * (1.0f - sa);
-            if (outA <= 1e-8f) {
-                dst.set(x, y, {0, 0, 0, 0});
-                continue;
+    // Banded over the bbox's ROWS. Every pixel here is computed from the coverage buffer, the
+    // paint and its own (x, y) alone -- the dither is keyed to the TARGET pixel precisely so it is
+    // "stable under tiling / threading" (see the note in the loop) -- and each row writes only its
+    // own slice of `dst`. So this is a pure motion: same values, same pixels, different order of
+    // visiting independent ones.
+    //
+    // It was serial, and it is where a full-bleed GRADIENT layer spends its time: the fixture's
+    // gradient rect is a document-sized shape whose every one of 39.8 M pixels evaluates the stop
+    // ramp and a dither. Coverage and paint are different costs and the sweep above only fixed the
+    // first one.
+    common::parallelFor(cov.height, 16, [&](std::size_t band0, std::size_t band1) {
+        for (std::uint32_t y = cov.oy + static_cast<std::uint32_t>(band0),
+                           yEnd = cov.oy + static_cast<std::uint32_t>(band1);
+             y < yEnd; ++y)
+            for (std::uint32_t x = cov.ox; x < cov.ox + cov.width; ++x) {
+                const float c = std::min(1.0f, cov.at(x, y));
+                if (c <= 0.0f)
+                    continue;
+                // (x,y) is the TARGET pixel, which is exactly the dither key a gradient wants:
+                // stable under tiling / threading, and independent of the layer's own transform.
+                const ColorF s =
+                    solid ? solidColor
+                          : paintColorAt(paint,
+                                         invToPixel
+                                             ? invToPixel->apply({x + 0.5, y + 0.5})
+                                             : Vec2{static_cast<double>(x), static_cast<double>(y)},
+                                         antialias,
+                                         SamplePixel{static_cast<std::int32_t>(x),
+                                                     static_cast<std::int32_t>(y), true});
+                const float sa = s.a * c;
+                if (sa <= 0.0f)
+                    continue;
+                const ColorF d = dst.at(x, y);
+                const float outA = sa + d.a * (1.0f - sa);
+                if (outA <= 1e-8f) {
+                    dst.set(x, y, {0, 0, 0, 0});
+                    continue;
+                }
+                const float k = 1.0f / outA; // straight-alpha source-over
+                dst.set(x, y,
+                        {(s.r * sa + d.r * d.a * (1.0f - sa)) * k,
+                         (s.g * sa + d.g * d.a * (1.0f - sa)) * k,
+                         (s.b * sa + d.b * d.a * (1.0f - sa)) * k, outA});
             }
-            const float k = 1.0f / outA;  // straight-alpha source-over
-            dst.set(x, y, {(s.r * sa + d.r * d.a * (1.0f - sa)) * k,
-                           (s.g * sa + d.g * d.a * (1.0f - sa)) * k,
-                           (s.b * sa + d.b * d.a * (1.0f - sa)) * k, outA});
-        }
+    });
 }
 
 // Accumulate an inside span [xa,xb) into one sub-scanline's coverage row, with analytic partial
@@ -516,18 +533,24 @@ common::ImageF rasterizeFillF(const Object& obj, std::uint32_t W, std::uint32_t 
     const ColorF solidColor = solid ? std::get<SolidPaint>(obj.fill).color : ColorF{};
     const std::optional<Affine2D> invToPixel = toPixel.inverse();
 
-    for (std::uint32_t y = cov.oy; y < cov.oy + cov.height; ++y)
-        for (std::uint32_t x = cov.ox; x < cov.ox + cov.width; ++x) {
-            const float c = std::min(1.0f, cov.at(x, y));
-            if (c <= 0.0f) continue;
-            ColorF col = solidColor;
-            if (!solid) {
-                const Vec2 localP = invToPixel ? invToPixel->apply({x + 0.5, y + 0.5})
-                                               : Vec2{static_cast<double>(x), static_cast<double>(y)};
-                col = paintColorAt(obj.fill, localP);
+    common::parallelFor(cov.height, 16, [&](std::size_t band0, std::size_t band1) { // rows are
+        for (std::uint32_t y = cov.oy + static_cast<std::uint32_t>(band0),          // independent
+             yEnd = cov.oy + static_cast<std::uint32_t>(band1);
+             y < yEnd; ++y)
+            for (std::uint32_t x = cov.ox; x < cov.ox + cov.width; ++x) {
+                const float c = std::min(1.0f, cov.at(x, y));
+                if (c <= 0.0f)
+                    continue;
+                ColorF col = solidColor;
+                if (!solid) {
+                    const Vec2 localP = invToPixel
+                                            ? invToPixel->apply({x + 0.5, y + 0.5})
+                                            : Vec2{static_cast<double>(x), static_cast<double>(y)};
+                    col = paintColorAt(obj.fill, localP);
+                }
+                img.set(x, y, {col.r, col.g, col.b, col.a * c}); // straight alpha, coverage-scaled
             }
-            img.set(x, y, {col.r, col.g, col.b, col.a * c});  // straight alpha, coverage-scaled
-        }
+    });
     return img;
 }
 
