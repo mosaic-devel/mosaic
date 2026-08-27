@@ -35,7 +35,9 @@
 #include "common/exif.hpp"
 #include "common/geometry.hpp"
 #include "common/image.hpp"
+#include "core/adjustments.hpp"
 #include "core/blend_mode.hpp"
+#include "core/brush/curve.hpp"
 #include "core/document.hpp"
 #include "core/layer.hpp"
 #include "core/layer_effects.hpp"
@@ -60,9 +62,11 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <iterator>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace io = mosaic::io::native;
@@ -105,6 +109,53 @@ private:
 void fail(const std::string& what) {
     std::printf("  FAIL  %s\n", what.c_str());
     ++g_failures;
+}
+
+// ---- adjustment parameters, checked against the kind's own schema ---------------------------
+//
+// ⚠ THE ONLY WAY TO SET AN ADJUSTMENT PARAMETER IN THIS FILE. Assigning `layer->params()`
+// directly is how this fixture spent an arc measuring less than it claimed: the bag is a plain
+// `map<string,double>` and `core::adjustmentParamValue` answers a MISSING key with the
+// descriptor's DEFAULT, so a misspelt one is not an error, it is silence. Four kinds were
+// affected --
+//
+//   Levels               inBlack/inWhite/outBlack/outWhite   (schema: in_black/in_white/...)
+//   Shadows/Highlights   shadowAmount/shadowRadius/...       (schema: shadows/highlights/radius)
+//   Add Noise            mode                                (schema: distribution)
+//   Vignette             amount/midpoint                     (schema: exposure/radius)
+//
+// -- and two of them (Curves, whose curve is not a schema row at all, and Shadows/Highlights)
+// therefore sat at their DEFAULTS, which are the identity, which the compositor skips outright.
+// The fixture carried two adjustment layers that composited nothing, and one of them was the
+// spatial kind it exists to exercise. `Adjustment: Shadows/Highlights  0.00 ms` was read off the
+// profiler more than once as a fact about the adjustment.
+//
+// So the tool now asks the schema. An unknown key FAILS the run rather than being dropped: this
+// is a measurement instrument, and an instrument that quietly declines to apply half its settings
+// is worse than no instrument. The range is checked too, because `adjustmentParamValue` CLAMPS --
+// Levels' window is [0,1] and the fixture was handing it 0..255, so `in_black 6.0` and
+// `in_white 246.0` both arrived as 1.0.
+void setParams(core::AdjustmentLayer& layer,
+               std::initializer_list<std::pair<const char*, double>> kv) {
+    const auto schema = core::adjustmentParamSchema(layer.adjustmentKind());
+    for (const auto& [key, value] : kv) {
+        const core::AdjustmentParamDesc* d = core::adjustmentParamDesc(layer.adjustmentKind(), key);
+        if (d == nullptr) {
+            std::string known;
+            for (const core::AdjustmentParamDesc& e : schema)
+                known += (known.empty() ? "" : ", ") + std::string(e.key);
+            fail(std::string(core::adjustmentKindName(layer.adjustmentKind())) +
+                 ": no parameter \"" + key + "\" (schema: " + known + ")");
+            continue;
+        }
+        if (value < d->min || value > d->max) {
+            fail(std::string(core::adjustmentKindName(layer.adjustmentKind())) + "." + key + " = " +
+                 std::to_string(value) + " is outside [" + std::to_string(d->min) + ", " +
+                 std::to_string(d->max) + "] and would be CLAMPED");
+            continue;
+        }
+        layer.params()[d->key] = value;
+    }
 }
 
 // ---- pixel helpers --------------------------------------------------------------------------
@@ -517,41 +568,59 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
         core::GroupLayer& grade = doc->root();
 
         auto lift = doc->makeAdjustment("Levels", core::AdjustmentKind::Levels);
-        lift->params() = {{"inBlack", 6.0},
-                          {"inWhite", 246.0},
+        // ⚠ The window is in [0,1], NOT 0..255: adjustmentParamValue CLAMPS to the descriptor's
+        // range, so 6.0 and 246.0 both arrived as 1.0 and collapsed the input window.
+        setParams(*lift, {{"in_black", 6.0 / 255.0},
+                          {"in_white", 246.0 / 255.0},
                           {"gamma", 1.12},
-                          {"outBlack", 4.0},
-                          {"outWhite", 252.0}};
+                          {"out_black", 4.0 / 255.0},
+                          {"out_white", 252.0 / 255.0}});
         grade.addOnTop(std::move(lift));
 
         auto curves = doc->makeAdjustment("Curves", core::AdjustmentKind::Curves);
-        curves->params() = {{"shadows", -0.06}, {"midtones", 0.08}, {"highlights", 0.04}};
+        // ⚠ A tone curve is NOT a schema row. Curves' whole schema is `channel`; the curve itself
+        // lives as indexed KNOTS under "curve_rgb_*" (core::setAdjustmentCurve), which is why a
+        // params bag of shadows/midtones/highlights left this layer at the identity -- and the
+        // compositor's `cv.identity` early-out then skipped it entirely.
+        core::setAdjustmentCurve(curves->params(), core::CurveChannel::Composite,
+                                 core::brush::Curve({{0.0, 0.0},
+                                                     {0.25, 0.25 - 0.06},
+                                                     {0.5, 0.5 + 0.08},
+                                                     {0.75, 0.75 + 0.04},
+                                                     {1.0, 1.0}}));
         grade.addOnTop(std::move(curves));
 
         auto hsl = doc->makeAdjustment("Hue/Saturation", core::AdjustmentKind::HueSaturation);
-        hsl->params() = {{"hue", -6.0}, {"saturation", 14.0}, {"lightness", -3.0}};
+        setParams(*hsl, {{"hue", -6.0}, {"saturation", 14.0}, {"lightness", -3.0}});
         grade.addOnTop(std::move(hsl));
 
         // SPATIAL: reads the backdrop's neighbourhood over the whole canvas.
         auto sh =
             doc->makeAdjustment("Shadows/Highlights", core::AdjustmentKind::ShadowsHighlights);
-        sh->params() = {{"shadowAmount", 38.0},
-                        {"shadowRadius", 180.0},
-                        {"highlightAmount", 24.0},
-                        {"highlightRadius", 140.0}};
+        // ⚠ ONE radius, shared by both bands -- there is no shadowRadius/highlightRadius pair.
+        // With the four invented keys this layer sat at its defaults (shadows 0, highlights 0),
+        // which is the identity: the fixture's one Shadows/Highlights layer measured NOTHING, and
+        // its 0.00 ms profiler row was read as "this adjustment is cheap".
+        setParams(*sh, {{"shadows", 38.0},
+                        {"shadows_tone", 55.0},
+                        {"highlights", 24.0},
+                        {"highlights_tone", 45.0},
+                        {"radius", 180.0}});
         grade.addOnTop(std::move(sh));
 
         // SPATIAL, masked: a large-radius blur confined to a soft ellipse -- the region machinery
         // has to grow the read extent by the blur's reach and then fold the mask.
         auto blur = doc->makeAdjustment("Depth blur", core::AdjustmentKind::GaussianBlur);
-        blur->params() = {{"radius", 96.0}};
+        setParams(*blur, {{"radius", 96.0}});
         blur->setMask(radialMask(static_cast<std::uint32_t>(W / 8),
                                  static_cast<std::uint32_t>(H / 8), 0.5, 0.34, 0.62));
         blur->setOpacity(0.85f);
         grade.addOnTop(std::move(blur));
 
         auto vib = doc->makeAdjustment("Vibrance", core::AdjustmentKind::Vibrance);
-        vib->params() = {{"vibrance", 26.0}, {"saturation", -4.0}};
+        // Vibrance is a ONE-knob kind: there is no `saturation` row on it (that is
+        // Hue/Saturation's, and this layer sits three above one). Caught by setParams.
+        setParams(*vib, {{"vibrance", 26.0}});
         grade.addOnTop(std::move(vib));
     }
 
@@ -938,17 +1007,27 @@ std::unique_ptr<core::Document> buildDocument(const std::string& photoPath) {
     {
         Stage s("finishing adjustments");
         auto hp = doc->makeAdjustment("High pass", core::AdjustmentKind::HighPass); // SPATIAL
-        hp->params() = {{"radius", 14.0}};
+        setParams(*hp, {{"radius", 14.0}});
         hp->setBlendMode(core::BlendMode::Overlay);
         hp->setOpacity(0.45f);
         doc->root().addOnTop(std::move(hp));
 
         auto grainAdj = doc->makeAdjustment("Add noise", core::AdjustmentKind::AddNoise);
-        grainAdj->params() = {{"amount", 3.5}, {"mode", 0.0}, {"monochrome", 1.0}};
+        // "mode" is not a key here -- the choice row is `distribution` (0 = Gaussian).
+        setParams(*grainAdj,
+                  {{"amount", 3.5}, {"distribution", 0.0}, {"monochrome", 1.0}, {"seed", 7.0}});
         doc->root().addOnTop(std::move(grainAdj));
 
         auto vig = doc->makeAdjustment("Vignette", core::AdjustmentKind::Vignette);
-        vig->params() = {{"amount", -0.55}, {"midpoint", 0.42}, {"roundness", 0.2}};
+        // ⚠ `amount`/`midpoint` are not keys: the falloff is `exposure` (EV) and `radius` (PX,
+        // seeded by the app from the canvas diagonal -- a fixture that omits it inherits the 300 px
+        // default, which on a 39.8 MP canvas darkens essentially every pixel and is why this row
+        // read as the most expensive scalar adjustment in the document).
+        setParams(*vig, {{"exposure", -0.55},
+                         {"radius",
+                          0.42 * 0.5 * std::hypot(static_cast<double>(W), static_cast<double>(H))},
+                         {"feather", 60.0},
+                         {"roundness", 20.0}});
         doc->root().addOnTop(std::move(vig));
     }
 
@@ -986,7 +1065,7 @@ void applyEdit(core::Document& doc, int index) {
         break;
     case 3:
         if (auto* a = findLayer<core::AdjustmentLayer>(doc, "Depth blur"))
-            a->params()["radius"] = 148.0;
+            setParams(*a, {{"radius", 148.0}});
         break;
     case 4:
         if (auto* t = findLayer<core::TextLayer>(doc, "Body copy")) {
@@ -1026,7 +1105,7 @@ void applyEdit(core::Document& doc, int index) {
         break;
     case 8:
         if (auto* a = findLayer<core::AdjustmentLayer>(doc, "Shadows/Highlights"))
-            a->params()["shadowRadius"] = 320.0;
+            setParams(*a, {{"radius", 320.0}});
         break;
     default:
         if (auto* g = findLayer<core::GroupLayer>(doc, "Texture"))
