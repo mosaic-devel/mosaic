@@ -574,6 +574,60 @@ TEST_CASE("a 3D block's overlay effects reach the canvas") {
     checkUndoRestores("3D colour overlay", *doc, settle, before);
 }
 
+TEST_CASE("a reflection-env swap re-renders the mirror without reading as a content edit") {
+    // TWO assertions that used to be in conflict, and the conflict shipped as an infinite loop.
+    //
+    // The reflect-canvas mirror is a snapshot of the document BELOW a 3D block, built by the app
+    // and sampled by the extrude lanes. It is render support -- no undo, no effect on the layer's
+    // silhouette -- but it is IN the pixels, so installing one has to re-render the pixel cache.
+    // setReflectionEnv got that by calling invalidateContentBounds(), i.e. by claiming the document
+    // content had changed.
+    //
+    // It had not, and the app's reflectStackFingerprint believed it: that fingerprint mixes every
+    // OTHER layer's contentRevision to decide whether a mirror is stale, so on a document with TWO
+    // reflect-canvas layers, building A's mirror staled B's, whose rebuild staled A's, forever --
+    // a full-canvas recomposite every 0.3 s settle. Measured on the S60 fixture: ten rebuilds in
+    // 150 s, no sign of stopping, each dragging a 16 s composite behind it. Two mirrors facing each
+    // other have no fixed point; the loop has to be truncated at one bounce.
+    //
+    // So: the pixels must move, and contentRevision must not.
+    Settle settle;
+    if (!settle.haveFonts())
+        return;
+
+    auto doc = makeDoc();
+    text::TextBlock block = make3dBlock(settle.fonts.defaultFamily());
+    block.extrude->material.metalness = 1.0f; // a mirror needs something to mirror WITH
+    block.extrude->material.roughness = 0.0f;
+    block.extrude->reflectCanvas = true;
+    block.extrude->orientation = mosaic::common::Quat::fromAxisAngle({1.0, 0.0, 0.0}, 0.9);
+    const core::LayerId id = addText(*doc, block);
+
+    settle(*doc);
+    auto* layer = doc->find(id)->as<core::TextLayer>();
+    REQUIRE(layer != nullptr);
+    const Image before = compositeAll(*doc);
+    const std::uint64_t revBefore = layer->contentRevision();
+
+    // A saturated mirror, so its arrival is unmistakable in the composited pixels.
+    mosaic::common::ImageF env(16, 16);
+    for (std::size_t i = 0; i < env.rgba.size(); i += 4) {
+        env.rgba[i + 0] = 1.0f; // red
+        env.rgba[i + 3] = 1.0f;
+    }
+    layer->setReflectionEnv(std::move(env), Affine2D::scaling(0.05, 0.05));
+
+    CHECK_FALSE(layer->cacheCurrent()); // ... the pixels are now stale and must re-render
+    const Rect band = settle(*doc);
+    const Image after = compositeAll(*doc);
+
+    CHECK_MESSAGE(diffBounds(before, after).empty() == false,
+                  "the mirror never reached the canvas");
+    CHECK_MESSAGE(!band.empty(), "the re-render reported no band, so a region pass would miss it");
+    CHECK_MESSAGE(layer->contentRevision() == revBefore,
+                  "installing a mirror moved the CONTENT revision -- this is the mirror loop");
+}
+
 // ---------------------------------------------------------------------------------------------
 // Flat type
 // ---------------------------------------------------------------------------------------------

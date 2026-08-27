@@ -566,10 +566,17 @@ public:
         m_cacheClipped = clipped;
         m_cacheLinear = bakedLinear;
         m_cacheRevision = m_contentRevision;
+        m_cacheEnvRevision = m_envRevision;
         ++m_cacheGeneration;
     }
     // True when the pixel/bounds caches already reflect the current block (no re-render needed).
-    [[nodiscard]] bool cacheCurrent() const noexcept { return m_cacheRevision == m_contentRevision; }
+    // TWO counters, because the pixels depend on two things that change independently: the BLOCK
+    // (contentRevision, which is document content and undoable) and the reflection ENV (which is
+    // render support the app rebuilds, with no undo and no effect on the layer's bounds). Keeping
+    // them apart is what stops a mirror swap from reading as a content edit -- see setReflectionEnv.
+    [[nodiscard]] bool cacheCurrent() const noexcept {
+        return m_cacheRevision == m_contentRevision && m_cacheEnvRevision == m_envRevision;
+    }
     // How many times the pixel cache has been REPLACED. Monotonic, and it moves on every
     // setCachedImage -- including the ones that put different pixels behind an UNCHANGED
     // contentRevision, which is the whole reason it exists (S60-a):
@@ -633,10 +640,26 @@ public:
     [[nodiscard]] const common::Affine2D& reflectionEnvTransform() const noexcept {
         return m_reflectionEnvToPx;  // layer-local design point -> env image pixel
     }
+    // ⚠ THIS BUMPS m_envRevision, NOT m_contentRevision, AND THAT IS THE WHOLE POINT.
+    //
+    // It used to call invalidateContentBounds(), which was right about the consequence (the pixel
+    // cache must re-render with the fresh mirror) and wrong about the CAUSE: the env is render
+    // support, not document content. The app's reflectStackFingerprint mixes every OTHER layer's
+    // contentRevision to decide whether a mirror is stale -- so on a document with TWO
+    // reflect-canvas layers, building A's mirror bumped A's content revision, which staled B's
+    // mirror, which bumped B's, which staled A's. Two mirrors facing each other: a full-canvas
+    // recomposite every 0.3 s settle, forever. Measured on the S60 fixture (layers 37 and 38):
+    // ten rebuilds in 150 s and no sign of stopping, each dragging a 16 s composite behind it.
+    //
+    // A feedback loop between two mirrors has no fixed point to converge to; it has to be TRUNCATED
+    // at one bounce, and this is where. B's mirror now shows A as it was before A's mirror
+    // refreshed, which is exactly what one bounce means and what the effect always approximated
+    // anyway. The bounds are deliberately not invalidated either: a mirror changes the colour of
+    // the solid's faces, never its silhouette.
     void setReflectionEnv(std::optional<common::ImageF> img, common::Affine2D layerToEnv) {
         m_reflectionEnv = std::move(img);
         m_reflectionEnvToPx = layerToEnv;
-        invalidateContentBounds();
+        ++m_envRevision;
     }
     // The backdrop fingerprint the stored snapshot mirrors (the app's staleness key) -- per layer,
     // so mirrors refresh with or without an edit session on this block (round 3).
@@ -652,6 +675,7 @@ private:
     mutable common::Affine2D m_cacheImageToLayer = common::Affine2D::identity();
     mutable common::Affine2D m_cacheLinear = common::Affine2D::identity();  // baked linear (cache key)
     mutable std::uint64_t m_cacheRevision = static_cast<std::uint64_t>(-1);  // != revision => stale
+    mutable std::uint64_t m_cacheEnvRevision = static_cast<std::uint64_t>(-1);  // ... and the env's
     mutable std::uint64_t m_cacheGeneration = 0;  // ++ per setCachedImage (see cacheGeneration())
     mutable bool m_cacheClipped = false;  // was the cache clipped to the Area box? (cache-validity key)
     mutable std::array<OverlayEffect, 3> m_cacheOverlays{};  // baked 3D overlays (cache-validity key)
@@ -659,6 +683,7 @@ private:
     std::optional<common::ImageF> m_reflectionEnv;  // 3D canvas-reflection snapshot (app-built)
     common::Affine2D m_reflectionEnvToPx = common::Affine2D::identity();
     std::uint64_t m_reflectionEnvFp = 0;            // the backdrop state the snapshot mirrors
+    std::uint64_t m_envRevision = 0;                // ++ per setReflectionEnv (see cacheCurrent)
     bool m_autoName = true;               // name tracks content until a manual rename (round-4 #5)
     std::uint64_t m_contentRevision = 0;
 };
