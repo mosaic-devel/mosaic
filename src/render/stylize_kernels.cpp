@@ -38,10 +38,16 @@ constexpr float kMinAlpha = 1e-6f;
 // c[0..2] = premultiplied R/G/B, c[3] = straight alpha. Planar rather than interleaved because
 // every kernel here is separable or windowed per channel, and a plane is what the box-mean and
 // Gaussian passes want.
+// The pixel PLANE: one float per pixel, canvas-sized in every lane below. common::Floats rather
+// than Plane so a fresh plane is calloc'd zero pages instead of a memset -- 159 MB per
+// plane at 39.8 MP, and this file allocates four of them per premultiply and one more per Gaussian
+// pass. See ZeroPageAllocator in common/image.hpp.
+using Plane = common::Floats;
+
 struct Planes {
     std::uint32_t w = 0;
     std::uint32_t h = 0;
-    std::array<std::vector<float>, 4> c;
+    std::array<Plane, 4> c;
 };
 
 [[nodiscard]] Planes premultiply(const common::ImageF& img) {
@@ -50,7 +56,7 @@ struct Planes {
     pl.w = img.width;
     pl.h = img.height;
     const std::size_t n = img.pixelCount();
-    for (std::vector<float>& p : pl.c) p.resize(n);
+    for (Plane& p : pl.c) p.resize(n);
     parallelFor(n, std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
         for (std::size_t i = i0; i < i1; ++i) {
             const std::size_t p = i * 4;
@@ -88,8 +94,8 @@ void writeBack(common::ImageF& img, const Planes& pl) {
 // Free a plane's storage outright. The windowed kernels below build several full-resolution
 // intermediates, and on a 4k canvas each one is 64 MiB -- dropping them the moment they are dead
 // keeps the peak at a handful of planes instead of a dozen.
-void release(std::vector<float>& v) {
-    std::vector<float>().swap(v);
+void release(Plane& v) {
+    Plane().swap(v);
 }
 
 // ---- separable primitives (clamp-to-edge) ------------------------------------------------------
@@ -98,13 +104,13 @@ void release(std::vector<float>& v) {
 // idiom the compositor's localBoxMean uses, and for the same reason: O(1) per pixel, and the
 // add/remove pair uses the same clamped indices so multiple out-of-range taps collapse onto the
 // same edge pixel consistently (docs/blur-filters.md §5).
-[[nodiscard]] std::vector<float> boxMean(const std::vector<float>& src, std::uint32_t W,
+[[nodiscard]] Plane boxMean(const Plane& src, std::uint32_t W,
                                          std::uint32_t H, int r) {
     const std::size_t n = static_cast<std::size_t>(W) * H;
     const float inv = 1.0f / static_cast<float>(2 * r + 1);
     const int maxX = static_cast<int>(W) - 1;
     const int maxY = static_cast<int>(H) - 1;
-    std::vector<float> tmp(n);
+    Plane tmp(n);
     for (std::uint32_t y = 0; y < H; ++y) {  // horizontal pass
         const std::size_t row = static_cast<std::size_t>(y) * W;
         float sum = 0.0f;
@@ -118,7 +124,7 @@ void release(std::vector<float>& v) {
                    src[row + static_cast<std::uint32_t>(sub)];
         }
     }
-    std::vector<float> out(n);
+    Plane out(n);
     for (std::uint32_t x = 0; x < W; ++x) {  // vertical pass
         float sum = 0.0f;
         for (int k = -r; k <= r; ++k)
@@ -137,11 +143,11 @@ void release(std::vector<float>& v) {
 // In-place separable Gaussian of a single plane, std-dev `sigma`, support `half` taps each side,
 // CLAMP-TO-EDGE. (effect_primitives' gaussianBlur is reflect-101 -- correct for the coverage
 // planes layer effects blur, wrong for content here, exactly the divergence blur.hpp documents.)
-void gaussianPlane(std::vector<float>& plane, std::uint32_t W, std::uint32_t H, float sigma,
+void gaussianPlane(Plane& plane, std::uint32_t W, std::uint32_t H, float sigma,
                    int half) {
     MOSAIC_PERF_SCOPE("FX gaussian plane", mosaic::common::Lane::Cpu);
     if (sigma <= 0.0f || half < 1) return;
-    std::vector<float> k(static_cast<std::size_t>(half) + 1);
+    std::vector<float> k(static_cast<std::size_t>(half) + 1); // the kernel, not a plane
     const float denom = 2.0f * sigma * sigma;
     float norm = 0.0f;
     for (int i = 0; i <= half; ++i) {
@@ -154,7 +160,7 @@ void gaussianPlane(std::vector<float>& plane, std::uint32_t W, std::uint32_t H, 
     const int maxX = static_cast<int>(W) - 1;
     const int maxY = static_cast<int>(H) - 1;
     const std::size_t n = static_cast<std::size_t>(W) * H;
-    std::vector<float> tmp(n);
+    Plane tmp(n);
     {
         MOSAIC_PERF_SCOPE("FX gaussian plane (horiz)", mosaic::common::Lane::Cpu);
         parallelFor(H, 64, [&](std::size_t row0, std::size_t row1) { // horizontal
@@ -184,12 +190,29 @@ void gaussianPlane(std::vector<float>& plane, std::uint32_t W, std::uint32_t H, 
                 };
                 for (std::uint32_t x = 0; x < xLo; ++x)
                     edge(x);
-                for (std::uint32_t x = xLo; x < xHi; ++x) {
-                    const float* c = plane.data() + row + x;
-                    float acc = *c * k[0];
-                    for (int i = 1; i <= half; ++i)
-                        acc += (c[-i] + c[i]) * k[static_cast<std::size_t>(i)];
-                    tmp[row + x] = acc;
+                // ⚠ TAP LOOP OUTSIDE, X LOOP INSIDE. With x outermost the inner loop is a
+                // serial floating-point reduction into `acc`, which no compiler may vectorise --
+                // reassociating a float sum changes the result, so GCC leaves it scalar and the
+                // pass runs one tap per cycle. Swapping the two makes the inner loop a flat
+                // elementwise update over contiguous x, which vectorises.
+                //
+                // Byte-identical, and that is the point of accumulating IN PLACE rather than
+                // gathering: every output still adds k[0], then i=1, then i=2, ... in exactly that
+                // order, with exactly those weights. Only the order in which DIFFERENT outputs are
+                // advanced changes, and they are independent. A row is ~20 KB at this width, so
+                // the accumulator and both tap streams stay in L1 across the whole tap loop.
+                {
+                    const float* c = plane.data() + row;
+                    float* out = tmp.data() + row;
+                    const float k0 = k[0];
+                    for (std::uint32_t x = xLo; x < xHi; ++x)
+                        out[x] = c[x] * k0;
+                    for (int i = 1; i <= half; ++i) {
+                        const float ki = k[static_cast<std::size_t>(i)];
+                        for (std::uint32_t x = xLo; x < xHi; ++x)
+                            out[x] += (c[x - static_cast<std::uint32_t>(i)] +
+                                       c[x + static_cast<std::uint32_t>(i)]) * ki;
+                    }
                 }
                 for (std::uint32_t x = std::max(xHi, xLo); x < W; ++x)
                     edge(x);
@@ -218,14 +241,19 @@ void gaussianPlane(std::vector<float>& plane, std::uint32_t W, std::uint32_t H, 
             for (std::uint32_t y = static_cast<std::uint32_t>(row0); y < row1; ++y) {
                 const std::size_t row = static_cast<std::size_t>(y) * W;
                 if (y >= yLo && y < yHi) { // interior rows: no vertical clamping anywhere
-                    for (std::uint32_t x = xs; x < xe; ++x) {
-                        const float* c = tmp.data() + row + x;
-                        float acc = *c * k[0];
-                        for (int i = 1; i <= half; ++i)
-                            acc += (c[-static_cast<std::ptrdiff_t>(i) * W] +
-                                    c[static_cast<std::ptrdiff_t>(i) * W]) *
-                                   k[static_cast<std::size_t>(i)];
-                        plane[row + x] = acc;
+                    // The same swap as the horizontal pass above, inside the strip: x innermost
+                    // and contiguous, the tap loop outside it. Same taps, same weights, same
+                    // per-output order.
+                    const float* c = tmp.data() + row;
+                    float* out = plane.data() + row;
+                    const float k0 = k[0];
+                    for (std::uint32_t x = xs; x < xe; ++x)
+                        out[x] = c[x] * k0;
+                    for (int i = 1; i <= half; ++i) {
+                        const float ki = k[static_cast<std::size_t>(i)];
+                        const std::ptrdiff_t off = static_cast<std::ptrdiff_t>(i) * W;
+                        for (std::uint32_t x = xs; x < xe; ++x)
+                            out[x] += (c[x - off] + c[x + off]) * ki;
                     }
                     continue;
                 }
@@ -248,7 +276,7 @@ void gaussianPlane(std::vector<float>& plane, std::uint32_t W, std::uint32_t H, 
 // Bilinear plane read in INDEX space (integer coordinates land on pixel centres), clamp-to-edge.
 // An integer sample position reproduces the stored value exactly (the far weight is 0), which is
 // what makes the analytic kernel tests -- and an unrotated, whole-pixel displacement -- exact.
-[[nodiscard]] float samplePlane(const std::vector<float>& p, std::uint32_t W, std::uint32_t H,
+[[nodiscard]] float samplePlane(const Plane& p, std::uint32_t W, std::uint32_t H,
                                 float x, float y) {
     const int maxX = static_cast<int>(W) - 1;
     const int maxY = static_cast<int>(H) - 1;
@@ -363,8 +391,8 @@ void sharpenImage(common::ImageF& img, float amount) {
     for (int ch = 0; ch < 3; ++ch) {
         // Read from a snapshot: the kernel is a neighbourhood read, so writing in place would
         // feed already-sharpened taps back into the pixels to the right and below.
-        const std::vector<float> src = pl.c[static_cast<std::size_t>(ch)];
-        std::vector<float>& dst = pl.c[static_cast<std::size_t>(ch)];
+        const Plane src = pl.c[static_cast<std::size_t>(ch)];
+        Plane& dst = pl.c[static_cast<std::size_t>(ch)];
         parallelFor(H, 64, [&](std::size_t row0, std::size_t row1) {
             for (std::uint32_t y = static_cast<std::uint32_t>(row0); y < row1; ++y) {
                 const std::size_t row = static_cast<std::size_t>(y) * W;
@@ -397,8 +425,8 @@ void unsharpMaskImage(common::ImageF& img, float sigma, float amount, float thre
     // 3 sigma of support is the blur family's convention; a live drag truncates to 2 sigma, which
     // is the only draft lane the S35 family needs (every other kernel here is O(1) per pixel).
     const int half = std::max(1, static_cast<int>(std::ceil((draft ? 2.0f : 3.0f) * sigma)));
-    std::array<std::vector<float>, 3> blurred{pl.c[0], pl.c[1], pl.c[2]};
-    for (std::vector<float>& b : blurred) gaussianPlane(b, pl.w, pl.h, sigma, half);
+    std::array<Plane, 3> blurred{pl.c[0], pl.c[1], pl.c[2]};
+    for (Plane& b : blurred) gaussianPlane(b, pl.w, pl.h, sigma, half);
 
     parallelFor(pl.c[3].size(), std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
         for (std::size_t i = i0; i < i1; ++i) {
@@ -425,8 +453,8 @@ void highPassImage(common::ImageF& img, float sigma, bool draft) {
     // The same 3-sigma support (2 under a live drag) unsharp uses -- the two kernels ARE the same
     // Gaussian difference, so a High Pass radius has to mean what an Unsharp radius means.
     const int half = std::max(1, static_cast<int>(std::ceil((draft ? 2.0f : 3.0f) * sigma)));
-    std::array<std::vector<float>, 3> blurred{pl.c[0], pl.c[1], pl.c[2]};
-    for (std::vector<float>& b : blurred) gaussianPlane(b, pl.w, pl.h, sigma, half);
+    std::array<Plane, 3> blurred{pl.c[0], pl.c[1], pl.c[2]};
+    for (Plane& b : blurred) gaussianPlane(b, pl.w, pl.h, sigma, half);
 
     parallelFor(pl.c[3].size(), std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
         for (std::size_t i = i0; i < i1; ++i) {
@@ -502,14 +530,14 @@ void denoiseImage(common::ImageF& img, int radius, float noiseSigma) {
     Planes pl = premultiply(img);
     const std::size_t n = pl.c[3].size();
     const float noiseVar = noiseSigma * noiseSigma;
-    std::vector<float> sq(n);
+    Plane sq(n);
     for (int ch = 0; ch < 3; ++ch) {
-        std::vector<float>& plane = pl.c[static_cast<std::size_t>(ch)];
+        Plane& plane = pl.c[static_cast<std::size_t>(ch)];
         parallelFor(n, std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
             for (std::size_t i = i0; i < i1; ++i) sq[i] = plane[i] * plane[i];
         });
-        const std::vector<float> m = boxMean(plane, pl.w, pl.h, radius);
-        const std::vector<float> m2 = boxMean(sq, pl.w, pl.h, radius);
+        const Plane m = boxMean(plane, pl.w, pl.h, radius);
+        const Plane m2 = boxMean(sq, pl.w, pl.h, radius);
         parallelFor(n, std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
             for (std::size_t i = i0; i < i1; ++i) {
                 // var = E[x^2] - E[x]^2, floored at 0 (the running sums can land a hair below).
@@ -558,7 +586,7 @@ void pixelateImage(common::ImageF& img, const common::Affine2D& bufToParent, dou
     // Bailing beats allocating an unbounded table.
     if (cells > img.pixelCount() + 1024) return;
 
-    std::vector<float> sum(cells * 4, 0.0f);
+    std::vector<float> sum(cells * 4, 0.0f); // per-CELL accumulator, not a plane
     std::vector<std::uint32_t> count(cells, 0u);
     const auto cellOf = [&](std::uint32_t x, std::uint32_t y) -> long {
         const common::Vec2 p =
@@ -620,7 +648,7 @@ void embossImage(common::ImageF& img, float offX, float offY, float amount) {
     const std::size_t n = img.pixelCount();
     // The relief is read off the PREMULTIPLIED luma, so a transparent neighbour contributes 0 and
     // the shape's own alpha edge embosses like any other edge (straight luma there is arbitrary).
-    std::vector<float> lum(n);
+    Plane lum(n);
     parallelFor(n, std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
         for (std::size_t i = i0; i < i1; ++i) {
             const std::size_t p = i * 4;
@@ -663,8 +691,8 @@ void oilPaintImage(common::ImageF& img, int half) {
     // the mean of the corresponding quadrant of the (4*half+1)^2 window centred on the pixel --
     // which is what makes the classic O(window) Kuwahara O(1) per pixel here.
     {
-        std::vector<float> lum(n);
-        std::vector<float> lum2(n);
+        Plane lum(n);
+        Plane lum2(n);
         parallelFor(n, std::size_t{1} << 16, [&](std::size_t i0, std::size_t i1) {
             for (std::size_t i = i0; i < i1; ++i) {
                 const float l = kLumR * pl.c[0][i] + kLumG * pl.c[1][i] + kLumB * pl.c[2][i];
@@ -672,9 +700,9 @@ void oilPaintImage(common::ImageF& img, int half) {
                 lum2[i] = l * l;
             }
         });
-        const std::vector<float> mL = boxMean(lum, W, H, half);
+        const Plane mL = boxMean(lum, W, H, half);
         release(lum);
-        const std::vector<float> mL2 = boxMean(lum2, W, H, half);
+        const Plane mL2 = boxMean(lum2, W, H, half);
         release(lum2);
 
         // The winning quadrant per pixel, kept as one byte so the four channel passes below can
@@ -705,7 +733,7 @@ void oilPaintImage(common::ImageF& img, int half) {
         });
 
         for (std::size_t ch = 0; ch < 4; ++ch) {
-            const std::vector<float> m = boxMean(pl.c[ch], W, H, half);
+            const Plane m = boxMean(pl.c[ch], W, H, half);
             parallelFor(H, 64, [&](std::size_t row0, std::size_t row1) {
                 for (std::uint32_t y = static_cast<std::uint32_t>(row0); y < row1; ++y) {
                     for (std::uint32_t x = 0; x < W; ++x) {
