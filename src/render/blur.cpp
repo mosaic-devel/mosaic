@@ -115,7 +115,16 @@ void separableRgba(ImageF& img, const Pass& pass) {
 // clamped. `kernel` is the normalised half-kernel with the centre weight at index 0.
 void gaussPassRgba(const float* src, float* dst, int len, std::ptrdiff_t stride,
                    const float* kernel, int r) {
-    for (int i = 0; i < len; ++i) {
+    // ⚠ BORDER / INTERIOR SPLIT -- the same one bf449d3 gave the stylize planes and 26dc2cd gave
+    // the effects Gaussian. This pass never got it, and it is the one the Gaussian Blur ADJUSTMENT
+    // runs: clamping is only ever needed within `r` samples of a line's end, but the single loop
+    // paid two clampi calls -- four comparisons -- on every tap of every sample, on all four
+    // channels' behalf. At sigma 12 that is 73 taps over 39.8 MP per pass.
+    //
+    // Byte-identical: in the interior both clamps are the identity by construction, so the same
+    // taps are summed with the same weights in the same order. The ends keep the clamped form
+    // verbatim, in the `edge` lambda below -- which is the original loop body, moved not rewritten.
+    const auto edge = [&](int i) {
         const float* c = src + i * stride;
         float acc[4] = {c[0] * kernel[0], c[1] * kernel[0], c[2] * kernel[0], c[3] * kernel[0]};
         for (int k = 1; k <= r; ++k) {
@@ -127,7 +136,28 @@ void gaussPassRgba(const float* src, float* dst, int len, std::ptrdiff_t stride,
         float* o = dst + i * stride;
         for (int ch = 0; ch < 4; ++ch)
             o[ch] = acc[ch];
+    };
+    // A line shorter than the kernel is all border; `hi >= lo` keeps the interior range empty
+    // rather than negative in that case.
+    const int lo = std::min(r, len);
+    const int hi = std::max(lo, len - r);
+    for (int i = 0; i < lo; ++i)
+        edge(i);
+    for (int i = lo; i < hi; ++i) {
+        const float* c = src + i * stride;
+        float acc[4] = {c[0] * kernel[0], c[1] * kernel[0], c[2] * kernel[0], c[3] * kernel[0]};
+        for (int k = 1; k <= r; ++k) {
+            const float* l = c - static_cast<std::ptrdiff_t>(k) * stride;
+            const float* h = c + static_cast<std::ptrdiff_t>(k) * stride;
+            for (int ch = 0; ch < 4; ++ch)
+                acc[ch] += (l[ch] + h[ch]) * kernel[k];
+        }
+        float* o = dst + i * stride;
+        for (int ch = 0; ch < 4; ++ch)
+            o[ch] = acc[ch];
     }
+    for (int i = hi; i < len; ++i)
+        edge(i);
 }
 
 // One exact box pass of half-width `r` over a line of RGBA samples, edges clamped: the
