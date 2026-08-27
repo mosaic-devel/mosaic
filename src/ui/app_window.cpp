@@ -5062,7 +5062,7 @@ public:
 
         // Flatten the document exactly as the canvas shows it (true alpha, the same resample
         // filter), on the deterministic CPU path -- the whole-doc export flatten (plan section 5).
-        ensureTextCaches();
+        settleTextCaches(); // an export must not be the only consumer of a band the canvas needs
         render::CompositeOptions opts;
         opts.checkerboard = false;
         opts.resampleFilter = currentResampleFilter();
@@ -5092,7 +5092,8 @@ public:
     std::optional<common::Image> compositeForExport(std::string* error) {
         if (!m_document)
             return std::nullopt;
-        ensureTextCaches();
+        settleTextCaches(); // ... and the same here: the flatten is for a FILE, the canvas still
+                            // needs whatever this refresh moved
         render::CompositeOptions opts;
         opts.checkerboard = false;
         opts.resampleFilter = currentResampleFilter();
@@ -7469,7 +7470,7 @@ public:
         // A 3D text layer BAKES the overlay effects into its pixel cache (S30-e §12), so a live
         // overlay tweak in the modal stales the cache -- refresh before compositing or the pane
         // lags the canvas by a frame.
-        ensureTextCaches();
+        settleTextCaches();
         const std::optional<common::Rect> eb = layer->effectsBounds(); // layer-local
         if (!eb || eb->empty())
             return {};
@@ -7733,7 +7734,7 @@ public:
         core::Layer* layer = m_document->find(id);
         if (layer == nullptr || layer->locked())
             return;
-        ensureTextCaches(); // a TextLayer's pixels live in a renderer-filled cache; fill it first
+        settleTextCaches(); // a TextLayer's pixels live in a renderer-filled cache; fill it first
         // The SAME filter the canvas is composited with: rasterizing must not change the picture.
         common::Image baked = render::rasterizeLayer(*layer, m_document->width(),
                                                      m_document->height(), currentResampleFilter());
@@ -7892,7 +7893,7 @@ public:
             transientStatus(_("Merge Down: an adjustment layer below has no pixels to merge into"));
             return;
         }
-        ensureTextCaches(); // text/texture pixels live in renderer-filled caches; fill them first
+        settleTextCaches(); // text/texture pixels live in renderer-filled caches; fill them first
         const std::uint32_t docW = m_document->width();
         const std::uint32_t docH = m_document->height();
         const render::ResampleFilter filter = currentResampleFilter();
@@ -8609,7 +8610,7 @@ public:
             transientStatus(noopMessage);
             return;
         }
-        ensureTextCaches(); // a bake reads TextLayer/TextureLayer pixels out of renderer caches
+        settleTextCaches(); // a bake reads TextLayer/TextureLayer pixels out of renderer caches
         m_document->commands().push(std::move(cmd));
         syncAfterEdit();
         // ⚠ ResizeCanvasCommand moves no layer revision, so the dock's cached group / adjustment /
@@ -8867,7 +8868,7 @@ public:
             transientStatus(_("Update All Text Layers: this document has no text"));
             return;
         }
-        ensureTextCaches();
+        settleTextCaches(); // superseded by the full composite below, and correct without it
         requestRecomposite(/*fitView=*/false);
         if (m_layerPanel != nullptr)
             m_layerPanel->refreshThumbnails();
@@ -11750,7 +11751,7 @@ private:
         // one -- so an opened document's text (3D text most visibly) showed a blank placeholder
         // until the next edit re-rendered it. This costs one text render at open; the first
         // composite would have done it a frame later anyway (user report, 2026-07-09).
-        ensureTextCaches();
+        settleTextCaches();
         if (m_layerPanel)
             m_layerPanel->setDocument(m_document.get());
         updateShapeRadiusRange(); // the rect "Corner" slider tops out at the document size, not
@@ -12829,7 +12830,14 @@ private:
 
     // Returns the DOCUMENT-space rect the refresh visibly changed (empty = nothing re-rendered):
     // the typing region path (S60-b) unions it into its dirty rect; full composites ignore it.
-    common::Rect ensureTextCaches() {
+    //
+    // ⚠ [[nodiscard]] IS LOAD-BEARING, not tidiness. The report is made EXACTLY ONCE -- a second
+    // call in the same frame finds the caches current and says nothing -- so a caller that drops it
+    // does not merely lose an optimisation, it loses the only notice that pixels moved. That has
+    // now shipped twice (MOSAIC_TILE_COMPOSITOR=1 in S60-a; the pre-drain settle in 0.3.2), both
+    // times as invisible typing, so the compiler holds the invariant instead of the reviewer.
+    // `settleTextCaches()` below is the disposition almost every caller wants.
+    [[nodiscard]] common::Rect ensureTextCaches() {
         if (!m_document)
             return {};
         // The block being edited renders UNCLIPPED so its Area overflow stays visible while you
@@ -12861,6 +12869,19 @@ private:
         }
         if (!texDirty.empty()) dirty = dirty.empty() ? texDirty : dirty.united(texDirty);
         return dirty;
+    }
+
+    // Refresh the caches and QUEUE what that visibly changed, so the next frame patches it. The
+    // right disposition for every caller that is NOT itself about to composite: a menu command, a
+    // panel build, an export flatten, the frame's own pre-drain settle. Over-queueing costs one
+    // small region patch of already-correct pixels; under-queueing costs the edit. Returns whether
+    // anything was queued, for the callers that also want to wake the frame loop.
+    bool settleTextCaches() {
+        const common::Rect dirty = ensureTextCaches();
+        if (dirty.empty())
+            return false;
+        m_pendingRegion.add(dirty);
+        return true;
     }
 
     // ---- S60-a item 13: the device-resident composite lane (opt-in, DEFAULT OFF) ---------------
@@ -13081,7 +13102,9 @@ private:
         // the previous composite): drop it — the fresh composite below takes the display back.
         if (m_recomposeReview)
             exitRecomposeReviewState();
-        ensureTextCaches();
+        // THE one legitimate discard in this file: the composite three lines down redraws the whole
+        // canvas, so a rect naming part of it adds nothing. Every other caller queues.
+        (void)ensureTextCaches();
         render::CompositeOptions opts;
         // S19-c: the display composite carries TRUE alpha now -- the transparency checkerboard is
         // drawn in screen space by the present shader, not baked here in doc space. This also makes
@@ -13487,7 +13510,17 @@ private:
         // Path fits BEFORE the reflection env, which is also the correct order rather than merely
         // the cheap one: the mirror should see settled path text. The old arrangement built the
         // snapshot first and re-flowed the text after it, leaving the mirror a frame stale.
-        ensureTextCaches();
+        //
+        // ⚠ AND THE REPORT IS QUEUED, NOT SWALLOWED. This is the third site in this file that has
+        // to say so, and the one that shipped broken (0.3.2): the refresh names the band it
+        // re-rendered EXACTLY ONCE, and moving a call ahead of the drain moved that one report
+        // ahead of it too. The drain's own call then found the caches current, reported nothing,
+        // unioned nothing with requestTextRecomposite's empty seed and patched NOTHING -- so every
+        // edit that rides the region path (typing, a style change, a 3D param, the font-hover
+        // preview, the edit-enter/leave clip flip) re-rendered the cache and never reached the
+        // canvas. Feeding it into m_pendingRegion is what makes an EARLIER call harmless: whoever
+        // asks first, the band still lands in this frame's queue.
+        settleTextCaches();
         updateTextPathFits();  // fit-to-path (§9): re-bake + re-flow path text when its path moved
         updateReflectionEnv(); // 3D reflect-canvas: build the below-composite snapshot when needed
 
@@ -13574,10 +13607,8 @@ private:
             // the settle is what lands the crisp bake after a draft gesture, this is the ONE report
             // of a band the canvas is still showing at half resolution -- and a report nobody acts
             // on is a report that is gone. Queue it; the next frame patches it.
-            if (const common::Rect crisp = ensureTextCaches(); !crisp.empty()) {
-                m_pendingRegion.add(crisp);
+            if (settleTextCaches())
                 requestFrame();
-            }
             if (m_layerPanel != nullptr)
                 m_layerPanel->refreshThumbnails();
             m_textThumbDirty = false;
