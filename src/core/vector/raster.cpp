@@ -1,5 +1,12 @@
 #include "core/vector/raster.hpp"
 
+#include "common/dither.hpp"
+#include "common/thread_pool.hpp" // ditherTPDF: the white-noise kind (shared with the sky renderer)
+#include "core/vector/flatten.hpp"
+#include "core/vector/hit.hpp"
+#include "core/vector/pattern.hpp"
+#include "core/vector/stroke.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -8,12 +15,6 @@
 #include <utility>
 #include <variant>
 #include <vector>
-
-#include "common/dither.hpp"  // ditherTPDF: the white-noise kind (shared with the sky renderer)
-#include "core/vector/flatten.hpp"
-#include "core/vector/hit.hpp"
-#include "core/vector/pattern.hpp"
-#include "core/vector/stroke.hpp"
 
 namespace mosaic::core::vec {
 namespace {
@@ -407,29 +408,93 @@ CoverageBuffer rasterizeCoverage(const Contours& contours, std::uint32_t W, std:
 
     const int N = std::max(1, subsamples);
     const float weight = 1.0f / static_cast<float>(N);
-    std::vector<std::pair<double, int>> xs;  // (x crossing, winding direction)
-    for (std::uint32_t y = box.y0; y < box.y1; ++y) {
-        float* row = &cov.a[static_cast<std::size_t>(y - box.y0) * cov.width];
-        for (int s = 0; s < N; ++s) {
-            const double sy = static_cast<double>(y) + (static_cast<double>(s) + 0.5) / N;
-            xs.clear();
-            for (const auto& e : edges) {
-                const double ay = e[1], by = e[3];
-                if (sy < std::min(ay, by) || sy >= std::max(ay, by)) continue;  // half-open
-                const double t = (sy - ay) / (by - ay);
-                xs.push_back({e[0] + t * (e[2] - e[0]), by > ay ? 1 : -1});
-            }
-            if (xs.size() < 2) continue;
-            std::sort(xs.begin(), xs.end(),
-                      [](const auto& a, const auto& b) { return a.first < b.first; });
-            int w = 0;
-            for (std::size_t k = 0; k + 1 < xs.size(); ++k) {
-                w += (rule == FillRule::NonZero) ? xs[k].second : 1;
-                const bool inside = (rule == FillRule::NonZero) ? (w != 0) : (w & 1);
-                if (inside) addSpan(row, box.x0, box.x1, xs[k].first, xs[k + 1].first, weight);
+
+    // ---- The sweep: an ACTIVE EDGE LIST, and the scanlines banded ------------------------------
+    //
+    // ⚠ THIS LOOP USED TO TEST EVERY EDGE OF THE OBJECT AT EVERY SCANLINE SAMPLE, and the two
+    // numbers are not close. A 41-lobe rosette flattens to 32,528 edges over a 3,388-row box, so
+    // at four subsamples that is 3388 x 4 x 32528 = **441 million** edge tests to draw one shape --
+    // to find the handful that actually cross each scanline. It was serial on top of that.
+    //
+    // Not a vector-shape corner either: this is also the glyph rasteriser. Body copy's text cache
+    // is 2679x1854 with ~7,000 edges per pass, six passes, and every one of them paid the same
+    // shape of scan.
+    //
+    // `sy` increases monotonically over the whole (y, s) iteration, so a textbook sweep applies:
+    // walk the edges in ylo order, admit each as its scanline arrives, retire it when its yhi
+    // passes, and test only what is live. O(rows x live) instead of O(rows x all).
+    //
+    // ⚠ THE ACTIVE LIST IS KEPT IN EDGE-INDEX ORDER, and that is what makes this bit-identical
+    // rather than merely equivalent. `xs` is sorted by x with a comparator that ignores the winding
+    // direction, so two crossings at the same x would come out in whichever order they went in --
+    // and the winding accumulation below reads that order. Emitting in the same order the old
+    // linear scan did removes the question: admitted edges are merged into place, and retiring
+    // preserves order, so `xs` is built exactly as before.
+    const std::size_t edgeCount = edges.size();
+    std::vector<double> ylo(edgeCount), yhi(edgeCount);
+    for (std::size_t i = 0; i < edgeCount; ++i) {
+        ylo[i] = std::min(edges[i][1], edges[i][3]);
+        yhi[i] = std::max(edges[i][1], edges[i][3]);
+    }
+    std::vector<std::uint32_t> byYlo(edgeCount);
+    for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(edgeCount); ++i)
+        byYlo[i] = i;
+    std::sort(byYlo.begin(), byYlo.end(),
+              [&ylo](std::uint32_t a, std::uint32_t b) { return ylo[a] < ylo[b]; });
+
+    // Rows are independent -- each band owns its own slice of `cov.a` and its own sweep state --
+    // so the banding changes no arithmetic, only who runs it. A band re-seeds its active list by
+    // one O(edges) pass at its first sample, which against the sweep it replaces is nothing.
+    common::parallelFor(box.height(), 32, [&](std::size_t band0, std::size_t band1) {
+        std::vector<std::pair<double, int>> xs; // (x crossing, winding direction)
+        std::vector<std::uint32_t> active;      // edge indices, ASCENDING -- see above
+        const std::uint32_t yStart = box.y0 + static_cast<std::uint32_t>(band0);
+        const std::uint32_t yEnd = box.y0 + static_cast<std::uint32_t>(band1);
+        const double firstSy = static_cast<double>(yStart) + 0.5 / N;
+        for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(edgeCount); ++i)
+            if (ylo[i] <= firstSy && yhi[i] > firstSy)
+                active.push_back(i);
+        std::size_t next = 0; // into byYlo: everything before it has already been admitted
+        while (next < edgeCount && ylo[byYlo[next]] <= firstSy)
+            ++next;
+
+        for (std::uint32_t y = yStart; y < yEnd; ++y) {
+            float* row = &cov.a[static_cast<std::size_t>(y - box.y0) * cov.width];
+            for (int s = 0; s < N; ++s) {
+                const double sy = static_cast<double>(y) + (static_cast<double>(s) + 0.5) / N;
+                const std::size_t held = active.size();
+                while (next < edgeCount && ylo[byYlo[next]] <= sy)
+                    active.push_back(byYlo[next++]);
+                if (active.size() != held) { // merge the new arrivals back into index order
+                    std::sort(active.begin() + static_cast<std::ptrdiff_t>(held), active.end());
+                    std::inplace_merge(active.begin(),
+                                       active.begin() + static_cast<std::ptrdiff_t>(held),
+                                       active.end());
+                }
+                active.erase(std::remove_if(active.begin(), active.end(),
+                                            [&yhi, sy](std::uint32_t i) { return yhi[i] <= sy; }),
+                             active.end());
+                xs.clear();
+                for (const std::uint32_t i : active) { // every one of these crosses sy, by
+                    const auto& e = edges[i];          // construction: ylo <= sy < yhi
+                    const double ay = e[1], by = e[3];
+                    const double t = (sy - ay) / (by - ay);
+                    xs.push_back({e[0] + t * (e[2] - e[0]), by > ay ? 1 : -1});
+                }
+                if (xs.size() < 2)
+                    continue;
+                std::sort(xs.begin(), xs.end(),
+                          [](const auto& a, const auto& b) { return a.first < b.first; });
+                int w = 0;
+                for (std::size_t k = 0; k + 1 < xs.size(); ++k) {
+                    w += (rule == FillRule::NonZero) ? xs[k].second : 1;
+                    const bool inside = (rule == FillRule::NonZero) ? (w != 0) : (w & 1);
+                    if (inside)
+                        addSpan(row, box.x0, box.x1, xs[k].first, xs[k + 1].first, weight);
+                }
             }
         }
-    }
+    });
     return cov;
 }
 

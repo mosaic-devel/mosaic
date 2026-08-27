@@ -1,20 +1,23 @@
-#include "core/vector/flatten.hpp"
-
-#include <doctest/doctest.h>
-
-#include <algorithm>
-#include <cmath>
-#include <memory>
-#include <variant>
-
 #include "core/commands.hpp"
 #include "core/document.hpp"
 #include "core/layer.hpp"
+#include "core/vector/flatten.hpp"
 #include "core/vector/hit.hpp"
 #include "core/vector/object.hpp"
 #include "core/vector/raster.hpp"
 #include "core/vector/stroke.hpp"
 #include "render/compositor.hpp"
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <doctest/doctest.h>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include <variant>
+#include <vector>
 
 using namespace mosaic::core;
 using mosaic::common::Vec2;
@@ -779,4 +782,223 @@ TEST_CASE("stroke: fill and stroke compose (red fill under a blue stroke)") {
     CHECK(chanF(img, 16, 16, 2) < 0.2);
     CHECK(chanF(img, 6, 16, 2) > 0.8);   // edge is the blue stroke
     CHECK(chanF(img, 6, 16, 0) < 0.2);
+}
+
+// ---------------------------------------------------------------------------------------------
+// rasterizeCoverage's active-edge sweep.
+//
+// The scanline pass used to test EVERY edge of the object at every scanline sample; it now walks
+// the edges in ylo order, admits each as its scanline arrives and retires it when its yhi passes.
+// That is a second implementation of "which edges cross this scanline", and the two are only ever
+// compared here. The reference below is the ORIGINAL linear scan, written out verbatim, so a sweep
+// that admits an edge a sample early, retires one a sample late, or reorders the crossings fails
+// against the thing it replaced rather than against a recorded picture.
+//
+// ⚠ BIT-EXACT, not approximate. `xs` is sorted by x with a comparator that ignores the winding
+// direction, so two crossings at the same x come out in whichever order they went in -- and the
+// winding accumulation reads that order. The sweep keeps its active list in EDGE-INDEX order
+// precisely so the question cannot arise; this test is what holds it there.
+namespace {
+
+// The pre-sweep pass, verbatim: for every scanline sample, test every edge.
+std::vector<float> referenceCoverage(const mosaic::core::vec::Contours& cs,
+                                     mosaic::core::vec::FillRule rule, int subsamples,
+                                     const mosaic::core::vec::PixelBounds& box) {
+    std::vector<float> cov(static_cast<std::size_t>(box.width()) * box.height(), 0.0f);
+    std::vector<std::array<double, 4>> edges;
+    for (const auto& c : cs) {
+        const auto& pts = c.points;
+        const std::size_t n = pts.size();
+        if (n < 2)
+            continue;
+        for (std::size_t i = 0; i < n; ++i) {
+            const Vec2 a = pts[i];
+            const Vec2 b = pts[(i + 1) % n];
+            if (a.y != b.y)
+                edges.push_back({a.x, a.y, b.x, b.y});
+        }
+    }
+    if (edges.empty())
+        return cov;
+    const int N = std::max(1, subsamples);
+    const float weight = 1.0f / static_cast<float>(N);
+    const auto addSpan = [&](float* row, double xa, double xb) {
+        xa = std::clamp(xa, static_cast<double>(box.x0), static_cast<double>(box.x1));
+        xb = std::clamp(xb, static_cast<double>(box.x0), static_cast<double>(box.x1));
+        if (xb <= xa)
+            return;
+        const int ixa = static_cast<int>(std::floor(xa));
+        const int ixb = static_cast<int>(std::floor(xb));
+        const int hi = static_cast<int>(box.x1);
+        const int base = static_cast<int>(box.x0);
+        if (ixa == ixb) {
+            if (ixa < hi)
+                row[ixa - base] += static_cast<float>(xb - xa) * weight;
+            return;
+        }
+        if (ixa < hi)
+            row[ixa - base] += static_cast<float>((ixa + 1) - xa) * weight;
+        for (int x = ixa + 1; x < ixb && x < hi; ++x)
+            row[x - base] += weight;
+        if (ixb < hi)
+            row[ixb - base] += static_cast<float>(xb - ixb) * weight;
+    };
+    std::vector<std::pair<double, int>> xs;
+    for (std::uint32_t y = box.y0; y < box.y1; ++y) {
+        float* row = &cov[static_cast<std::size_t>(y - box.y0) * box.width()];
+        for (int s = 0; s < N; ++s) {
+            const double sy = static_cast<double>(y) + (static_cast<double>(s) + 0.5) / N;
+            xs.clear();
+            for (const auto& e : edges) {
+                const double ay = e[1], by = e[3];
+                if (sy < std::min(ay, by) || sy >= std::max(ay, by))
+                    continue;
+                const double t = (sy - ay) / (by - ay);
+                xs.push_back({e[0] + t * (e[2] - e[0]), by > ay ? 1 : -1});
+            }
+            if (xs.size() < 2)
+                continue;
+            std::sort(xs.begin(), xs.end(),
+                      [](const auto& a, const auto& b) { return a.first < b.first; });
+            int w = 0;
+            for (std::size_t k = 0; k + 1 < xs.size(); ++k) {
+                w += (rule == mosaic::core::vec::FillRule::NonZero) ? xs[k].second : 1;
+                const bool inside =
+                    (rule == mosaic::core::vec::FillRule::NonZero) ? (w != 0) : (w & 1);
+                if (inside)
+                    addSpan(row, xs[k].first, xs[k + 1].first);
+            }
+        }
+    }
+    return cov;
+}
+
+// A rosette: `lobes` cusps between an outer and an inner radius, flattened finely enough that the
+// edge list is large and short-lived -- the shape the sweep exists for, and the one the fixture's
+// Rosette layer is.
+mosaic::core::vec::Contours rosetteContours(int lobes, double outer, double inner, double cx,
+                                            double cy, int steps) {
+    mosaic::core::vec::Contour c;
+    c.closed = true;
+    for (int i = 0; i < steps; ++i) {
+        const double t = 2.0 * std::acos(-1.0) * i / steps;
+        const double r = inner + (outer - inner) * 0.5 * (1.0 + std::cos(lobes * t));
+        c.points.push_back({cx + r * std::cos(t), cy + r * std::sin(t)});
+    }
+    return {c};
+}
+
+} // namespace
+
+TEST_CASE("rasterizeCoverage: the active-edge sweep matches the linear scan bit for bit") {
+    using namespace mosaic::core::vec;
+    struct Case {
+        const char* what;
+        Contours cs;
+        FillRule rule;
+        int subsamples;
+    };
+    // A concave self-overlapping star exercises NonZero vs EvenOdd differing; two nested squares
+    // wound the same way exercise a non-zero interior; the rosette is the many-short-edges case.
+    Contours star;
+    {
+        Contour c;
+        c.closed = true;
+        for (int i = 0; i < 10; ++i) {
+            const double t = 2.0 * std::acos(-1.0) * i / 10.0;
+            const double r = (i % 2 == 0) ? 40.0 : 15.0;
+            c.points.push_back({48.0 + r * std::cos(t), 48.0 + r * std::sin(t)});
+        }
+        star = {c};
+    }
+    Contours nested;
+    {
+        Contour a, b;
+        a.closed = b.closed = true;
+        a.points = {{8.0, 8.0}, {88.0, 8.0}, {88.0, 88.0}, {8.0, 88.0}};
+        b.points = {{28.0, 28.0}, {68.0, 28.0}, {68.0, 68.0}, {28.0, 68.0}};
+        nested = {a, b};
+    }
+    // Fractional coordinates on purpose: integer vertices make every crossing land on a sample
+    // boundary, which is the one case where an off-by-one in the sweep would not show.
+    Contours slivers;
+    {
+        Contour c;
+        c.closed = true;
+        c.points = {{10.25, 4.75}, {10.5, 90.5}, {11.75, 90.25}, {11.5, 4.5}};
+        slivers = {c};
+    }
+    // ⚠ VERTICES EXACTLY ON A SAMPLE LINE. With N subsamples the scanline samples sit at
+    // y + (s + 0.5)/N, so at N=4 they are y.125 / y.375 / y.625 / y.875 -- and the admit/retire
+    // tests are `ylo <= sy` and `yhi <= sy`, whose boundary is only reachable when a vertex lands
+    // on one of those exactly. Every other case in this list has vertices that miss them, which
+    // makes a `<=` silently interchangeable with a `<`. These do not.
+    Contours onSample;
+    {
+        Contour c;
+        c.closed = true;
+        c.points = {{20.0, 12.125}, {70.0, 12.125}, {70.0, 60.875}, {45.0, 44.375}, {20.0, 60.875}};
+        onSample = {c};
+    }
+    Contours onSampleHalf; // the same idea at N=2, where the samples are y.25 / y.75
+    {
+        Contour c;
+        c.closed = true;
+        c.points = {{18.0, 9.25}, {77.0, 30.75}, {60.0, 80.25}, {24.0, 55.75}};
+        onSampleHalf = {c};
+    }
+    // ⚠ AND THE VERTEX MUST BE A MONOTONE PASS-THROUGH, not a local extremum. At a y-extremum the
+    // two edges meeting there carry OPPOSITE windings, so admitting or retiring one sample early
+    // adds a matched pair of crossings at the same x -- a zero-width span, invisible. Where the
+    // contour merely passes through (prev.y < v.y < next.y) the two carry the SAME winding, the
+    // parity flips, and an off-by-one shows. Under EvenOdd it shows as a whole scanline.
+    Contours passThrough;
+    {
+        Contour c;
+        c.closed = true; // y runs 8.125 -> 24.375 -> 56.625 -> 88.875 -> 40.125, so the second
+        c.points = {{20.0, 8.125},
+                    {60.0, 24.375},
+                    {70.0, 56.625},
+                    {40.0, 88.875},
+                    {12.0, 40.125}}; // and third vertices pass straight through
+        passThrough = {c};
+    }
+    const Case cases[] = {
+        {"pass-through vertex on a sample line", passThrough, FillRule::EvenOdd, 4},
+        {"pass-through vertex on a sample line, nonzero", passThrough, FillRule::NonZero, 4},
+        {"vertices on the sample lines", onSample, FillRule::NonZero, 4},
+        {"vertices on the sample lines, evenodd", onSample, FillRule::EvenOdd, 4},
+        {"vertices on the sample lines, N=2", onSampleHalf, FillRule::NonZero, 2},
+        {"star nonzero", star, FillRule::NonZero, 4},
+        {"star evenodd", star, FillRule::EvenOdd, 4},
+        {"nested nonzero", nested, FillRule::NonZero, 4},
+        {"nested evenodd", nested, FillRule::EvenOdd, 4},
+        {"slivers", slivers, FillRule::NonZero, 4},
+        {"star 1 subsample", star, FillRule::NonZero, 1},
+        {"star 7 subsamples", star, FillRule::NonZero, 7},
+        {"rosette 41 lobes", rosetteContours(41, 44.0, 18.0, 48.0, 48.0, 900), FillRule::NonZero,
+         4},
+    };
+    constexpr std::uint32_t kW = 96, kH = 96;
+    std::size_t compared = 0;
+    for (const Case& c : cases) {
+        INFO("case=" << std::string(c.what));
+        // Both the clipped sub-rect and the whole window: the sweep is seeded off the box, and a
+        // band that starts partway down the shape is exactly where a re-seed can be wrong.
+        const std::optional<PixelBounds> tight = pixelBoundsOf(c.cs, kW, kH);
+        REQUIRE(tight.has_value());
+        const PixelBounds boxes[] = {*tight, PixelBounds{0, 0, kW, kH}};
+        for (const PixelBounds& box : boxes) {
+            const CoverageBuffer got = rasterizeCoverage(c.cs, kW, kH, c.rule, c.subsamples, box);
+            const std::vector<float> want = referenceCoverage(c.cs, c.rule, c.subsamples, box);
+            REQUIRE(got.a.size() == want.size());
+            for (std::size_t i = 0; i < want.size(); ++i) {
+                if (got.a[i] != want[i])
+                    INFO("index " << i << " got " << got.a[i] << " want " << want[i]);
+                REQUIRE(got.a[i] == want[i]);
+                ++compared;
+            }
+        }
+    }
+    CHECK(compared > 100000);
 }
