@@ -113,8 +113,50 @@ struct RootInfo {
     return best;
 }
 
+// ⚠ A TOTAL FOR THE WHOLE OPEN, because a per-chunk cap is not a bound on memory.
+//
+// codec.hpp caps one chunk and chunk.hpp caps it again by type, but both readers below RETAIN
+// every payload they decode -- one per (type, key) -- so N chunks cost N times the cap and nothing
+// added them up. Measured before this existed: a 2 MB file holding 160 valid TILE frames that each
+// honestly expanded to 256 MB took openDocument to 23.6 GB resident in 17.9 s. The tile bound in
+// chunk.cpp kills that particular file; it does not close the class, because the types with no
+// arithmetic bound -- manifests, directories, history tables, vector geometry, blobs -- can be
+// multiplied just as freely. This is the bound that does.
+//
+// THE NUMBERS ARE FROM REAL DOCUMENTS. A file cannot honestly decompress to more than a modest
+// multiple of itself: harbinger.mosaic (289 MB, 56 layers, ten saves of history) expands 1.7x
+// whole-file, and a small sparse document expands 19x -- sparse documents have the higher ratio
+// because their few stored tiles compress well while the fixed structure stays the same size. 64x
+// with a 256 MB floor leaves better than 3x headroom over the worst real case and still refuses a
+// 2 MB file that wants 40 GB.
+//
+// Exhaustion is not an error path: a chunk past the budget simply does not decode, which both
+// readers already treat as an honest loss, and the user gets the damage report they would get for
+// any unreadable area.
+class DecodeBudget {
+public:
+    explicit DecodeBudget(std::size_t fileBytes) noexcept
+        : m_left(std::max(kFloorBytes, fileBytes * kRatio)) {}
+
+    [[nodiscard]] std::optional<std::vector<std::uint8_t>> take(
+        const ChunkRecord& rec, std::span<const std::uint8_t> file) noexcept {
+        if (rec.uncompressedLen > m_left)
+            return std::nullopt; // refuse BEFORE the decoder sizes a buffer from the claim
+        std::optional<std::vector<std::uint8_t>> payload = decodeChunkPayload(rec, file);
+        if (payload.has_value())
+            m_left -= std::min(m_left, payload->size());
+        return payload;
+    }
+
+private:
+    static constexpr std::size_t kFloorBytes = 256u << 20;
+    static constexpr std::size_t kRatio = 64;
+    std::size_t m_left;
+};
+
 void fullScanRecover(std::span<const std::uint8_t> file, ReadReport& out) {
     out.usedFullScan = true;
+    DecodeBudget budget(file.size());
     // Content types only -- ROOT/DIR/RPTR are accelerators, PRTY is reconstructed from rather
     // than returned, and journal-only types never appear in the main file.
     static constexpr ChunkTag kContent[] = {kTypeManifest, kTypePreview, kTypeTile,
@@ -129,7 +171,7 @@ void fullScanRecover(std::span<const std::uint8_t> file, ReadReport& out) {
         const auto it = best.find(mapKey);
         if (it != best.end() && it->second.generation >= rec.generation)
             continue;
-        auto payload = decodeChunkPayload(rec, file);
+        auto payload = budget.take(rec, file);
         if (!payload.has_value())
             continue;
         best[mapKey] = RecoveredChunk{rec.type,  rec.key,           rec.generation, rec.flags,
@@ -372,6 +414,7 @@ ReadReport readCheckpoint(std::span<const std::uint8_t> file) {
         return report;
     }
 
+    DecodeBudget budget(file.size());
     struct LostEntry {
         ChunkTag tag;
         ChunkKey key;
@@ -412,9 +455,10 @@ ReadReport readCheckpoint(std::span<const std::uint8_t> file) {
             lost.push_back({*tag, *key, static_cast<std::size_t>(off), history});
             continue;
         }
-        auto payload = decodeChunkPayload(*rec, file);
+        auto payload = budget.take(*rec, file);
         if (!payload.has_value()) {
-            // Checksum-valid but undecodable (a foreign writer's bug): parity would reproduce
+            // Checksum-valid but undecodable (a foreign writer's bug, or the open's decode budget
+            // exhausted by a file engineered to expand): parity would reproduce
             // the same undecodable bytes, so reconstruction cannot help. Honest loss -- unless a
             // replica of the same chunk answers, which the tally below decides.
             unresolved.push_back({*tag, *key, static_cast<std::size_t>(off), history});
