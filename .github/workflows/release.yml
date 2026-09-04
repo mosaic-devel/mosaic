@@ -57,7 +57,15 @@ env:
   MOSAIC_REQUIRE_CLEAN_GIT_REV: ${{ github.ref_type == 'tag' && 'ON' || 'OFF' }}
   MOSAIC_OSXCROSS_REF: 27d21e4977c9751d01199c7a226a6faf494c3dd9
   MOSAIC_LIBDMG_PB_REF: 7ac55ec64c96f7800d9818ce64c79670e7f02b67
-  MOSAIC_LIBDMG_FQ_REF: 7ac55ec64c96f7800d9818ce64c79670e7f02b67
+  # ⚠ The two forks pin DIFFERENT commits, and pinning them to the same one is the bug this
+  # replaced. 7ac55ec6 is a 2018 commit both repositories share -- planetbeing's own history, and
+  # only an ancestor of fanquake's -- so checking fanquake out at it got planetbeing's old tree
+  # back, filevault.c and all. That file declares an OpenSSL HMAC_CTX BY VALUE, which has been an
+  # incomplete type since OpenSSL 1.1, so it cannot compile against any current distro. It went
+  # unnoticed for as long as the dmgtools cache kept hitting; the cache is evicted after 7 idle
+  # days, and the first rebuild after that -- v0.3.5 -- failed. fanquake's actual head is the
+  # "only_what_core_needs" branch, which deletes filevault.c and with it the OpenSSL dependency.
+  MOSAIC_LIBDMG_FQ_REF: 1cc791e4173da9cb0b0cc16c5a1aaa25d5eb5efa
   MOSAIC_RCODESIGN_TAG: apple-codesign/0.29.0
   MOSAIC_LLVM_MINGW_TAG: '20260616'
 
@@ -509,7 +517,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: /opt/dmgtools
-          key: dmgtools-v1
+          key: dmgtools-v2
 
       - name: Build DMG tooling
         if: steps.dmgtools-cache.outputs.cache-hit != 'true'
