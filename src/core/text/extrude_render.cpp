@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <vector>
 
 // Software 3D rasterization for extruded text (S30-c). Technique lineage: edge-function triangle
@@ -81,6 +82,39 @@ ColorF sampleEnv(const common::ImageF& img, double x, double y) {
     return out;
 }
 
+// Everything a shade needs that does NOT vary per fragment, resolved once per render.
+//
+// It is all loop-invariant and it was all being redone per covered sample: an exp2 and four
+// clamps per fragment for the material terms, and -- the one that actually hurt -- a
+// `(-light.direction).normalized()` per LIGHT per fragment, which is a sqrt and three divides to
+// re-derive a constant. The albedo stays out of here on purpose: an overlay map (§12) replaces it
+// per fragment, so the F0 split that depends on it is the one thing left inline.
+struct ShadeLight {
+    Vec3 l; // surface -> lamp, unit (the pre-normalized -direction)
+    ColorF color;
+    double intensity = 1.0;
+};
+struct ShadeConst {
+    double metal = 0.0, rough = 0.5, kd = 1.0, shininess = 4.0, specGain = 1.0;
+    std::vector<ShadeLight> lights;
+
+    [[nodiscard]] static ShadeConst from(const Extrude& params, const Material& m) {
+        ShadeConst c;
+        c.metal = std::clamp(static_cast<double>(m.metalness), 0.0, 1.0);
+        c.rough = std::clamp(static_cast<double>(m.roughness), 0.0, 1.0);
+        c.kd = 1.0 - c.metal;                                 // a true metal has no diffuse lobe
+        c.shininess = std::exp2(2.0 + 8.0 * (1.0 - c.rough)); // 4 .. 1024
+        c.specGain = 0.25 + 0.75 * (1.0 - c.rough);           // rough surfaces spread it thin
+        for (const Light& light : params.lights) {
+            const Vec3 l = (-light.direction).normalized(); // surface -> lamp
+            if (l == Vec3{})
+                continue; // a zero direction is not a light (the old inline skip)
+            c.lights.push_back({l, light.color, light.intensity});
+        }
+        return c;
+    }
+};
+
 // Blinn-Phong / PBR-lite (§10.3): albedo split into diffuse/specular by metalness, shininess from
 // roughness, N unit and already facing the viewer. Lights' directions are the way the light
 // TRAVELS, in the un-rotated design frame -- they stay put while the solid orbits (the way every
@@ -91,25 +125,25 @@ ColorF sampleEnv(const common::ImageF& img, double x, double y) {
 // frame as `viewDir`. `capSurface` marks the front/back face: with reflectSidesOnly set, caps
 // keep the studio finish and only the extruded sides mirror the canvas (round 3 follow-up: a
 // head-on face mirroring the artwork reads odd at some angles).
-Shaded shade(const Extrude& params, const Material& m, Vec3 n, Vec3 viewDir, Vec3 p,
-             const EnvContext& ec, bool capSurface) {
-    const float ar = m.albedo.r, ag = m.albedo.g, ab = m.albedo.b;
+// `ar/ag/ab` is the fragment's albedo -- the material's, or the overlay map's sample where one
+// applies -- passed separately from `sc` for exactly that reason.
+Shaded shade(const Extrude& params, const ShadeConst& sc, float ar, float ag, float ab, Vec3 n,
+             Vec3 viewDir, Vec3 p, const EnvContext& ec, bool capSurface) {
     if (!params.lightingEnabled) return {ar, ag, ab};  // flat self-lit faces
 
-    const double metal = std::clamp(static_cast<double>(m.metalness), 0.0, 1.0);
-    const double rough = std::clamp(static_cast<double>(m.roughness), 0.0, 1.0);
-    const double kd = 1.0 - metal;                      // a true metal has no diffuse lobe
+    const double metal = sc.metal;
+    const double rough = sc.rough;
+    const double kd = sc.kd;
     const double ksR = 0.06 + (ar - 0.06) * metal;      // dielectric 6% -> tinted metal spec (F0)
     const double ksG = 0.06 + (ag - 0.06) * metal;
     const double ksB = 0.06 + (ab - 0.06) * metal;
-    const double shininess = std::exp2(2.0 + 8.0 * (1.0 - rough));  // 4 .. 1024
-    const double specGain = 0.25 + 0.75 * (1.0 - rough);            // rough surfaces spread it thin
+    const double shininess = sc.shininess;
+    const double specGain = sc.specGain;
 
     double r = ar * params.ambient.r * kd, g = ag * params.ambient.g * kd,
            b = ab * params.ambient.b * kd;
-    for (const Light& light : params.lights) {
-        const Vec3 l = (-light.direction).normalized();  // surface -> lamp
-        if (l == Vec3{}) continue;
+    for (const ShadeLight& light : sc.lights) {
+        const Vec3 l = light.l;
         const double ndl = std::max(0.0, n.dot(l));
         const double di = light.intensity;
         if (ndl > 0.0) {
@@ -117,7 +151,10 @@ Shaded shade(const Extrude& params, const Material& m, Vec3 n, Vec3 viewDir, Vec
             g += ag * kd * light.color.g * di * ndl;
             b += ab * kd * light.color.b * di * ndl;
             const Vec3 h = (l + viewDir).normalized();
-            const double spec = std::pow(std::max(0.0, n.dot(h)), shininess) * specGain * di;
+            const double ndh = n.dot(h);
+            // pow() is the single most expensive call in the shade; a back-facing half-vector
+            // makes it pow(0, shininess) == 0, which is a pure waste of it.
+            const double spec = ndh > 0.0 ? std::pow(ndh, shininess) * specGain * di : 0.0;
             r += ksR * light.color.r * spec;
             g += ksG * light.color.g * spec;
             b += ksB * light.color.b * spec;
@@ -311,83 +348,257 @@ void renderExtrudeMeshF(common::ImageF& dst, const ExtrudeMesh& mesh, const Extr
     if (tx1 <= tx0 || ty1 <= ty0) return;
     const std::size_t tw = static_cast<std::size_t>(tx1 - tx0);
     const std::size_t th = static_cast<std::size_t>(ty1 - ty0);
-    std::vector<float> color(tw * th * 4, 0.0f);
-    std::vector<double> zbuf(tw * th, -1.0);  // stores invD; larger = closer; -1 = empty
 
-    const Vec3 eye{0.0, 0.0, cam.camDist};
-    // ⚠ BANDED OVER SCANLINES, and the z-buffer is why it has to be scanlines rather than
-    // triangles. Every fragment below resolves against `zbuf`, so two threads taking different
-    // TRIANGLES would race on the same texel and the winner would depend on timing. Rows do not:
-    // a texel belongs to exactly one band, each band walks the ranges and the triangles inside
-    // them in the SAME order the serial loop did, and its z-test therefore resolves identically.
-    // Byte-identical, and deterministic, which a triangle split would not be either.
+    // Per-RANGE shading setup, resolved once. This used to be redone for every range inside every
+    // band -- a std::map lookup (materialForRun) and two overlay lookups each.
+    struct RangeInfo {
+        const Material* mat = nullptr;
+        float alpha = 0.0f;
+        const common::ImageF* capMap = nullptr;  // the front-cap design map (§12)
+        const common::ImageF* wallMap = nullptr; // the unrolled wall map (§12 wrap)
+        ShadeConst sc;
+    };
+    std::vector<RangeInfo> rinfo(mesh.ranges.size());
+    for (std::size_t i = 0; i < mesh.ranges.size(); ++i) {
+        RangeInfo& ri = rinfo[i];
+        const std::size_t run = mesh.ranges[i].runIndex;
+        ri.mat = &materialForRun(params, run);
+        ri.alpha = std::clamp(ri.mat->albedo.a, 0.0f, 1.0f);
+        ri.capMap = overlay != nullptr ? overlay->mapForRun(run) : nullptr;
+        ri.wallMap = overlay != nullptr ? overlay->wallMapForRun(run) : nullptr;
+        ri.sc = ShadeConst::from(params, *ri.mat);
+    }
+
+    // ⚠ SETUP ONCE, BIN ONCE. The previous shape of this loop re-walked the WHOLE index buffer in
+    // every band and redid each triangle's projection AABB, its material lookup and its cap/front/
+    // overlay classification there -- work proportional to bands x triangles that answered the
+    // same question every time. On a 41-lobe stroked rosette (40,854 triangles, 8 bands) that was
+    // 327,000 re-derivations, and it was the majority of the render: the mesh is big, the bands
+    // are few, and most triangles miss most bands.
     //
-    // This is the whole of the 3D type cost on a machine with no compute lane: a 200 px extruded
-    // headline on a 1080p canvas spends 56 of its 66 ms right here, shading 2x2 supersampled
-    // fragments one at a time. The per-band re-walk of the triangle list is an overlap test each,
-    // which against a full Blinn-Phong shade per covered fragment is nothing.
-    common::parallelFor(th, 32, [&](std::size_t band0, std::size_t band1) {
-        const long bandLo = ty0 + static_cast<long>(band0);
-        const long bandHi = ty0 + static_cast<long>(band1); // exclusive
-        for (const ExtrudeMeshRange& range : mesh.ranges) {
-            const Material& mat = materialForRun(params, range.runIndex);
-            const float alpha = std::clamp(mat.albedo.a, 0.0f, 1.0f);
-            if (alpha <= 0.0f)
+    // So: classify each triangle once into a screen-space record, then bucket it into the row
+    // bands its AABB actually touches. A band then walks only the triangles that reach it.
+    struct Tri {
+        std::uint32_t v0 = 0, v1 = 0, v2 = 0;
+        std::uint32_t range = 0;
+        double inv = 0.0; // 1 / signed area
+        // The three edge functions' dw/dx. They are constant over the whole triangle (only the
+        // constant term moves with the scanline), which is what makes the per-row span below two
+        // divides rather than a search.
+        double a0 = 0.0, a1 = 0.0, a2 = 0.0;
+        long x0 = 0, x1 = 0, y0 = 0, y1 = 0; // AABB, already clipped to the tile
+        const common::ImageF* map = nullptr; // the overlay map this triangle samples, or none
+        bool cap = false;
+    };
+    const bool wrap = overlay != nullptr && overlay->wrapSides;
+    std::vector<Tri> tris;
+    tris.reserve(mesh.indices.size() / 3);
+    for (std::size_t r = 0; r < mesh.ranges.size(); ++r) {
+        const ExtrudeMeshRange& range = mesh.ranges[r];
+        if (rinfo[r].alpha <= 0.0f)
+            continue; // fully transparent run: no ink, and no z either
+        for (std::uint32_t k = range.firstIndex; k + 2 < range.firstIndex + range.indexCount;
+             k += 3) {
+            Tri t;
+            t.v0 = mesh.indices[k];
+            t.v1 = mesh.indices[k + 1];
+            t.v2 = mesh.indices[k + 2];
+            const TV& a = tv[t.v0];
+            const TV& b = tv[t.v1];
+            const TV& c = tv[t.v2];
+            const double area = (b.px - a.px) * (c.py - a.py) - (c.px - a.px) * (b.py - a.py);
+            if (std::abs(area) < 1e-12)
+                continue; // degenerate on screen
+            t.x0 = std::max(tx0, static_cast<long>(std::floor(std::min({a.px, b.px, c.px}))));
+            t.x1 = std::min(tx1 - 1, static_cast<long>(std::ceil(std::max({a.px, b.px, c.px}))));
+            if (t.x1 < t.x0)
                 continue;
-            const common::ImageF* ovMap =
-                overlay != nullptr ? overlay->mapForRun(range.runIndex) : nullptr;
-            const common::ImageF* wallMap =
-                overlay != nullptr ? overlay->wallMapForRun(range.runIndex) : nullptr;
-            for (std::uint32_t k = range.firstIndex; k + 2 < range.firstIndex + range.indexCount;
-                 k += 3) {
-                const TV& a = tv[mesh.indices[k]];
-                const TV& b = tv[mesh.indices[k + 1]];
-                const TV& c = tv[mesh.indices[k + 2]];
-                // Cap vs side is a per-TRIANGLE fact (the mesher never mixes them in one triangle).
-                const bool capTri = mesh.vertices[mesh.indices[k]].cap > 0.5f;
-                // The FRONT cap carries the overlay design (§12). Wrap mode paints the WHOLE solid:
-                // the back cap takes the design map too (mirrored from behind, like the back of a
-                // painted sign), and walls/bevels take the UNROLLED wall map by their side coords.
-                // Front = the cap whose model-space z is +depth/2.
-                const bool frontTri = capTri && mesh.vertices[mesh.indices[k]].position.z > 0.0;
-                const bool wrap = overlay != nullptr && overlay->wrapSides;
-                const common::ImageF* triMap = nullptr;
-                if (capTri && (frontTri || wrap))
-                    triMap = ovMap;
-                else if (!capTri && wrap)
-                    triMap = wallMap;
-                const double area = (b.px - a.px) * (c.py - a.py) - (c.px - a.px) * (b.py - a.py);
-                if (std::abs(area) < 1e-12)
-                    continue; // degenerate on screen
-                const double inv = 1.0 / area;
-                const long bx0 =
-                    std::max(tx0, static_cast<long>(std::floor(std::min({a.px, b.px, c.px}))));
-                const long by0 =
-                    std::max(bandLo, static_cast<long>(std::floor(std::min({a.py, b.py, c.py}))));
-                const long bx1 =
-                    std::min(tx1 - 1, static_cast<long>(std::ceil(std::max({a.px, b.px, c.px}))));
-                const long by1 = std::min(
-                    bandHi - 1, static_cast<long>(std::ceil(std::max({a.py, b.py, c.py}))));
-                if (by1 < by0)
-                    continue; // this triangle does not reach this band
-                for (long py = by0; py <= by1; ++py) {
-                    for (long px = bx0; px <= bx1; ++px) {
-                        const double sx = px + 0.5, sy = py + 0.5;
-                        const double w0 =
-                            ((b.px - sx) * (c.py - sy) - (c.px - sx) * (b.py - sy)) * inv;
-                        const double w1 =
-                            ((c.px - sx) * (a.py - sy) - (a.px - sx) * (c.py - sy)) * inv;
+            t.y0 = std::max(ty0, static_cast<long>(std::floor(std::min({a.py, b.py, c.py}))));
+            t.y1 = std::min(ty1 - 1, static_cast<long>(std::ceil(std::max({a.py, b.py, c.py}))));
+            if (t.y1 < t.y0)
+                continue; // entirely off the tile
+            t.range = static_cast<std::uint32_t>(r);
+            t.inv = 1.0 / area;
+            t.a0 = (b.py - c.py) * t.inv;
+            t.a1 = (c.py - a.py) * t.inv;
+            t.a2 = (a.py - b.py) * t.inv;
+            // Cap vs side is a per-TRIANGLE fact (the mesher never mixes them in one triangle).
+            t.cap = mesh.vertices[t.v0].cap > 0.5f;
+            // The FRONT cap carries the overlay design (§12). Wrap mode paints the WHOLE solid:
+            // the back cap takes the design map too (mirrored from behind, like the back of a
+            // painted sign), and walls/bevels take the UNROLLED wall map by their side coords.
+            // Front = the cap whose model-space z is +depth/2.
+            const bool front = t.cap && mesh.vertices[t.v0].position.z > 0.0;
+            if (t.cap && (front || wrap))
+                t.map = rinfo[r].capMap;
+            else if (!t.cap && wrap)
+                t.map = rinfo[r].wallMap;
+            tris.push_back(t);
+        }
+    }
+    if (tris.empty())
+        return;
+
+    // Row bands, finer than one-per-thread: the pool hands them out as workers free up, so a band
+    // that lands on the dense middle of the solid does not stall a whole core the way an eighth of
+    // the tile did.
+    const std::size_t bandH =
+        std::max<std::size_t>(32, (th + common::hardwareThreads() * 4 - 1) /
+                                      std::max<std::size_t>(1, common::hardwareThreads() * 4));
+    const std::size_t nBands = (th + bandH - 1) / bandH;
+    std::vector<std::vector<std::uint32_t>> bins(nBands);
+    for (std::uint32_t i = 0; i < tris.size(); ++i) {
+        const std::size_t b0 = static_cast<std::size_t>(tris[i].y0 - ty0) / bandH;
+        const std::size_t b1 = static_cast<std::size_t>(tris[i].y1 - ty0) / bandH;
+        for (std::size_t b = b0; b <= b1 && b < nBands; ++b)
+            bins[b].push_back(i);
+    }
+
+    // ⚠ A VISIBILITY pass, not a shading one -- the change that took the fragment cost off the
+    // depth complexity. An extruded solid is 2-4 surfaces deep at any pixel (front cap, walls,
+    // back cap), and this loop used to run the FULL fragment program -- two normalizations, a
+    // perspective divide, an overlay sample and a whole Blinn-Phong shade with its pow() -- for
+    // every one of those, then throw all but the nearest away. Now it resolves depth only, keeps
+    // the winner's triangle and barycentrics, and the resolve pass below shades each surviving
+    // sample exactly once.
+    //
+    // The barycentrics are STORED rather than re-derived from the sample position because the
+    // resolve must shade the same point the depth test accepted, bit for bit; recomputing the
+    // edge functions at a second call site invites the compiler to contract them differently.
+    //
+    // Banded over scanlines, and the z-buffer is why it has to be scanlines rather than triangles.
+    // Every fragment resolves against `zbuf`, so two threads taking different TRIANGLES would race
+    // on the same texel and the winner would depend on timing. Rows do not: a texel belongs to
+    // exactly one band, each band walks its triangles in the SAME order the serial loop did, and
+    // its z-test therefore resolves identically. Byte-identical, and deterministic, which a
+    // triangle split would not be either.
+    const std::size_t nSamples = tw * th;
+    std::vector<double> zbuf(nSamples, -1.0); // stores invD; larger = closer; < 0 = empty
+    // Written only where zbuf says a fragment landed, so they never need clearing.
+    auto gtri = std::make_unique_for_overwrite<std::uint32_t[]>(nSamples);
+    auto gw0 = std::make_unique_for_overwrite<double[]>(nSamples);
+    auto gw1 = std::make_unique_for_overwrite<double[]>(nSamples);
+
+    common::parallelBands(nBands, [&](std::size_t band) {
+        const long bandLo = ty0 + static_cast<long>(band * bandH);
+        const long bandHi = std::min(ty1, ty0 + static_cast<long>((band + 1) * bandH));
+        for (const std::uint32_t ti : bins[band]) {
+            const Tri& t = tris[ti];
+            const TV& a = tv[t.v0];
+            const TV& b = tv[t.v1];
+            const TV& c = tv[t.v2];
+            const long by0 = std::max(bandLo, t.y0);
+            const long by1 = std::min(bandHi - 1, t.y1);
+            const double inv = t.inv;
+            for (long py = by0; py <= by1; ++py) {
+                const double sy = py + 0.5;
+                double* zrow = zbuf.data() + static_cast<std::size_t>(py - ty0) * tw;
+                // ⚠ SOLVE for the covered span, do not SCAN for it. Each edge function is affine
+                // in x along a scanline -- w_i(sx) = c_i + a_i * sx -- so the covered run is the
+                // intersection of three half-lines, which is two divides.
+                //
+                // This is where an extruded solid's raster time went. Its triangles are slivers:
+                // every wall quad, every bevel ring segment is a long thin diagonal whose
+                // AXIS-ALIGNED box is mostly not the triangle. Measured on a 4-lobe stroked
+                // rosette, walking those boxes tested 11.0M samples over an 838k-sample tile --
+                // 13x the tile -- and 87.8% of the tests answered "outside". The barycentric
+                // rejection was the rasteriser.
+                //
+                // The span only BOUNDS the loop; the exact sign test below is unchanged and still
+                // decides coverage, and the bounds carry a one-sample guard on each side, so a
+                // rounding difference between the solved root and the tested edge function costs
+                // a redundant test rather than a dropped fragment. Coverage is bit-identical.
+                const double ep = c.py - sy, eq = b.py - sy, er = a.py - sy;
+                const double c0 = (b.px * ep - c.px * eq) * inv;
+                const double c1 = (c.px * er - a.px * ep) * inv;
+                const double c2 = 1.0 - c0 - c1;
+                double lo = -std::numeric_limits<double>::infinity();
+                double hi = std::numeric_limits<double>::infinity();
+                bool none = false;
+                const double ea[3] = {t.a0, t.a1, t.a2};
+                const double ec3[3] = {c0, c1, c2};
+                for (int e = 0; e < 3; ++e) {
+                    if (ea[e] > 0.0)
+                        lo = std::max(lo, -ec3[e] / ea[e]);
+                    else if (ea[e] < 0.0)
+                        hi = std::min(hi, -ec3[e] / ea[e]);
+                    else if (ec3[e] < 0.0)
+                        none = true; // constant and negative: the whole row is outside
+                }
+                if (none || lo > hi)
+                    continue;
+                long xs = t.x0, xe = t.x1;
+                if (std::isfinite(lo))
+                    xs = std::max(xs, static_cast<long>(std::ceil(lo - 0.5)) - 1);
+                if (std::isfinite(hi))
+                    xe = std::min(xe, static_cast<long>(std::floor(hi - 0.5)) + 1);
+                for (long px = xs; px <= xe; ++px) {
+                    const double sx = px + 0.5;
+                    const double w0 = ((b.px - sx) * (c.py - sy) - (c.px - sx) * (b.py - sy)) * inv;
+                    const double w1 = ((c.px - sx) * (a.py - sy) - (a.px - sx) * (c.py - sy)) * inv;
+                    const double w2 = 1.0 - w0 - w1;
+                    if (w0 < 0.0 || w1 < 0.0 || w2 < 0.0)
+                        continue;
+                    // 1/depth is affine in screen space: interpolate it directly for the z-test.
+                    const double invD = w0 * a.invD + w1 * b.invD + w2 * c.invD;
+                    const std::size_t col = static_cast<std::size_t>(px - tx0);
+                    if (invD <= zrow[col])
+                        continue;
+                    zrow[col] = invD;
+                    const std::size_t at = static_cast<std::size_t>(py - ty0) * tw + col;
+                    gtri[at] = ti;
+                    gw0[at] = w0;
+                    gw1[at] = w1;
+                }
+            }
+        }
+    });
+
+    // Shade the survivors and resolve straight into `dst`. Fusing the shade, the box downsample
+    // and the source-over is what lets the whole S-scaled RGBA colour tile go: on a full-canvas
+    // solid at 1080p that buffer was 133 MB to allocate, zero and stream through, for numbers no
+    // other pass ever read. The arithmetic below is compositeSupersampledTile's, unchanged --
+    // that entry point stays for the Vulkan lane's readback, which has real texels to composite.
+    const Vec3 eye{0.0, 0.0, cam.camDist};
+    const long dx0 = tx0 / S, dy0 = ty0 / S;
+    const long dx1 = (tx1 + S - 1) / S, dy1 = (ty1 + S - 1) / S;
+    const float sampleN = static_cast<float>(S * S); // `taken` was always S*S
+    // Banded finer than one-per-thread, and dynamically claimed, for the same reason the
+    // visibility pass is: a solid is fattest across its middle, so eight equal slices of it hand
+    // the middle threads roughly twice the covered samples the top and bottom ones get, and the
+    // pass takes as long as its slowest slice. Destination rows are disjoint, so the split is free
+    // to be as fine as it likes.
+    const std::size_t rows = static_cast<std::size_t>(dy1 - dy0);
+    const std::size_t rowsPerBand =
+        std::max<std::size_t>(16, (rows + common::hardwareThreads() * 4 - 1) /
+                                      std::max<std::size_t>(1, common::hardwareThreads() * 4));
+    common::parallelBands((rows + rowsPerBand - 1) / rowsPerBand, [&](std::size_t band) {
+        const std::size_t r0 = band * rowsPerBand;
+        const std::size_t r1 = std::min(rows, r0 + rowsPerBand);
+        for (long dy = dy0 + static_cast<long>(r0), dyEnd = dy0 + static_cast<long>(r1); dy < dyEnd;
+             ++dy) {
+            if (dy < 0 || dy >= static_cast<long>(dst.height))
+                continue;
+            for (long dx = dx0; dx < dx1; ++dx) {
+                if (dx < 0 || dx >= static_cast<long>(dst.width))
+                    continue;
+                float ar = 0.0f, ag = 0.0f, ab = 0.0f, aa = 0.0f;
+                for (int sy = 0; sy < S; ++sy) {
+                    for (int sx = 0; sx < S; ++sx) {
+                        const long qx = dx * S + sx, qy = dy * S + sy;
+                        if (qx < tx0 || qx >= tx1 || qy < ty0 || qy >= ty1)
+                            continue; // outside the tile = transparent sample
+                        const std::size_t at = static_cast<std::size_t>(qy - ty0) * tw +
+                                               static_cast<std::size_t>(qx - tx0);
+                        if (zbuf[at] < 0.0)
+                            continue; // nothing landed here = transparent sample
+                        const Tri& t = tris[gtri[at]];
+                        const RangeInfo& ri = rinfo[t.range];
+                        const TV& a = tv[t.v0];
+                        const TV& b = tv[t.v1];
+                        const TV& c = tv[t.v2];
+                        const double w0 = gw0[at], w1 = gw1[at];
                         const double w2 = 1.0 - w0 - w1;
-                        if (w0 < 0.0 || w1 < 0.0 || w2 < 0.0)
-                            continue;
-                        // 1/depth is affine in screen space: interpolate it directly for the
-                        // z-test.
-                        const double invD = w0 * a.invD + w1 * b.invD + w2 * c.invD;
-                        const std::size_t at = static_cast<std::size_t>(py - ty0) * tw +
-                                               static_cast<std::size_t>(px - tx0);
-                        if (invD <= zbuf[at])
-                            continue;
-                        zbuf[at] = invD;
                         // Perspective-correct attribute interpolation: attr/d is affine, so weight
                         // the barycentrics by each vertex's 1/d and renormalize.
                         const double q0 = w0 * a.invD, q1 = w1 * b.invD, q2 = w2 * c.invD;
@@ -403,35 +614,46 @@ void renderExtrudeMeshF(common::ImageF& dst, const ExtrudeMesh& mesh, const Extr
                         // coverage stays the material's), then shading proceeds unchanged, so the
                         // design is lit WITH the surface it sits on. Caps sample by design UV,
                         // walls/bevels (wrap mode) by their unrolled side coords.
-                        Material tinted;
-                        const Material* fragMat = &mat;
-                        if (triMap != nullptr) {
-                            const bool side = !capTri;
+                        float mr = ri.mat->albedo.r, mg = ri.mat->albedo.g, mb = ri.mat->albedo.b;
+                        if (t.map != nullptr) {
+                            const bool side = !t.cap;
                             const double uu = side ? (a.su * q0 + b.su * q1 + c.su * q2) * qs
                                                    : (a.u * q0 + b.u * q1 + c.u * q2) * qs;
                             const double vv = side ? (a.sv * q0 + b.sv * q1 + c.sv * q2) * qs
                                                    : (a.v * q0 + b.v * q1 + c.v * q2) * qs;
                             const ColorF oc =
-                                sampleEnv(*triMap, uu * triMap->width, vv * triMap->height);
-                            tinted = mat;
-                            tinted.albedo.r = oc.r;
-                            tinted.albedo.g = oc.g;
-                            tinted.albedo.b = oc.b;
-                            fragMat = &tinted;
+                                sampleEnv(*t.map, uu * t.map->width, vv * t.map->height);
+                            mr = oc.r;
+                            mg = oc.g;
+                            mb = oc.b;
                         }
-                        const Shaded s = shade(params, *fragMat, nn, viewDir, p, ec, capTri);
-                        color[at * 4 + 0] = s.r;
-                        color[at * 4 + 1] = s.g;
-                        color[at * 4 + 2] = s.b;
-                        color[at * 4 + 3] = alpha;
+                        const Shaded s =
+                            shade(params, ri.sc, mr, mg, mb, nn, viewDir, p, ec, t.cap);
+                        const float sa = ri.alpha;
+                        ar += s.r * sa; // premultiplied accumulation
+                        ag += s.g * sa;
+                        ab += s.b * sa;
+                        aa += sa;
                     }
                 }
+                if (aa <= 0.0f)
+                    continue;
+                const float outA = aa / sampleN;
+                const float pr = ar / sampleN, pg = ag / sampleN,
+                            pb = ab / sampleN; // premultiplied average
+                const std::size_t at =
+                    (static_cast<std::size_t>(dy) * dst.width + static_cast<std::size_t>(dx)) * 4;
+                const float da = dst.rgba[at + 3];
+                const float ra = outA + da * (1.0f - outA);
+                if (ra <= 0.0f)
+                    continue;
+                dst.rgba[at + 0] = (pr + dst.rgba[at + 0] * da * (1.0f - outA)) / ra;
+                dst.rgba[at + 1] = (pg + dst.rgba[at + 1] * da * (1.0f - outA)) / ra;
+                dst.rgba[at + 2] = (pb + dst.rgba[at + 2] * da * (1.0f - outA)) / ra;
+                dst.rgba[at + 3] = ra;
             }
         }
     });
-
-    compositeSupersampledTile(dst, color.data(), tx0, ty0, static_cast<long>(tw),
-                              static_cast<long>(th), S);
 }
 
 void compositeSupersampledTile(common::ImageF& dst, const float* tile, long tx0, long ty0,
