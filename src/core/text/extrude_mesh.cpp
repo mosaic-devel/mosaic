@@ -1,10 +1,10 @@
 #include "core/text/extrude_mesh.hpp"
 
-#include <earcut.hpp>
-
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
+#include <earcut.hpp>
 #include <limits>
 #include <utility>
 
@@ -174,42 +174,126 @@ std::vector<std::vector<double>> safeInsets(const std::vector<Ring>& rings, doub
     // OPPOSES the vertex's own and that lies on its INWARD side constrains it -- that pair of
     // tests keeps gap-facing walls free (an 'i' dot over its stem moves APART on inset; without
     // the inward-side test the dot gap would wrongly cap the bevel).
-    for (std::size_t ri = 0; ri < rings.size(); ++ri) {
-        const Ring& rv = rings[ri];
-        for (std::size_t i = 0; i < rv.pts.size(); ++i) {
-            const Vec2 v = rv.pts[i];
-            const double ml = rv.miter[i].length();
-            if (ml <= 1e-12) continue;
-            const Vec2 mHat = rv.miter[i] * (1.0 / ml);
-            double& sv = safe[ri][i];
-            for (std::size_t rk = 0; rk < rings.size(); ++rk) {
-                const Ring& re = rings[rk];
-                const std::size_t n = re.pts.size();
-                for (std::size_t k = 0; k < n; ++k) {
-                    if (rk == ri && (k == i || (k + 1) % n == i))
-                        continue;  // the two edges that own vertex i
-                    const Vec2 a = re.pts[k];
-                    const Vec2 c = re.pts[(k + 1) % n];
-                    const double reach = 2.0 * sv;  // farther walls cannot tighten the bound
-                    if ((a.x < v.x - reach && c.x < v.x - reach) ||
-                        (a.x > v.x + reach && c.x > v.x + reach) ||
-                        (a.y < v.y - reach && c.y < v.y - reach) ||
-                        (a.y > v.y + reach && c.y > v.y + reach))
+    //
+    // ⚠ GRIDDED, because this is a BOUNDED-RADIUS query wearing an all-pairs loop's clothes. Every
+    // vertex was tested against every edge of every ring in the solid -- and for a stroked shape
+    // the solid is the normalized stroke ribbon, which has an order of magnitude more outline
+    // points than the path it came from. Measured on a 41-lobe stroked rosette: 1,745 ribbon
+    // points against their own 1,745 edges is 3.0M vertex/edge pairs, and it was 40 of the mesh
+    // build's 42 ms.
+    //
+    // The radius is the point. `sv` starts at `unconstrained` and only ever falls, and an edge can
+    // only tighten it through min(sv, dist * 0.5) -- so an edge farther than 2 * unconstrained
+    // from a vertex cannot change that vertex's answer no matter what order it is visited in. That
+    // is exactly what the `reach` test below already asserted per pair; hoisting its widest form
+    // into a uniform grid answers it for whole neighbourhoods at once instead.
+    //
+    // The grid only decides WHICH pairs to look at. Every pair it yields runs the identical body,
+    // the live `reach` test included, and the result is a min over a set the pruning provably
+    // never removes a contributor from -- so the insets come out unchanged.
+    const double reachMax = 2.0 * unconstrained;
+    {
+        struct GEdge {
+            Vec2 a, c;
+            std::uint32_t ring = 0, k = 0;
+        };
+        std::vector<GEdge> ge;
+        double gx0 = std::numeric_limits<double>::infinity(), gy0 = gx0;
+        double gx1 = -gx0, gy1 = -gx0;
+        for (std::size_t ri = 0; ri < rings.size(); ++ri) {
+            const std::size_t n = rings[ri].pts.size();
+            for (std::size_t k = 0; k < n; ++k) {
+                const Vec2 a = rings[ri].pts[k];
+                const Vec2 c = rings[ri].pts[(k + 1) % n];
+                ge.push_back({a, c, static_cast<std::uint32_t>(ri), static_cast<std::uint32_t>(k)});
+                gx0 = std::min({gx0, a.x, c.x});
+                gy0 = std::min({gy0, a.y, c.y});
+                gx1 = std::max({gx1, a.x, c.x});
+                gy1 = std::max({gy1, a.y, c.y});
+            }
+        }
+        if (!ge.empty()) {
+            // A cell at least as wide as the reach, so a query is a 3x3 neighbourhood; widened if
+            // that would make the index bigger than the edge list it accelerates.
+            constexpr int kMaxAxis = 512;
+            const double cell =
+                std::max({reachMax, (gx1 - gx0) / kMaxAxis, (gy1 - gy0) / kMaxAxis, 1e-9});
+            const int nx = std::clamp(static_cast<int>((gx1 - gx0) / cell) + 1, 1, kMaxAxis);
+            const int ny = std::clamp(static_cast<int>((gy1 - gy0) / cell) + 1, 1, kMaxAxis);
+            const auto cx = [&](double x) {
+                return std::clamp(static_cast<int>((x - gx0) / cell), 0, nx - 1);
+            };
+            const auto cy = [&](double y) {
+                return std::clamp(static_cast<int>((y - gy0) / cell), 0, ny - 1);
+            };
+            // CSR: count the cells each edge's box touches, prefix-sum, then scatter.
+            std::vector<std::uint32_t> starts(static_cast<std::size_t>(nx) * ny + 1, 0);
+            for (const GEdge& e : ge)
+                for (int iy = cy(std::min(e.a.y, e.c.y)); iy <= cy(std::max(e.a.y, e.c.y)); ++iy)
+                    for (int ix = cx(std::min(e.a.x, e.c.x)); ix <= cx(std::max(e.a.x, e.c.x));
+                         ++ix)
+                        ++starts[static_cast<std::size_t>(iy) * nx + ix + 1];
+            for (std::size_t i = 1; i < starts.size(); ++i)
+                starts[i] += starts[i - 1];
+            std::vector<std::uint32_t> items(starts.back());
+            std::vector<std::uint32_t> fill(starts.begin(), starts.end() - 1);
+            for (std::uint32_t i = 0; i < ge.size(); ++i) {
+                const GEdge& e = ge[i];
+                for (int iy = cy(std::min(e.a.y, e.c.y)); iy <= cy(std::max(e.a.y, e.c.y)); ++iy)
+                    for (int ix = cx(std::min(e.a.x, e.c.x)); ix <= cx(std::max(e.a.x, e.c.x));
+                         ++ix)
+                        items[fill[static_cast<std::size_t>(iy) * nx + ix]++] = i;
+            }
+
+            for (std::size_t ri = 0; ri < rings.size(); ++ri) {
+                const Ring& rv = rings[ri];
+                for (std::size_t i = 0; i < rv.pts.size(); ++i) {
+                    const Vec2 v = rv.pts[i];
+                    const double ml = rv.miter[i].length();
+                    if (ml <= 1e-12)
                         continue;
-                    if (mHat.dot(edgeOutwardNormal(a, c)) > -0.1) continue;  // not a facing wall
-                    const Vec2 ac = c - a;
-                    const double len2 = ac.dot(ac);
-                    const double t =
-                        len2 > 0.0 ? std::clamp((v - a).dot(ac) / len2, 0.0, 1.0) : 0.0;
-                    const Vec2 q = a + ac * t;
-                    const Vec2 d = q - v;
-                    const double dist = d.length();
-                    if (dist <= 1e-12) {
-                        sv = 0.0;
-                        continue;
+                    const Vec2 mHat = rv.miter[i] * (1.0 / ml);
+                    double& sv = safe[ri][i];
+                    const int ix0 = cx(v.x - reachMax), ix1 = cx(v.x + reachMax);
+                    const int iy0 = cy(v.y - reachMax), iy1 = cy(v.y + reachMax);
+                    for (int iy = iy0; iy <= iy1; ++iy) {
+                        for (int ix = ix0; ix <= ix1; ++ix) {
+                            const std::size_t c0 = static_cast<std::size_t>(iy) * nx + ix;
+                            for (std::uint32_t s = starts[c0]; s < starts[c0 + 1]; ++s) {
+                                const GEdge& e = ge[items[s]];
+                                const std::size_t rk = e.ring;
+                                const std::size_t n = rings[rk].pts.size();
+                                const std::size_t k = e.k;
+                                if (rk == ri && (k == i || (k + 1) % n == i))
+                                    continue; // the two edges that own vertex i
+                                const Vec2 a = e.a;
+                                const Vec2 c = e.c;
+                                const double reach =
+                                    2.0 * sv; // farther walls cannot tighten the bound
+                                if ((a.x < v.x - reach && c.x < v.x - reach) ||
+                                    (a.x > v.x + reach && c.x > v.x + reach) ||
+                                    (a.y < v.y - reach && c.y < v.y - reach) ||
+                                    (a.y > v.y + reach && c.y > v.y + reach))
+                                    continue;
+                                if (mHat.dot(edgeOutwardNormal(a, c)) > -0.1)
+                                    continue; // not a facing wall
+                                const Vec2 ac = c - a;
+                                const double len2 = ac.dot(ac);
+                                const double t =
+                                    len2 > 0.0 ? std::clamp((v - a).dot(ac) / len2, 0.0, 1.0) : 0.0;
+                                const Vec2 q = a + ac * t;
+                                const Vec2 d = q - v;
+                                const double dist = d.length();
+                                if (dist <= 1e-12) {
+                                    sv = 0.0;
+                                    continue;
+                                }
+                                if (d.dot(mHat) > -1e-12)
+                                    continue; // on the outward side
+                                sv = std::min(sv, dist * 0.5);
+                            }
+                        }
                     }
-                    if (d.dot(mHat) > -1e-12) continue;  // on the outward side: moving apart
-                    sv = std::min(sv, dist * 0.5);
                 }
             }
         }
