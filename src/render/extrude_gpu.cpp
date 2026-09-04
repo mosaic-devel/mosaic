@@ -578,7 +578,9 @@ bool ExtrudeGpu::render(common::ImageF& dst, const ExtrudeMesh& mesh, const Extr
                                       .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
                                       .dstAccessMask = VK_ACCESS_SHADER_READ_BIT |
                                                        VK_ACCESS_SHADER_WRITE_BIT};
-    const std::uint32_t groups = (triCount + 63) / 64;
+    // One workgroup PER TRIANGLE (the shader stripes that triangle's scanlines across its 64
+    // invocations), not one thread per triangle packed 64 to a group -- see the note in main().
+    const std::uint32_t groups = triCount;
     for (std::uint32_t mode = 0; mode <= 1; ++mode) {
         vkCmdPushConstants(im.cmd, im.pipeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(mode),
                            &mode);

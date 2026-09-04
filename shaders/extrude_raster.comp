@@ -2,9 +2,11 @@
 // Extruded-text compute rasterizer (S30-c, docs/type-tool.md §10.5): the Vulkan lane of the 3D
 // text renderer, mirroring core/text/extrude_render.cpp formula-for-formula so the two lanes stay
 // parity-testable. All-compute like the rest of the renderer (no graphics pipeline): pass 0 walks
-// each triangle's pixel bbox and atomicMax-es 1/depth into the depth grid (positive-float bits
-// order like uints); pass 1 re-walks and shades the fragments that WON their pixel. Blinn-Phong /
-// PBR-lite per §10.3; lights live in the un-rotated design frame. One thread per triangle.
+// each triangle's covered scanline spans and atomicMax-es 1/depth into the depth grid
+// (positive-float bits order like uints); pass 1 re-walks and shades the fragments that WON their
+// pixel. Blinn-Phong /
+// PBR-lite per §10.3; lights live in the un-rotated design frame. One workgroup per triangle,
+// its invocations striping that triangle's scanlines.
 //
 // Push constant selects the pass so both dispatches share this module and its layout.
 
@@ -167,7 +169,21 @@ vec3 shadePixel(uint mat, vec3 albedoRgb, vec3 n, vec3 viewDir, vec3 p, bool cap
 }
 
 void main() {
-    uint tri = gl_GlobalInvocationID.x;
+    // ⚠ ONE WORKGROUP PER TRIANGLE, its 64 invocations striping the triangle's SCANLINES -- not
+    // one thread per triangle, which is what this was.
+    //
+    // A thread-per-triangle dispatch is the wrong shape for this mesh twice over. It offers the
+    // device only as many threads as there are triangles (a few thousand, where this GPU wants
+    // tens of thousands), and it makes every lane in a subgroup wait for whichever triangle in it
+    // has the tallest box -- and an extruded solid mixes earcut cap triangles that span most of
+    // the tile with wall slivers a few pixels tall. The whole dispatch ran at the speed of its
+    // worst triangle, twice (prepass and shade).
+    //
+    // Striping rows across the workgroup gives a big triangle 64-way parallelism instead of one
+    // serial lane, and costs a small triangle only idle threads. Rows are disjoint, so nothing
+    // about the depth resolve changes: the prepass still atomicMax-es, and the shade pass still
+    // keeps the fragment whose bits won.
+    uint tri = gl_WorkGroupID.x;
     if (tri >= uint(u.counts.x)) return;
 
     PV a = transformVertex(idx[3u * tri + 0u]);
@@ -202,9 +218,44 @@ void main() {
     bool capSample = capTri && mapW > 0.5 && (frontTri || wrap);
     bool wallSample = !capTri && wrap && wallW > 0.5;
 
-    for (int py = by0; py <= by1; ++py) {
-        for (int px = bx0; px <= bx1; ++px) {
-            float sx = float(px) + 0.5, sy = float(py) + 0.5;
+    // ⚠ SOLVE the covered run per scanline, do not SCAN the bbox for it. Each edge function is
+    // affine in x along a row -- w_i(sx) = ci + ai * sx -- so the covered span is the intersection
+    // of three half-lines, which is two divides. The dw/dx terms are constant over the triangle.
+    //
+    // This matters more here than it does in the CPU lane, and for a reason that is about the
+    // dispatch shape rather than the arithmetic: this kernel is ONE THREAD PER TRIANGLE, so a
+    // thread that walks a big empty box does not merely waste its own cycles -- every other lane
+    // in its subgroup waits for it. An extruded solid's triangles are slivers whose axis-aligned
+    // boxes are mostly not the triangle (measured on the CPU side: 87.8% of bbox samples fall
+    // outside), and the cap triangles earcut emits can span most of the tile, so the whole
+    // dispatch ran at the speed of its worst triangle. Twice, since the depth prepass and the
+    // shade pass each walk the same boxes.
+    float ea0 = (b.px.y - c.px.y) * inv;
+    float ea1 = (c.px.y - a.px.y) * inv;
+    float ea2 = (a.px.y - b.px.y) * inv;
+    for (int py = by0 + int(gl_LocalInvocationID.x); py <= by1; py += int(gl_WorkGroupSize.x)) {
+        float sy = float(py) + 0.5;
+        float ep = c.px.y - sy, eq = b.px.y - sy, er = a.px.y - sy;
+        float ec0 = (b.px.x * ep - c.px.x * eq) * inv;
+        float ec1 = (c.px.x * er - a.px.x * ep) * inv;
+        float ec2 = 1.0 - ec0 - ec1;
+        float lo = -1e30, hi = 1e30;
+        bool none = false;
+        // Unrolled: three half-line clips, each a divide when the edge is not horizontal.
+        if (ea0 > 0.0) lo = max(lo, -ec0 / ea0); else if (ea0 < 0.0) hi = min(hi, -ec0 / ea0);
+        else if (ec0 < 0.0) none = true;
+        if (ea1 > 0.0) lo = max(lo, -ec1 / ea1); else if (ea1 < 0.0) hi = min(hi, -ec1 / ea1);
+        else if (ec1 < 0.0) none = true;
+        if (ea2 > 0.0) lo = max(lo, -ec2 / ea2); else if (ea2 < 0.0) hi = min(hi, -ec2 / ea2);
+        else if (ec2 < 0.0) none = true;
+        if (none || lo > hi) continue;
+        // The span only BOUNDS the loop; the exact sign test below still decides coverage, and the
+        // one-sample guard on each side keeps a rounding difference between the solved root and
+        // the tested edge function costing a redundant test rather than a dropped fragment.
+        int xs = max(bx0, int(ceil(lo - 0.5)) - 1);
+        int xe = min(bx1, int(floor(hi - 0.5)) + 1);
+        for (int px = xs; px <= xe; ++px) {
+            float sx = float(px) + 0.5;
             float w0 = ((b.px.x - sx) * (c.px.y - sy) - (c.px.x - sx) * (b.px.y - sy)) * inv;
             float w1 = ((c.px.x - sx) * (a.px.y - sy) - (a.px.x - sx) * (c.px.y - sy)) * inv;
             float w2 = 1.0 - w0 - w1;
