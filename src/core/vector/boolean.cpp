@@ -218,25 +218,36 @@ bool refine(const Lattice& lat, std::vector<Edge>& edges) {
     // Bentley-Ottmann's ordering idea in its simplest form: sweep in x and stop the inner scan as
     // soon as an edge starts past the current edge's right end. No status structure, but it turns
     // the quadratic into "quadratic in what actually overlaps", which for real artwork is small.
-    std::vector<std::size_t> order(n);
-    for (std::size_t i = 0; i < n; ++i) order[i] = i;
-    std::sort(order.begin(), order.end(), [&](std::size_t l, std::size_t r) {
-        const Int lx = std::min(edges[l].a.x, edges[l].b.x);
-        const Int rx = std::min(edges[r].a.x, edges[r].b.x);
-        return lx != rx ? lx < rx : l < r;  // total order -> deterministic
+    //
+    // ⚠ The sweep walks a COMPACT ARRAY OF BOXES in x order, not an index permutation over
+    // `edges`. Same pairs, same order, same splits -- but the inner scan is the hot loop of this
+    // phase and the two forms cost very differently. Through a permutation, every candidate is a
+    // random-access load of a 40-byte Edge somewhere else in the vector, and each one recomputes
+    // the same four min/max bounds it recomputed the last time it was scanned. Normalizing a
+    // stroke ribbon runs this 12 times over 62,000 edges and scans 2.7M candidates to find the
+    // 218,000 that actually overlap -- 92% of the scan is a rejection, so the rejection is the
+    // loop, and it wants to be a sequential read of precomputed bounds.
+    struct Box {
+        Int xLo, xHi, yLo, yHi;
+        std::uint32_t idx;
+    };
+    std::vector<Box> boxes(n);
+    for (std::size_t i = 0; i < n; ++i)
+        boxes[i] = {std::min(edges[i].a.x, edges[i].b.x), std::max(edges[i].a.x, edges[i].b.x),
+                    std::min(edges[i].a.y, edges[i].b.y), std::max(edges[i].a.y, edges[i].b.y),
+                    static_cast<std::uint32_t>(i)};
+    std::sort(boxes.begin(), boxes.end(), [](const Box& l, const Box& r) {
+        return l.xLo != r.xLo ? l.xLo < r.xLo : l.idx < r.idx; // total order -> deterministic
     });
     for (std::size_t oi = 0; oi < n; ++oi) {
-        const std::size_t i = order[oi];
-        const Int xHi = std::max(edges[i].a.x, edges[i].b.x);
-        const Int yLo = std::min(edges[i].a.y, edges[i].b.y);
-        const Int yHi = std::max(edges[i].a.y, edges[i].b.y);
+        const Box bi = boxes[oi];
         for (std::size_t oj = oi + 1; oj < n; ++oj) {
-            const std::size_t k = order[oj];
-            if (std::min(edges[k].a.x, edges[k].b.x) > xHi) break;
-            if (std::min(edges[k].a.y, edges[k].b.y) > yHi ||
-                std::max(edges[k].a.y, edges[k].b.y) < yLo)
+            const Box& bk = boxes[oj];
+            if (bk.xLo > bi.xHi)
+                break;
+            if (bk.yLo > bi.yHi || bk.yHi < bi.yLo)
                 continue;
-            pairSplits(lat, edges[i], edges[k], splits[i], splits[k]);
+            pairSplits(lat, edges[bi.idx], edges[bk.idx], splits[bi.idx], splits[bk.idx]);
         }
     }
 
@@ -347,30 +358,6 @@ bool leqEps(Int v, Int my, Int ny) {
     return ny >= 0;
 }
 
-// Sunday's winding number (vector/hit.cpp's rule) evaluated at M + eps*n, accumulated for every
-// operand in one scan. M is a fragment midpoint, so -- by invariants I1/I2 -- it lies on exactly
-// one fragment and nothing else, which is what makes the symbolic evaluation well defined.
-void windingsAt(const std::vector<Frag>& frags, IPt m, IPt n, std::vector<Int>& w) {
-    std::fill(w.begin(), w.end(), Int{0});
-    const std::size_t k = w.size();
-    for (const Frag& f : frags) {
-        const bool aLe = leqEps(f.p.y, m.y, n.y);
-        const bool bLe = leqEps(f.q.y, m.y, n.y);
-        if (aLe == bLe) continue;  // the ray misses this fragment on both sides
-        // orient2d(p, q, M + eps*n) == orient2d(p, q, M) + eps * cross(q - p, n); the second term
-        // only ever decides when the first is zero, and both cannot be zero at a midpoint.
-        Int s = orient2d(f.p, f.q, m);
-        if (s == 0) s = cross(sub(f.q, f.p), n);
-        if (aLe) {
-            if (s <= 0) continue;
-            for (std::size_t i = 0; i < k; ++i) w[i] += f.m[i];
-        } else {
-            if (s >= 0) continue;
-            for (std::size_t i = 0; i < k; ++i) w[i] -= f.m[i];
-        }
-    }
-}
-
 bool insideOp(BoolOp op, const std::vector<Int>& w, const std::vector<FillRule>& rules) {
     const std::size_t n = w.size();
     if (n == 0) return false;
@@ -399,6 +386,125 @@ bool insideOp(BoolOp op, const std::vector<Int>& w, const std::vector<FillRule>&
         }
     }
     return false;
+}
+
+// The §4 predicate for EVERY fragment, in one swept pass.
+//
+// The predicate itself is Sunday's winding number (vector/hit.cpp's rule) evaluated at M + eps*n
+// for each operand, where M is a fragment midpoint -- so by invariants I1/I2 it lies on exactly
+// one fragment and nothing else, which is what makes the symbolic evaluation well defined.
+//
+// ⚠ SWEPT IN Y, not all-pairs, and it answers both sides of a fragment in ONE scan. The direct
+// direct form casts the two probes separately and each scans every other fragment: 2*F^2
+// tests. A stroked shape's ribbon is where that bites -- the stroker emits one overlapping piece
+// per segment and per join, so normalizing a 41-lobe rosette's outline arrives here with 4,762
+// fragments, which is 45 million tests and measured 78 of the boolean's 95 ms, more than every
+// other phase put together.
+//
+// Two facts collapse it, and neither changes an answer:
+//
+//   * A fragment contributes to a probe only when its y-interval STRADDLES the probe's y -- that
+//     is exactly what the aLe != bLe test rejects on. So sweep the probes in increasing y and
+//     keep an active list of the fragments whose interval is still open; the list IS the set the
+//     old scan would have kept, and everything else it walked contributed nothing.
+//   * The two probes share the midpoint and differ only in the normal, and the normals are
+//     negatives of each other -- so one orient2d serves both, and only the symbolic tie-break
+//     (the s == 0 case, and leqEps on an endpoint exactly at the probe's y) has to be asked twice.
+//
+// The winding numbers are integer sums over the same set of fragments, so they come out identical
+// whatever order the sweep visits them in, and the classification with them.
+enum : std::uint8_t { kSideNeither = 0, kSideRight = 1, kSideLeft = 2 };
+
+std::vector<std::uint8_t> classifyFragments(BoolOp op, const std::vector<Frag>& frags,
+                                            const std::vector<FillRule>& rules, std::size_t nOps) {
+    const std::size_t F = frags.size();
+    std::vector<std::uint8_t> out(F, kSideNeither);
+    std::vector<Int> yLo(F), yHi(F), qy(F);
+    for (std::size_t i = 0; i < F; ++i) {
+        yLo[i] = std::min(frags[i].p.y, frags[i].q.y);
+        yHi[i] = std::max(frags[i].p.y, frags[i].q.y);
+        // The probe point is the fragment's midpoint; lattice coordinates are doubled, so the
+        // halving is exact (the same midpoint the direct form probed at).
+        qy[i] = (frags[i].p.y + frags[i].q.y) / 2;
+    }
+    std::vector<std::uint32_t> byLo(F), byQuery(F);
+    for (std::size_t i = 0; i < F; ++i)
+        byLo[i] = byQuery[i] = static_cast<std::uint32_t>(i);
+    // Index ties break the sorts, so both orders are total and the sweep is reproducible.
+    std::sort(byLo.begin(), byLo.end(), [&](std::uint32_t a, std::uint32_t b) {
+        return yLo[a] != yLo[b] ? yLo[a] < yLo[b] : a < b;
+    });
+    std::sort(byQuery.begin(), byQuery.end(), [&](std::uint32_t a, std::uint32_t b) {
+        return qy[a] != qy[b] ? qy[a] < qy[b] : a < b;
+    });
+
+    std::vector<std::uint32_t> active;
+    active.reserve(F);
+    std::vector<Int> wL(nOps, 0), wR(nOps, 0);
+    std::size_t next = 0;
+    for (const std::uint32_t qi : byQuery) {
+        const Frag& f = frags[qi];
+        const IPt m{(f.p.x + f.q.x) / 2, qy[qi]};
+        const IPt d = sub(f.q, f.p);
+        const IPt nL{d.y, -d.x};
+        const IPt nR{-d.y, d.x};
+        while (next < F && yLo[byLo[next]] <= m.y)
+            active.push_back(byLo[next++]);
+        std::fill(wL.begin(), wL.end(), Int{0});
+        std::fill(wR.begin(), wR.end(), Int{0});
+        // Retiring rides along on the scan: probes only ever move DOWN in y, so a fragment that
+        // ends above this one can never straddle a later probe either.
+        std::size_t live = 0;
+        for (std::size_t r = 0; r < active.size(); ++r) {
+            const std::uint32_t fi = active[r];
+            if (yHi[fi] < m.y)
+                continue; // closed behind the sweep: drop it for good
+            active[live++] = fi;
+            const Frag& g = frags[fi];
+            const bool pLeL = leqEps(g.p.y, m.y, nL.y);
+            const bool qLeL = leqEps(g.q.y, m.y, nL.y);
+            const bool pLeR = leqEps(g.p.y, m.y, nR.y);
+            const bool qLeR = leqEps(g.q.y, m.y, nR.y);
+            if (pLeL == qLeL && pLeR == qLeR)
+                continue; // the ray misses on both sides
+            // orient2d(p, q, M + eps*n) == orient2d(p, q, M) + eps * cross(q - p, n); the second
+            // term only ever decides when the first is zero, and the two normals are negatives,
+            // so the tie-break is one cross product and its negation.
+            const Int s0 = orient2d(g.p, g.q, m);
+            Int sL = s0, sR = s0;
+            if (s0 == 0) {
+                sL = cross(sub(g.q, g.p), nL);
+                sR = -sL;
+            }
+            if (pLeL != qLeL) {
+                if (pLeL) {
+                    if (sL > 0)
+                        for (std::size_t i = 0; i < nOps; ++i)
+                            wL[i] += g.m[i];
+                } else if (sL < 0) {
+                    for (std::size_t i = 0; i < nOps; ++i)
+                        wL[i] -= g.m[i];
+                }
+            }
+            if (pLeR != qLeR) {
+                if (pLeR) {
+                    if (sR > 0)
+                        for (std::size_t i = 0; i < nOps; ++i)
+                            wR[i] += g.m[i];
+                } else if (sR < 0) {
+                    for (std::size_t i = 0; i < nOps; ++i)
+                        wR[i] -= g.m[i];
+                }
+            }
+        }
+        active.resize(live);
+        const bool inL = insideOp(op, wL, rules);
+        const bool inR = insideOp(op, wR, rules);
+        if (inL == inR)
+            continue; // both sides agree -> not a boundary of the result
+        out[qi] = inR ? kSideRight : kSideLeft;
+    }
+    return out;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -581,21 +687,17 @@ Contours resolve(BoolOp op, const std::vector<const Contours*>& operands,
     // §4 -- keep the fragments the op's predicate straddles, oriented interior-on-the-right.
     std::vector<DEdge> kept;
     kept.reserve(frags.size());
-    std::vector<Int> wLeft(nOps, 0);
-    std::vector<Int> wRight(nOps, 0);
-    for (const Frag& f : frags) {
-        const IPt mid{(f.p.x + f.q.x) / 2, (f.p.y + f.q.y) / 2};  // exact: coordinates are doubled
-        const IPt d = sub(f.q, f.p);
-        const IPt nL{d.y, -d.x};
-        const IPt nR{-d.y, d.x};
-        windingsAt(frags, mid, nL, wLeft);
-        windingsAt(frags, mid, nR, wRight);
-        const bool inL = insideOp(op, wLeft, ruleset);
-        const bool inR = insideOp(op, wRight, ruleset);
-        if (inL == inR) continue;  // both sides agree -> not a boundary of the result
+    // Emitted in FRAGMENT order, whatever order the sweep classified them in: the ring assembly
+    // below and the reproducibility it promises are stated over this sequence.
+    const std::vector<std::uint8_t> side = classifyFragments(op, frags, ruleset, nOps);
+    for (std::size_t i = 0; i < frags.size(); ++i) {
+        if (side[i] == kSideNeither)
+            continue;
+        const Frag& f = frags[i];
         // Emit so the interior is on the (-dy, dx) side of the travel direction: that is the
         // winding whose ring comes out POSITIVE (visually clockwise, y-down) for an outer.
-        if (inR) kept.push_back(DEdge{f.p, f.q});
+        if (side[i] == kSideRight)
+            kept.push_back(DEdge{f.p, f.q});
         else kept.push_back(DEdge{f.q, f.p});
     }
     if (kept.empty()) return {};
