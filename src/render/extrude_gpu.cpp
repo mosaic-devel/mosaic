@@ -297,8 +297,8 @@ std::unique_ptr<ExtrudeGpu> ExtrudeGpu::create(bool enableValidation, std::strin
 }
 
 bool ExtrudeGpu::render(common::ImageF& dst, const ExtrudeMesh& mesh, const Extrude& params,
-                        const common::Affine2D& toPixel, bool antialias,
-                        const core::text::ExtrudeEnv* env,
+                        const core::text::ExtrudePalette& palette, const common::Affine2D& toPixel,
+                        bool antialias, const core::text::ExtrudeEnv* env,
                         const core::text::ExtrudeOverlay* overlay) {
     Impl& im = *m_impl;
     if (!im.ctx || mesh.empty() || dst.width == 0 || dst.height == 0) return false;
@@ -455,9 +455,11 @@ bool ExtrudeGpu::render(common::ImageF& dst, const ExtrudeMesh& mesh, const Extr
                     }
                 }
             }
-            const float row[12] = {m.albedo.r,  m.albedo.g,  m.albedo.b, m.albedo.a,
-                                   m.metalness, m.roughness, mapOff,     mapW,
-                                   mapH,        wallOff,     wallW,      wallH};
+            // Slot 0..3 is the run's COLOUR, straight from the palette -- the layer's own, the
+            // same value the CPU lane shades with; the material contributes only the finish.
+            const common::ColorF c = palette.forRun(slotRuns[s]);
+            const float row[12] = {c.r,    c.g,  c.b,  c.a,     m.metalness, m.roughness,
+                                   mapOff, mapW, mapH, wallOff, wallW,       wallH};
             std::memcpy(mout + s * 12, row, sizeof(row));
         }
     }

@@ -268,7 +268,6 @@ text::TextBlock headlineBlock(const std::string& words, float sizePx, float dept
     ex.bevelBack.profile = text::Bevel::Profile::Concave;
     ex.bevelBack.size = depth * 0.18f;
     ex.bevelBack.segments = 10;
-    ex.material.albedo = {0.86f, 0.71f, 0.24f, 1.0f};
     ex.material.metalness = 0.85f;
     ex.material.roughness = 0.22f;
     ex.perspective = 26.0f;
@@ -280,8 +279,13 @@ text::TextBlock headlineBlock(const std::string& words, float sizePx, float dept
     ex.reflectCanvas = true;     // needs the composite-below snapshot every time it re-renders
     ex.reflectSidesOnly = false; // ...on the caps too, which is the expensive half
     ex.overlayWrapSides = true;  // the S30-e overlay map wraps onto every wall and bevel texel
-    // Per-run materials partition the mesh into index ranges -- one draw per material.
-    ex.runMaterials[0] = text::Material{{0.92f, 0.35f, 0.28f, 1.0f}, 0.4f, 0.35f};
+    // Per-run materials partition the mesh into index ranges -- one draw per FINISH. The colours
+    // are the runs' own paints (§10.4): gold overall, run 0 a warm red.
+    for (text::StyleRun& r : b.runs)
+        r.style.paint = vec::SolidPaint{common::ColorF{0.86f, 0.71f, 0.24f, 1.0f}};
+    if (!b.runs.empty())
+        b.runs[0].style.paint = vec::SolidPaint{common::ColorF{0.92f, 0.35f, 0.28f, 1.0f}};
+    ex.runMaterials[0] = text::Material{0.4f, 0.35f};
     b.extrude = ex;
     return b;
 }

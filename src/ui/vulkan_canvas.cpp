@@ -150,6 +150,10 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr double kRotateSnapRad = 5.0 * kPi / 180.0; // Shift snaps rotation to 5 degrees
 constexpr double kDoubleTapSeconds = 0.35;           // double-tap-R window
 constexpr double kAntsSpeedPxPerSec = 12.0;          // marching-ants crawl speed (S13)
+// One notch of zoom. Shared by the mouse wheel and the Zoom tool's click so that a click and a
+// wheel notch are the same size of step -- two different-sized "one step"s in one app is the kind
+// of thing nobody can name but everybody feels.
+constexpr double kZoomClickStep = 1.2;
 constexpr double kPolyCloseScreenPx = 8.0;  // a poly-lasso click this close to the start closes it
 constexpr double kHandleHitPx = 7.0;        // Move tool: handle grab radius, logical px (S15)
 constexpr double kRotateBandPx = 18.0;      // ... and the rotate band hugging each corner
@@ -2021,6 +2025,68 @@ void VulkanCanvas::cancelLayerMarquee() {
     if (latched)
         restoreDocumentMask();
     updateToolCursor(m_pointerInside);
+    requestHostFrame();
+}
+
+// ---- The Zoom tool ---------------------------------------------------------------------------
+//
+// See the block comment at zoomToolActive's declaration for the design. The framing preview goes
+// out through the CONTROLS QUAD lane (WindowRenderer::setFramingPreview -> present-pass mode 9),
+// the same lane the Move box and the crop rect use -- four screen-space corners and a mode, no
+// document-sized anything. Not the selection/ants lane: ants mean "selected", they animate, and a
+// crawling dashed rectangle following the pointer reads as a selection being dragged.
+
+bool VulkanCanvas::zoomToolActive() const {
+    return m_tools != nullptr && m_tools->active() == ToolId::Zoom;
+}
+
+std::optional<std::array<common::Vec2, 4>> VulkanCanvas::zoomPreviewQuad() const {
+    // The preview shows while the Zoom tool has the pointer and nothing else is using it. A pan, a
+    // rotate or a locked canvas is a different thing happening under the same cursor, and
+    // previewing a click that is not the next thing to happen is a lie.
+    if (!zoomToolActive() || !m_pointerInside || m_panning || m_rotating || m_spaceDown ||
+        m_rotateDown || m_inpaintBusy)
+        return std::nullopt;
+
+    // What a left click actually does to the zoom -- asked of a COPY of the view rather than
+    // assumed, so the CLAMP is honoured: at kMaxZoom the effective factor is 1 and the box becomes
+    // the whole viewport, which is the honest picture of "this click changes nothing".
+    CanvasView after = m_view;
+    after.zoomAround(m_cursorLogical, kZoomClickStep);
+    const double factor = m_view.zoom() > 0.0 ? after.zoom() / m_view.zoom() : 1.0;
+    if (!(factor > 0.0))
+        return std::nullopt;
+
+    // zoomAround keeps the doc point under the anchor fixed, so in SCREEN space the whole
+    // transform is a uniform scale about that anchor:
+    //     screen'(p) = A + factor * (screen(p) - A)     for every document point p
+    // (it falls straight out of the pan formula, and the view rotation cancels -- both frames
+    // carry the same R). The region that will FILL the viewport is therefore the viewport rect
+    // pulled toward the anchor by 1/factor. No document round-trip, no rotated-AABB approximation,
+    // and exact at any view rotation -- the corners are already the screen quad the shader wants.
+    const common::Vec2 a = m_cursorLogical;
+    const double k = 1.0 / factor;
+    const common::Vec2 v{static_cast<double>(w()), static_cast<double>(h())};
+    const auto pull = [&](common::Vec2 corner) { return a + (corner - a) * k; };
+    return std::array<common::Vec2, 4>{pull({0.0, 0.0}), pull({v.x, 0.0}), pull({v.x, v.y}),
+                                       pull({0.0, v.y})};
+}
+
+void VulkanCanvas::syncZoomPreview() {
+    if (!m_renderer)
+        return;
+    const std::optional<std::array<common::Vec2, 4>> quad = zoomPreviewQuad();
+    m_renderer->setFramingPreview(quad.has_value(), quad.value_or(std::array<common::Vec2, 4>{}));
+}
+
+void VulkanCanvas::clickZoom(bool out) {
+    // About the point clicked, so the pixel under the magnifier stays under the magnifier. The
+    // tracked pointer, not the event pair, for the reason updateToolCursor gives -- and it is the
+    // same point zoomPreviewQuad framed, so the click lands where the box promised.
+    m_view.zoomAround(m_cursorLogical, out ? 1.0 / kZoomClickStep : kZoomClickStep);
+    notifyViewChanged(); // the status bar's zoom readout + the rulers
+    notifyCursor(true);  // a new document point sits under the same screen point
+    // The box is re-derived from the new view on the next frame, so there is nothing to invalidate.
     requestHostFrame();
 }
 
@@ -6590,6 +6656,9 @@ Fl_Cursor VulkanCanvas::tabletCursorFor(int want) noexcept {
         return FL_CURSOR_INSERT;
     case 22: // the fit-to-path hover hand: the pen gets the named pointing hand
         return FL_CURSOR_HAND;
+    case 23: // the Zoom tool's magnifiers: no named "zoom" shape exists, and the pen still has to
+    case 24: // aim at a point, so both collapse to the crosshair
+        return FL_CURSOR_CROSS;
     default:
         break; // 15 (rotate) falls through to the arrow: no named shape reads as "rotate"
     }
@@ -6689,6 +6758,12 @@ void VulkanCanvas::updateToolCursor(bool inside) {
                            // pointer -- the affordance finally has an indicator (user 2026-07-14)
             else
                 want = 0; // the marquee crosshair: a click=Point / drag=Area creates a block
+        } else if (zoomToolActive()) {
+            // The "+" magnifier at rest -- that is what a left click does, and what the preview
+            // box on the canvas is promising. It flips to "-" only while the right button is
+            // actually held, because a right click is the only thing that zooms out and there is
+            // no hovering it.
+            want = m_zoomOutPressed ? 24 : 23;
         }
     }
     // The rotate cursor (15) reorients with the box, so its glyph changes while the state stays 15
@@ -6730,6 +6805,10 @@ void VulkanCanvas::updateToolCursor(bool inside) {
     }
     if (want == 22) { // the Type tool's fit-to-path hover hand (static art, cached per scale)
         applyFitTextCursor();
+        return;
+    }
+    if (want == 23 || want == 24) { // the Zoom tool's magnifier (23 = "+", 24 = "-")
+        applyZoomCursor(/*out=*/want == 24);
         return;
     }
     if (want == 16 || want == 17) { // the pan-gesture hands (16 grab/open, 17 grabbing/closed)
@@ -7018,6 +7097,30 @@ void VulkanCanvas::applyFitTextCursor() {
         cursor(FL_CURSOR_HAND); // rasterization failed: the stock pointing hand
 }
 
+// Build + set a magnifier (states 23 in / 24 out). The pair is cached together on the two things
+// the art varies with -- the theme two-tone and the build scale -- so pressing and releasing the
+// right button swaps between two ready bitmaps instead of rasterizing an SVG each way.
+void VulkanCanvas::applyZoomCursor(bool out) {
+    const bool dark = activePalette().dark;
+    const double scale = cursorBuildScale();
+    if (m_zoomCursorScale != scale || m_zoomCursorDark != dark) {
+        m_zoomCursorImages[0].reset();
+        m_zoomCursorImages[1].reset();
+        m_zoomCursorScale = scale;
+        m_zoomCursorDark = dark;
+    }
+    const std::size_t idx = out ? 1 : 0;
+    if (!m_zoomCursorImages[idx]) {
+        m_zoomCursorPixels[idx] = zoomCursor(out, dark, scale);
+        m_zoomCursorImages[idx] = makeCursorImage(m_zoomCursorPixels[idx]);
+    }
+    if (m_zoomCursorImages[idx])
+        cursor(m_zoomCursorImages[idx].get(), m_zoomCursorPixels[idx].logicalHotX,
+               m_zoomCursorPixels[idx].logicalHotY);
+    else
+        cursor(FL_CURSOR_CROSS); // rasterization failed: the nearest stock "aim at a point"
+}
+
 void VulkanCanvas::renderFrame() {
     ensureRenderer();
     if (!m_renderer)
@@ -7083,6 +7186,7 @@ void VulkanCanvas::renderFrame() {
     // only mark it dirty), so it wears the user's overlay line style and its ants crawl like any
     // other selection outline. Transient: finish/cancelLayerMarquee restore the document's mask.
     syncLayerMarqueeMask();
+    syncZoomPreview();
     if (m_documentPending) {
         m_renderer->setCanvasImage(m_documentImage);
         m_documentImage = common::Image{}; // the renderer copied it
@@ -8947,6 +9051,9 @@ void VulkanCanvas::resize(int X, int Y, int W, int H) {
             m_textCursorBucket = -1;
             m_fitTextCursorImage.reset();
             m_fitTextCursorScale = 0;
+            for (auto& img : m_zoomCursorImages)
+                img.reset();
+            m_zoomCursorScale = 0.0;
             m_moveCursor.reset();
             m_cursorState = -2;
         }
@@ -9630,12 +9737,18 @@ int VulkanCanvas::handle(int event) {
                 pushGradientTool(); // grab a gradient handle / anchor a new gradient drag (S22)
             else if (typeToolActive())
                 pushTypeTool();  // place the caret / select-to-edit / anchor a create gesture (S29-b)
+            else if (zoomToolActive())
+                clickZoom(/*out=*/false); // left-click zooms IN about the point clicked
             requestHostFrame();  // new gesture preview / handles should show this frame
         } else if (Fl::event_button() == FL_RIGHT_MOUSE &&
                    (eyedropperToolActive() || temporaryEyedropperActive()) && !m_inpaintBusy) {
             pushEyedropper();  // right-click samples into the BACKGROUND swatch (S24)
             requestHostFrame();
-        } else if (Fl::event_button() == FL_RIGHT_MOUSE && typeToolActive() && textSessionActive()) {
+        } else if (Fl::event_button() == FL_RIGHT_MOUSE && zoomToolActive() && !m_inpaintBusy) {
+            m_zoomOutPressed = true; // the cursor shows "-" for as long as the button is held
+            clickZoom(/*out=*/true); // the Zoom tool's other button: out, about the point clicked
+        } else if (Fl::event_button() == FL_RIGHT_MOUSE && typeToolActive() &&
+                   textSessionActive()) {
             // Right-click in a live text session: a themed Cut/Copy/Paste/Select-All menu (#9). With
             // nothing selected, place the caret at the click first so Paste lands where you clicked.
             if (m_textSel.empty()) {
@@ -9750,6 +9863,7 @@ int VulkanCanvas::handle(int event) {
             m_anchorDragPrev.reset();
             requestHostFrame();
         }
+        m_zoomOutPressed = false; // the Zoom tool's "-" cursor is held-only (see updateToolCursor)
         finishLayerMarquee(); // S15-f: the band gathers what it swept, then gives the ants back
         endMoveGesture(/*restoreBase=*/false); // the streamed transform stands as the commit
         finishDofGesture(); // a DoF handle drag ends: the last streamed geometry stands (S33)
@@ -9809,7 +9923,7 @@ int VulkanCanvas::handle(int event) {
     case FL_MOUSEWHEEL: {
         const int dy = Fl::event_dy();
         if (dy != 0) {
-            const double factor = std::pow(1.2, -dy); // wheel up (dy<0) zooms in
+            const double factor = std::pow(kZoomClickStep, -dy); // wheel up (dy<0) zooms in
             m_view.zoomAround(eventLogicalPoint(), factor);
             notifyViewChanged();
             notifyCursor(true); // same screen point, new document point

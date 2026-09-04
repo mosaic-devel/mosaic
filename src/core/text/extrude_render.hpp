@@ -84,20 +84,22 @@ struct ExtrudeOverlay;  // extrude_overlay.hpp: baked Layer-Effects overlay maps
 // §10.4: the range's run override or the shared default. `env` is the optional canvas-reflection
 // snapshot (used only when params.reflectCanvas); `overlay` the optional baked Layer-Effects
 // overlay maps -- front-cap fragments (and, with overlay->wrapSides, walls/bevels) shade with the
-// map sampled at their design-space UV instead of the constant albedo. Renders through the
-// injected override (the Vulkan lane) when one is set and succeeds; the CPU rasterizer is the
-// always-there fallback.
+// map sampled at their design-space UV instead of the constant albedo. `palette` is the colour
+// each run paints with -- the layer's OWN colour (§10.4), supplied per render rather than stored,
+// so 3D colour and 2D colour are one thing. Renders through the injected override (the Vulkan
+// lane) when one is set and succeeds; the CPU rasterizer is the always-there fallback.
 void renderExtrudeMeshF(common::ImageF& dst, const ExtrudeMesh& mesh, const Extrude& params,
-                        const common::Affine2D& toPixel, bool antialias,
-                        const ExtrudeEnv* env = nullptr, const ExtrudeOverlay* overlay = nullptr);
+                        const ExtrudePalette& palette, const common::Affine2D& toPixel,
+                        bool antialias, const ExtrudeEnv* env = nullptr,
+                        const ExtrudeOverlay* overlay = nullptr);
 
 // The GPU lane's injection seam (§10.5): core stays Vulkan-free, so the app registers the Vulkan
 // pass here at startup (render::ExtrudeGpu). Return true = rendered; false = fall back to the CPU
 // lane (device lost, no Vulkan, etc.). Set once before rendering starts; not thread-guarded.
-using ExtrudeRenderOverride = std::function<bool(
-    common::ImageF& dst, const ExtrudeMesh& mesh, const Extrude& params,
-    const common::Affine2D& toPixel, bool antialias, const ExtrudeEnv* env,
-    const ExtrudeOverlay* overlay)>;
+using ExtrudeRenderOverride =
+    std::function<bool(common::ImageF& dst, const ExtrudeMesh& mesh, const Extrude& params,
+                       const ExtrudePalette& palette, const common::Affine2D& toPixel,
+                       bool antialias, const ExtrudeEnv* env, const ExtrudeOverlay* overlay)>;
 void setExtrudeRenderOverride(ExtrudeRenderOverride fn);
 
 // Shared by both lanes: box-downsample a supersampled straight-alpha float RGBA tile (origin

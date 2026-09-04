@@ -109,6 +109,7 @@ mosaic_add_module(core
         texture/texture_layer_render.cpp
         texture/render_worker.cpp
         vector/flatten.cpp
+        vector/extrude_shape.cpp
         vector/corner.cpp
         vector/boolean.cpp
         vector/to_path.cpp

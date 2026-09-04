@@ -67,8 +67,11 @@ struct ExtrudeOverlay {
 // matches the output, so the map never softens the result); `antialias` is the document-wide AA
 // setting pattern edges follow, exactly like the 2D path. Returns an empty overlay when no
 // overlay draws.
+// `palette` supplies the base colour each run's map is composited over -- the layer's own colour
+// (§10.4), the same one the render lanes shade with.
 [[nodiscard]] ExtrudeOverlay buildExtrudeOverlay(const LayerEffects& fx, const ExtrudeMesh& mesh,
                                                  const Extrude& params,
+                                                 const ExtrudePalette& palette,
                                                  const common::Rect& uvDomain, double pixelScale,
                                                  bool antialias);
 

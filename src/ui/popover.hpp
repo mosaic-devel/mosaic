@@ -15,24 +15,29 @@
 class Fl_RGB_Image;
 
 // A lightweight, themed, modeless popover (PLAN S11-d). It is a **genuine child sub-window of the
-// main window** (on X11 a nested child window, on native Wayland a wl_subsurface) — emphatically NOT
-// a separate top-level. That distinction is the whole design:
-//   * A sub-surface is, by protocol, an integral part of its parent, so the compositor cannot give it
-//     its own taskbar entry, cannot centre it (it is positioned *relative to the parent*), and cannot
-//     outlive it. A borderless top-level, by contrast, showed up as a stray window in the KDE
-//     taskbar, got centred on Wayland (no app-set toplevel coords), and — left shown when the main
-//     window closed — kept Fl::run() alive, orphaning the app. All of that is gone here.
+// main window** (on X11 a nested child window, on native Wayland a wl_subsurface) — emphatically
+// NOT a separate top-level. That distinction is the whole design:
+//   * A sub-surface is, by protocol, an integral part of its parent, so the compositor cannot give
+//   it
+//     its own taskbar entry, cannot centre it (it is positioned *relative to the parent*), and
+//     cannot outlive it. A borderless top-level, by contrast, showed up as a stray window in the
+//     KDE taskbar, got centred on Wayland (no app-set toplevel coords), and — left shown when the
+//     main window closed — kept Fl::run() alive, orphaning the app. All of that is gone here.
 //   * It must be created **before the parent is show()n** (the main window builds it in its
-//     constructor) — a window added to an already-realized parent and only then shown is promoted by
-//     FLTK to an independent top-level, which is exactly the bug above. So it is built eagerly and
-//     kept hidden, then shown/hidden on demand.
+//     constructor) — a window added to an already-realized parent and only then shown is promoted
+//     by FLTK to an independent top-level, which is exactly the bug above. So it is built eagerly
+//     and kept hidden, then shown/hidden on demand.
 // Being a real sub-window it draws above the Vulkan-canvas sub-window and takes keyboard focus (its
 // text fields work), and it reuses ordinary FLTK widgets — so the richer S12 picker (model combo,
 // colour wheel, hex) just works.
 //
 // The main window owns it (it is one of its child widgets); openers keep only a non-owning pointer.
-// Dismissal: Esc, or an outside click forwarded via dismissActivePopover{,OnOutsideClick}. At most
-// one popover is open at a time.
+// Dismissal: Esc, or an outside click forwarded via dismissActivePopover{,OnOutsideClick}.
+//
+// SEVERAL may be open at once -- a tool-slot button inside the toolbar's overflow popover opens
+// that slot's variant flyout on top of it -- so dismissal acts on ALL of them, sparing any the
+// click actually landed on. (It used to track exactly one, which orphaned whatever was underneath:
+// the overflow popover stayed on screen and no click could ever close it.)
 namespace mosaic::ui {
 
 class Popover : public Fl_Double_Window {
@@ -68,7 +73,7 @@ public:
     // (Non-const only because FLTK's shown() is non-const.)
     [[nodiscard]] bool shownFor(const Fl_Widget* a) { return m_anchor == a && shown(); }
 
-    void hide() override; // also clears the active-popover slot
+    void hide() override; // also drops it from the shown-popover list
 
     // A "pinned" popover is NOT auto-dismissed by a click outside it -- neither a canvas-work-area
     // click (dismissActivePopover) nor a click on other chrome (dismissActivePopoverOnOutsideClick).
@@ -186,22 +191,24 @@ private:
     ThemeSubscription m_themeSub; // re-fills the panelBg ground on a runtime theme change
 };
 
-// The popover currently shown (at most one), or nullptr.
+// The TOPMOST shown popover (the most recently opened), or nullptr when none is open.
 [[nodiscard]] Popover* activePopover();
 
-// Re-pin the active popover to its anchor at its fixed size (after the parent window resized). No-op
-// when none is open. The main window calls this from resize(), so it covers any popover (picker,
-// tool flyout, future ones) without enumerating them.
+// Re-pin every shown popover to its anchor at its fixed size (after the parent window resized).
+// No-op when none is open. The main window calls this from resize(), so it covers any popover
+// (picker, tool flyout, future ones) without enumerating them.
 void reanchorActivePopover();
 
-// Dismiss the active popover if the press at (winX, winY) — relative to the main window — is outside
-// both it and its anchor. Called by the main window on every FL_PUSH it receives (clicks land on the
-// chrome widgets it hosts; the anchor is spared so the swatch can toggle the popover shut).
+// Dismiss every shown popover the press at (winX, winY) — relative to the main window — falls
+// outside of (its window AND its anchor rect). Called by the main window on every FL_PUSH it
+// receives (clicks land on the chrome widgets it hosts; anchors are spared so an opener can toggle
+// its own popover shut, and a click INSIDE one popover leaves that one alone while closing the
+// others). Pinned popovers (the Type panel) are never dismissed this way.
 void dismissActivePopoverOnOutsideClick(int winX, int winY);
 
-// Dismiss the active popover unconditionally (a no-op when none is open). For callers whose every
-// click is by construction outside the popover — chiefly the canvas sub-window, which (being its own
-// window) never sees clicks that landed on the popover stacked above it, and never hosts the anchor.
+// Dismiss every shown popover unconditionally (a no-op when none is open). For callers whose every
+// click is by construction outside them all — chiefly the canvas sub-window, which (being its own
+// window) never sees clicks that landed on a popover stacked above it, and never hosts an anchor.
 void dismissActivePopover();
 
 } // namespace mosaic::ui

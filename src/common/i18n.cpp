@@ -1,15 +1,16 @@
 #include "common/i18n.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <clocale>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include <system_error>
+#include <vector>
 
 #if defined(__APPLE__) || defined(_WIN32)
-#  include <system_error>
-
 // installedDataDir(): the .app's Contents/Resources, or the Windows payload beside mosaic.exe.
 #  include "common/settings.hpp"
 #endif
@@ -170,11 +171,19 @@ bool categoryIsNeutered(const char* applied) {
            std::strcmp(applied, "C.utf8") == 0;
 }
 
-void applyLanguageOverride() {
+void applyLanguageOverride(const char* preferred) {
     // Cleared first so a second init() cannot report a language the current environment no longer
     // asks for. (Only the tests call init() twice, but stale global state is stale global state.)
     g_languageOverride.clear();
+    // $MOSAIC_LANG first, the saved Settings::language second. The variable is set for ONE run and
+    // is therefore the more specific instruction; the preference is what the user picked once and
+    // expects to stick. Both mean exactly the same thing from here on, which is why the saved value
+    // is fed into this path rather than getting one of its own -- the locale rescue below is
+    // needed for a Settings pick on a C-locale machine just as much as for the variable.
     const char* want = std::getenv("MOSAIC_LANG");
+    if (want == nullptr || *want == '\0') {
+        want = preferred;
+    }
     if (want == nullptr || *want == '\0') {
         return;
     }
@@ -221,7 +230,8 @@ void applyLanguageOverride() {
 }  // namespace
 #endif
 
-void init([[maybe_unused]] const char* domain, [[maybe_unused]] const char* localeDir) {
+void init([[maybe_unused]] const char* domain, [[maybe_unused]] const char* localeDir,
+          [[maybe_unused]] const char* preferred) {
 #if MOSAIC_HAVE_GETTEXT
     // Adopt the user's locale (LC_MESSAGES selects the catalog, LC_CTYPE the codeset).
     //
@@ -242,13 +252,41 @@ void init([[maybe_unused]] const char* domain, [[maybe_unused]] const char* loca
     // guards read std::localeconv(), which is a plain CRT call and reports that truthfully, so the
     // Windows path cannot slip past them -- but it is the platform where they earn their keep.
     std::setlocale(LC_ALL, "");
-    applyLanguageOverride();  // $MOSAIC_LANG re-points MESSAGES only; the rest stays system
+    applyLanguageOverride(preferred); // $MOSAIC_LANG / Settings::language re-point MESSAGES
+                                      // only; the rest stays system
     bindDomain(domain, localeDir);
     textdomain(domain);  // make `domain` the default for _()/gettext
 #endif
 }
 
 const char* activeLanguageOverride() { return g_languageOverride.c_str(); }
+
+std::vector<std::string> installedLanguages([[maybe_unused]] const char* domain,
+                                            [[maybe_unused]] const char* localeDir) {
+    std::vector<std::string> out;
+#if MOSAIC_HAVE_GETTEXT
+    const std::filesystem::path dir = resolveLocaleDir(localeDir);
+    if (dir.empty()) {
+        return out; // no catalog tree: nothing is installed, and saying so is the honest answer
+    }
+    const std::string mo =
+        std::string(domain != nullptr && *domain != '\0' ? domain : "mosaic") + ".mo";
+    std::error_code ec;
+    // A plain directory_iterator, not recursive: the tree is exactly two levels deep by gettext's
+    // own layout, and an install prefix's share/locale can be very wide (system catalogs live
+    // there too on a --prefix=/usr install), so a recursive walk would read far more than it needs.
+    for (const std::filesystem::directory_entry& e : std::filesystem::directory_iterator(dir, ec)) {
+        if (!e.is_directory(ec)) {
+            continue;
+        }
+        if (std::filesystem::is_regular_file(e.path() / "LC_MESSAGES" / mo, ec)) {
+            out.push_back(e.path().filename().string());
+        }
+    }
+    std::sort(out.begin(), out.end());
+#endif
+    return out;
+}
 
 void initDomain([[maybe_unused]] const char* domain, [[maybe_unused]] const char* localeDir) {
 #if MOSAIC_HAVE_GETTEXT

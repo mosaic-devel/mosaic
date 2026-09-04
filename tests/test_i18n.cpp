@@ -1,13 +1,19 @@
-#include <doctest/doctest.h>
+#include "common/i18n.hpp" // defines _() and N_(); include after doctest
+#include "common/languages.hpp"
 
 #include <array>
-#include <clocale>  // setlocale: the downgrade regression inspects the applied LC_MESSAGES
-#include <cstdlib>  // setenv/unsetenv: the MOSAIC_LANG cases drive init() through the environment
+#include <clocale> // setlocale: the downgrade regression inspects the applied LC_MESSAGES
+#include <cstdlib> // setenv/unsetenv: the MOSAIC_LANG cases drive init() through the environment
 #include <cstring>
+#include <doctest/doctest.h>
+#include <filesystem>
+#include <fstream>
 #include <optional>
+#include <span>
 #include <string>
-
-#include "common/i18n.hpp"  // defines _() and N_(); include after doctest
+#include <string_view>
+#include <system_error>
+#include <vector>
 
 using namespace mosaic;
 
@@ -70,8 +76,14 @@ public:
 
 private:
     std::string m_locale;
-    std::array<std::pair<const char*, std::optional<std::string>>, 4> m_env{
-        {{"MOSAIC_LANG", {}}, {"LANGUAGE", {}}, {"LC_ALL", {}}, {"LC_MESSAGES", {}}}};
+    std::array<std::pair<const char*, std::optional<std::string>>, 5> m_env{
+        {{"MOSAIC_LANG", {}},
+         {"LANGUAGE", {}},
+         {"LC_ALL", {}},
+         {"LC_MESSAGES", {}},
+         // installedLanguages()' catalog-dir scan: $MOSAIC_LOCALEDIR OUTRANKS the argument, so the
+         // scan case has to clear it, and clearing it has to be undone like the rest.
+         {"MOSAIC_LOCALEDIR", {}}}};
 };
 }  // namespace
 TEST_CASE("no MOSAIC_LANG leaves the language selection to the system locale") {
@@ -153,4 +165,76 @@ TEST_CASE("an empty MOSAIC_LANG is treated as absent, not as a language named \"
     ::setenv("MOSAIC_LANG", "", 1);
     common::i18n::init();
     CHECK(std::strcmp(common::i18n::activeLanguageOverride(), "") == 0);
+}
+
+// The saved language (Settings -> General), which reaches init() as its `preferred` argument.
+TEST_CASE("the saved language is used when MOSAIC_LANG is absent") {
+    const LocaleGuard guard;
+    ::unsetenv("MOSAIC_LANG");
+    common::i18n::init("mosaic", nullptr, "de");
+    if (overrideIsLive()) {
+        CHECK(std::strcmp(common::i18n::activeLanguageOverride(), "de") == 0);
+    }
+}
+
+TEST_CASE("MOSAIC_LANG outranks the saved language") {
+    const LocaleGuard guard;
+    ::setenv("MOSAIC_LANG", "fr", 1);
+    common::i18n::init("mosaic", nullptr, "de");
+    if (overrideIsLive()) {
+        CHECK(std::strcmp(common::i18n::activeLanguageOverride(), "fr") == 0);
+    }
+}
+
+TEST_CASE("an empty saved language is treated as absent") {
+    const LocaleGuard guard;
+    ::unsetenv("MOSAIC_LANG");
+    common::i18n::init("mosaic", nullptr, "");
+    CHECK(std::strcmp(common::i18n::activeLanguageOverride(), "") == 0);
+    common::i18n::init("mosaic", nullptr, nullptr);
+    CHECK(std::strcmp(common::i18n::activeLanguageOverride(), "") == 0);
+}
+
+// installedLanguages() + the generated display-name table they are joined against.
+TEST_CASE("installedLanguages reports only directories that hold a catalog") {
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / "mosaic-i18n-scan-test";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    std::filesystem::create_directories(root / "de" / "LC_MESSAGES", ec);
+    std::filesystem::create_directories(root / "fr" / "LC_MESSAGES", ec);
+    std::filesystem::create_directories(root / "xx" / "LC_MESSAGES", ec); // no .mo -> not offered
+    std::ofstream(root / "de" / "LC_MESSAGES" / "mosaic.mo") << "x";
+    std::ofstream(root / "fr" / "LC_MESSAGES" / "mosaic.mo") << "x";
+    // A different domain's catalog does not make the language available for the main one.
+    std::ofstream(root / "xx" / "LC_MESSAGES" / "motivate.mo") << "x";
+
+    const LocaleGuard guard;
+    ::unsetenv("MOSAIC_LOCALEDIR"); // the argument must not be shadowed by the environment
+    const std::vector<std::string> found =
+        common::i18n::installedLanguages("mosaic", root.string().c_str());
+    // Built without gettext the scan is a stub that finds nothing, which is the correct answer
+    // there (a build that cannot translate must offer no languages) -- so accept either, and pin
+    // the content whenever there IS content.
+    CHECK((found.empty() || found == std::vector<std::string>{"de", "fr"}));
+    std::filesystem::remove_all(root, ec);
+}
+
+TEST_CASE("every shipped catalog has a display name, and the table is code-sorted") {
+    const std::span<const common::LanguageInfo> all = common::knownLanguages();
+    REQUIRE(!all.empty());
+    for (std::size_t i = 1; i < all.size(); ++i)
+        CHECK(std::string_view(all[i - 1].code) < std::string_view(all[i].code)); // findLanguage
+                                                                                  // binary-searches
+    for (const common::LanguageInfo& li : all) {
+        CHECK(li.english[0] != '\0');
+        CHECK(li.endonym[0] != '\0');
+        CHECK(common::findLanguage(li.code) == &li);
+    }
+    CHECK(common::findLanguage("de") != nullptr);
+    CHECK(std::strcmp(common::findLanguage("de")->endonym, "Deutsch") == 0);
+    CHECK(common::findLanguage("ca@valencia") != nullptr); // an @modifier code round-trips
+    CHECK(common::findLanguage("") == nullptr);
+    CHECK(common::findLanguage("zz") == nullptr);
+    CHECK(common::findLanguage("zzzzzz") == nullptr); // past the last row: no read off the end
 }

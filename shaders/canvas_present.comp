@@ -739,6 +739,27 @@ float chromeShadow(float d); // defined below: the fixed-colour chrome's tight a
 //     stages the document at its NEW pixel size and a size change reads only against the frame it
 //     replaces;
 //   * `handles` false (mode 8) drops the 8 knobs for a preview whose rect is derived, not dragged.
+// The FRAMING PREVIEW (controls mode 9, the Zoom tool): "this is the region you will be looking
+// at". The crop picture stripped to the two parts that say that and nothing else -- the shield
+// dimming everything the framing drops, and the box outline around what it keeps.
+//
+// Deliberately NOT the marching ants. Ants mean "this is selected"; they crawl, they are the one
+// piece of canvas chrome that animates, and the Zoom tool's box follows the pointer -- a crawling
+// dashed rectangle chasing the cursor reads as a selection being dragged, which is the one thing
+// it is not. Deliberately not cropOverlay() either, even though mode 8 already drops the handles:
+// its expansion hatch (green, "an Apply will ADD this") fires for any part of the box outside the
+// canvas, which is exactly what a zoom-OUT preview looks like and means nothing here.
+vec3 framingPreview(vec2 p, vec3 base) {
+    float S = uiScale();
+    float sd = controlsQuadDist(p); // <0 inside, >0 outside (screen px)
+    // A gentler shield than the crop's 0.45x: this is a hover indicator that tracks the pointer,
+    // not a staged edit sitting still while you tune it. Same ~3px feather, for the same reason
+    // (a 1px one staircases on a rotated view).
+    vec3 col = mix(base, base * 0.62, smoothstep(-1.5, 1.5, sd / S));
+    // No handles (nothing here is grabbable), no expansion tint, no rule-of-thirds.
+    return transformHandles(p, col, /*expandTint=*/false, vec2(0.0), /*handles=*/false);
+}
+
 vec3 cropOverlay(vec2 p, vec2 doc, vec3 base, bool ghostDoc, bool handles) {
     vec3 col = base;
     // Feather the shield (dim the cropped-away area) around the rect edge so the dim/bright boundary
@@ -1909,7 +1930,10 @@ void main() {
     if (lassoCount > 1u)
         color = vec4(lassoLine(s, color.rgb), 1.0);
 
-    if (pc.ants.z > 7.5)
+    if (pc.ants.z > 8.5)
+        // mode 9: the Zoom tool's framing preview -- shield + outline, nothing grabbable.
+        color = vec4(framingPreview(s, color.rgb), 1.0);
+    else if (pc.ants.z > 7.5)
         // mode 8: an Image-menu preview whose rect is DERIVED (Rotate Arbitrary's bounding box) --
         // the crop picture without the 8 knobs, because no drag stands behind them.
         color = vec4(cropOverlay(s, doc, color.rgb, /*ghostDoc=*/false, /*handles=*/false), 1.0);

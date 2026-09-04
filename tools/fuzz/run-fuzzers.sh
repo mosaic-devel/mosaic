@@ -51,7 +51,7 @@ mkdir -p "$OUT"
 # these two lines too.
 COMMON=(-std=c++23 -g -O1
         -I "$ROOT/src" -I "$ROOT/third_party" -I "$ROOT/third_party/nanosvg"
-        -I "$ROOT/third_party/pugixml" -I "$GEN"
+        -I "$ROOT/third_party/pugixml" -I "$ROOT/third_party/earcut" -I "$GEN"
         -DPUGIXML_NO_XPATH
         -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -w)
 
@@ -80,10 +80,18 @@ build fuzz_meta "$ROOT/tools/fuzz/fuzz_meta.cpp" \
     "$ROOT/src/io/exif.cpp" "$ROOT/src/common/image_svg.cpp" "$ROOT/src/common/image.cpp" \
     "$ROOT/src/common/logging.cpp" "$ROOT/src/common/fs_path.cpp" -lspdlog -lfmt
 
+# ⚠ The three core/text/extrude_*.cpp are here because of a SHAPE feature, not a text one.
+# core/vector/extrude_shape.cpp (a 3D shape's solids) calls the mesher, and layer.cpp's
+# contentBounds asks projectedExtrudeBounds how far an extruded shape reaches -- both of which
+# live under core/text/ because that is where the extrusion model was authored, not because they
+# are typographic (docs/vector-model.md §11). The glob above drags extrude_shape.cpp in, so these
+# have to come with it or the harness does not link.
 build fuzz_brush "$ROOT/tools/fuzz/fuzz_brush.cpp" \
     "$ROOT"/src/io/brush/*.cpp "$ROOT"/src/core/brush/*.cpp "$ROOT"/src/common/*.cpp \
     "$ROOT"/src/formats/*.cpp "$ROOT/src/io/png.cpp" "$ROOT/src/core/selection.cpp" \
-    "$ROOT/src/core/layer.cpp" "$ROOT"/src/core/vector/*.cpp "$ROOT"/third_party/pugixml/*.cpp \
+    "$ROOT/src/core/layer.cpp" "$ROOT"/src/core/vector/*.cpp \
+    "$ROOT/src/core/text/extrude_mesh.cpp" "$ROOT/src/core/text/extrude_render.cpp" \
+    "$ROOT/src/core/text/extrude_overlay.cpp" "$ROOT"/third_party/pugixml/*.cpp \
     -lz -lpng -ljpeg -lspdlog -lfmt
 
 # ⚠ Not optional for fuzz_brush. std::stable_sort's _Temporary_buffer allocates through

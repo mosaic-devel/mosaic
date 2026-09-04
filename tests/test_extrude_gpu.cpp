@@ -22,8 +22,15 @@ using mosaic::common::Affine2D;
 using mosaic::common::ImageF;
 using mosaic::common::Quat;
 using mosaic::common::Vec2;
-
+// Colour is a RENDER INPUT now (§10.4): the lane takes a palette where these cases used to set
+// Material::albedo.
 namespace {
+ExtrudePalette paletteOf(mosaic::common::ColorF c) {
+    ExtrudePalette p;
+    p.runs = {c, c};
+    return p;
+}
+const ExtrudePalette kPal = paletteOf(mosaic::common::ColorF{0.9f, 0.9f, 0.9f, 1.0f});
 
 GlyphSolidInput squareWithHole() {
     vec::Contour outer, hole;
@@ -76,7 +83,7 @@ TEST_CASE("the Vulkan lane draws the same picture as the CPU lane") {
     e.bevelFront.size = 1.5f;
     e.bevelFront.profile = Bevel::Profile::Round;
     e.orientation = Quat::fromAxisAngle({0.5, 0.8, 0.2}, 0.7);
-    e.material.albedo = {0.85f, 0.55f, 0.2f, 1.0f};
+    const auto pal = paletteOf(mosaic::common::ColorF{0.85f, 0.55f, 0.2f, 1.0f});
     e.material.roughness = 0.35f;
     e.lights = {Light{{0.4, 0.5, -0.75}, {1, 1, 1, 1}, 1.0f}};
 
@@ -85,8 +92,8 @@ TEST_CASE("the Vulkan lane draws the same picture as the CPU lane") {
 
     const Affine2D place = Affine2D::translation(30.0, 30.0);
     ImageF cpu(90, 90), viaGpu(90, 90);
-    renderExtrudeMeshF(cpu, mesh, e, place, /*antialias=*/true);  // no override set in tests
-    REQUIRE(gpu->render(viaGpu, mesh, e, place, /*antialias=*/true));
+    renderExtrudeMeshF(cpu, mesh, e, pal, place, /*antialias=*/true); // no override set in tests
+    REQUIRE(gpu->render(viaGpu, mesh, e, pal, place, /*antialias=*/true));
 
     const Diff d = compare(cpu, viaGpu);
     REQUIRE(d.cpuCovered > 200);
@@ -97,7 +104,7 @@ TEST_CASE("the Vulkan lane draws the same picture as the CPU lane") {
 
     // A second render (cached mesh buffers) is just as right.
     ImageF again(90, 90);
-    REQUIRE(gpu->render(again, mesh, e, place, true));
+    REQUIRE(gpu->render(again, mesh, e, pal, place, true));
     const Diff d2 = compare(viaGpu, again);
     CHECK(d2.coverDiff == 0);
 
@@ -105,8 +112,10 @@ TEST_CASE("the Vulkan lane draws the same picture as the CPU lane") {
     Extrude flat = e;
     flat.lightingEnabled = false;
     ImageF cpuFlat(90, 90), gpuFlat(90, 90);
-    renderExtrudeMeshF(cpuFlat, buildExtrudeMesh({squareWithHole()}, flat), flat, place, true);
-    REQUIRE(gpu->render(gpuFlat, buildExtrudeMesh({squareWithHole()}, flat), flat, place, true));
+    renderExtrudeMeshF(cpuFlat, buildExtrudeMesh({squareWithHole()}, flat), flat, kPal, place,
+                       true);
+    REQUIRE(
+        gpu->render(gpuFlat, buildExtrudeMesh({squareWithHole()}, flat), flat, kPal, place, true));
     const Diff df = compare(cpuFlat, gpuFlat);
     CHECK(df.meanAbs < 0.005);  // flat albedo: no shading math to diverge
 
@@ -125,7 +134,7 @@ TEST_CASE("the Vulkan lane matches the CPU lane with canvas reflections on") {
     e.depth = 14.0f;
     e.perspective = 15.0f;
     e.orientation = Quat::fromAxisAngle({1.0, 0.2, 0.0}, 0.9);  // tipped: rays reach the canvas
-    e.material.albedo = {0.9f, 0.9f, 0.9f, 1.0f};
+    const auto pal = paletteOf(mosaic::common::ColorF{0.9f, 0.9f, 0.9f, 1.0f});
     e.material.metalness = 1.0f;
     e.material.roughness = 0.1f;
     e.reflectCanvas = true;
@@ -147,8 +156,8 @@ TEST_CASE("the Vulkan lane matches the CPU lane with canvas reflections on") {
     REQUIRE_FALSE(mesh.empty());
     const Affine2D place = Affine2D::translation(30.0, 30.0);
     ImageF cpu(90, 90), viaGpu(90, 90);
-    renderExtrudeMeshF(cpu, mesh, e, place, true, &env);
-    REQUIRE(gpu->render(viaGpu, mesh, e, place, true, &env));
+    renderExtrudeMeshF(cpu, mesh, e, pal, place, true, &env);
+    REQUIRE(gpu->render(viaGpu, mesh, e, pal, place, true, &env));
     const Diff d = compare(cpu, viaGpu);
     REQUIRE(d.cpuCovered > 200);
     CHECK(d.coverDiff <= d.cpuCovered / 50 + 8);
@@ -158,8 +167,8 @@ TEST_CASE("the Vulkan lane matches the CPU lane with canvas reflections on") {
     Extrude sides = e;
     sides.reflectSidesOnly = true;
     ImageF cpuSides(90, 90), gpuSides(90, 90);
-    renderExtrudeMeshF(cpuSides, mesh, sides, place, true, &env);
-    REQUIRE(gpu->render(gpuSides, mesh, sides, place, true, &env));
+    renderExtrudeMeshF(cpuSides, mesh, sides, pal, place, true, &env);
+    REQUIRE(gpu->render(gpuSides, mesh, sides, pal, place, true, &env));
     const Diff ds = compare(cpuSides, gpuSides);
     CHECK(ds.coverDiff <= ds.cpuCovered / 50 + 8);
     CHECK(ds.meanAbs < 0.02);
@@ -179,7 +188,7 @@ TEST_CASE("the Vulkan lane matches the CPU lane with S30-e overlay maps on") {
     e.perspective = 18.0f;
     e.bevelFront.size = 1.0f;
     e.orientation = Quat::fromAxisAngle({0.3, 0.8, 0.1}, 0.6);  // front cap AND walls visible
-    e.material.albedo = {0.9f, 0.2f, 0.15f, 1.0f};
+    const auto pal = paletteOf(mosaic::common::ColorF{0.9f, 0.2f, 0.15f, 1.0f});
     e.material.roughness = 0.4f;
     e.lights = {Light{{0.4, 0.5, -0.75}, {1, 1, 1, 1}, 1.0f}};
     const ExtrudeMesh mesh = buildExtrudeMesh({squareWithHole()}, e);
@@ -191,13 +200,13 @@ TEST_CASE("the Vulkan lane matches the CPU lane with S30-e overlay maps on") {
     vec::Gradient g;
     g.stops = {{0.0, mosaic::common::ColorF{0, 1, 0, 1}}, {1.0, mosaic::common::ColorF{0, 0, 1, 1}}};
     fx.gradientOverlay.paint = g;
-    const ExtrudeOverlay ov = buildExtrudeOverlay(fx, mesh, e, mesh.designBounds, 2.0, true);
+    const ExtrudeOverlay ov = buildExtrudeOverlay(fx, mesh, e, pal, mesh.designBounds, 2.0, true);
     REQUIRE_FALSE(ov.empty());
 
     const Affine2D place = Affine2D::translation(30.0, 30.0);
     ImageF cpu(90, 90), viaGpu(90, 90);
-    renderExtrudeMeshF(cpu, mesh, e, place, true, nullptr, &ov);
-    REQUIRE(gpu->render(viaGpu, mesh, e, place, true, nullptr, &ov));
+    renderExtrudeMeshF(cpu, mesh, e, pal, place, true, nullptr, &ov);
+    REQUIRE(gpu->render(viaGpu, mesh, e, pal, place, true, nullptr, &ov));
     const Diff d = compare(cpu, viaGpu);
     REQUIRE(d.cpuCovered > 200);
     CHECK(d.coverDiff <= d.cpuCovered / 50 + 8);
@@ -206,10 +215,11 @@ TEST_CASE("the Vulkan lane matches the CPU lane with S30-e overlay maps on") {
     // Wrap-to-sides parity: the walls sample the map through the same interpolated UVs.
     Extrude wrap = e;
     wrap.overlayWrapSides = true;
-    const ExtrudeOverlay ovWrap = buildExtrudeOverlay(fx, mesh, wrap, mesh.designBounds, 2.0, true);
+    const ExtrudeOverlay ovWrap =
+        buildExtrudeOverlay(fx, mesh, wrap, pal, mesh.designBounds, 2.0, true);
     ImageF cpuWrap(90, 90), gpuWrap(90, 90);
-    renderExtrudeMeshF(cpuWrap, mesh, wrap, place, true, nullptr, &ovWrap);
-    REQUIRE(gpu->render(gpuWrap, mesh, wrap, place, true, nullptr, &ovWrap));
+    renderExtrudeMeshF(cpuWrap, mesh, wrap, pal, place, true, nullptr, &ovWrap);
+    REQUIRE(gpu->render(gpuWrap, mesh, wrap, pal, place, true, nullptr, &ovWrap));
     const Diff dw = compare(cpuWrap, gpuWrap);
     CHECK(dw.coverDiff <= dw.cpuCovered / 50 + 8);
     CHECK(dw.meanAbs < 0.02);
@@ -264,7 +274,7 @@ TEST_CASE("bench: extrude drag-frame costs" * doctest::skip()) {
         auto ta = Clock::now();
         for (int i = 0; i < N; ++i) {
             ImageF cpu(780, 140);
-            renderExtrudeMeshF(cpu, mesh, e, place, true);
+            renderExtrudeMeshF(cpu, mesh, e, kPal, place, true);
         }
         auto tb = Clock::now();
         std::printf("CPU raster (2x2):  %7.2f ms  (780x140)\n", ms(ta, tb) / N);
@@ -275,7 +285,7 @@ TEST_CASE("bench: extrude drag-frame costs" * doctest::skip()) {
         auto ta = Clock::now();
         for (int i = 0; i < N; ++i) {
             ImageF cpu(1560, 280);
-            renderExtrudeMeshF(cpu, mesh, e, big, true);
+            renderExtrudeMeshF(cpu, mesh, e, kPal, big, true);
         }
         auto tb = Clock::now();
         std::printf("CPU raster @200%%:  %7.2f ms  (1560x280)\n", ms(ta, tb) / N);
@@ -289,11 +299,11 @@ TEST_CASE("bench: extrude drag-frame costs" * doctest::skip()) {
     }
     {
         ImageF warm(780, 140);
-        REQUIRE(gpu->render(warm, mesh, e, place, true));  // pipeline + mesh upload warm-up
+        REQUIRE(gpu->render(warm, mesh, e, kPal, place, true)); // pipeline + mesh upload warm-up
         auto ta = Clock::now();
         for (int i = 0; i < N; ++i) {
             ImageF img(780, 140);
-            REQUIRE(gpu->render(img, mesh, e, place, true));
+            REQUIRE(gpu->render(img, mesh, e, kPal, place, true));
         }
         auto tb = Clock::now();
         std::printf("GPU raster+readbk: %7.2f ms  (780x140, cached mesh)\n", ms(ta, tb) / N);
@@ -301,7 +311,7 @@ TEST_CASE("bench: extrude drag-frame costs" * doctest::skip()) {
         ta = Clock::now();
         for (int i = 0; i < N; ++i) {
             ImageF img(1560, 280);
-            REQUIRE(gpu->render(img, mesh, e, big, true));
+            REQUIRE(gpu->render(img, mesh, e, kPal, big, true));
         }
         tb = Clock::now();
         std::printf("GPU raster @200%%:  %7.2f ms  (1560x280, cached mesh)\n", ms(ta, tb) / N);

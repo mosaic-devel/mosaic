@@ -115,4 +115,13 @@ struct CursorImage {
 // Returns an empty image on failure (the caller falls back to the stock cursor).
 [[nodiscard]] CursorImage moveCursor(bool darkMode, double scale = 1.0);
 
+// The Zoom tool's magnifier (S11 View group, 2026-08-28): `out` false = the "+" lens, true = "-".
+// The vendored apple_cursor zoom-in / zoom-out glyphs, recoloured to the theme two-tone exactly as
+// `rotateCursor` recolours its arrow (blue outline / green inner -> black/white by theme), and
+// rasterized at the device `scale` in one AA pass. Unlike the arrows, the hotspot is NOT the art
+// centre: it is the centre of the LENS, which is the point a magnifier claims to be over -- the
+// handle hangs down-right of it and would drag the aim point off the pixel a click zooms about.
+// Returns an empty image on failure (the caller falls back to a stock cursor).
+[[nodiscard]] CursorImage zoomCursor(bool out, bool darkMode, double scale = 1.0);
+
 } // namespace mosaic::ui

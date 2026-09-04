@@ -2456,13 +2456,16 @@ bool WindowRenderer::drawFrame(common::Color8 clearColor, std::string& error) {
 
     // Who owns the controls quad lanes this frame -- computed ONCE so the dot alpha (written into
     // the lasso header just below), the corner pick and the mode float (pushed further down) can
-    // never disagree: sample area > crop > line gizmo > Move/Shape handles > the Type box's dots.
-    const bool ctlTextDots = m_textDotsActive && !m_sampleAreaActive && !m_cropActive &&
-                             !m_handlesActive && !m_lineGizmoActive;
-    const float ctlDotAlpha = m_sampleAreaActive || m_cropActive || m_lineGizmoActive ? 0.0f
-                              : m_handlesActive ? m_rotateDotAlpha
-                              : ctlTextDots     ? m_textDotAlpha
-                                                : 0.0f;
+    // never disagree: framing preview > sample area > crop > line gizmo > Move/Shape handles > the
+    // Type box's dots. (The framing preview leads because it is the Zoom tool's, and the Zoom tool
+    // is never up alongside the tools below it -- so it never actually displaces one.)
+    const bool ctlTextDots = m_textDotsActive && !m_framingActive && !m_sampleAreaActive &&
+                             !m_cropActive && !m_handlesActive && !m_lineGizmoActive;
+    const float ctlDotAlpha =
+        m_framingActive || m_sampleAreaActive || m_cropActive || m_lineGizmoActive ? 0.0f
+        : m_handlesActive ? m_rotateDotAlpha
+        : ctlTextDots     ? m_textDotAlpha
+                          : 0.0f;
 
     // Upload the in-flight lasso polyline + brush reticle into their shared SSBO (std430
     // {uint count; uint reticleActive; vec2 min; vec2 max; vec2 reticleCenter; vec4 reticleShape;
@@ -3208,10 +3211,11 @@ bool WindowRenderer::drawFrame(common::Color8 clearColor, std::string& error) {
         // The inpaint sample-area preview (mode 4, S39) claims the quad lanes when active; otherwise
         // crop wins over the Move handles (they're never active together). The Type box's rotate
         // dots (mode 6) have the LOWEST claim (ctlTextDots, the shared priority rule above).
-        const std::array<common::Vec2, 4>& quadCorners = m_sampleAreaActive ? m_sampleAreaCorners
-                                                          : m_cropActive     ? m_cropCorners
-                                                          : ctlTextDots      ? m_textDotCorners
-                                                                             : m_handleCorners;
+        const std::array<common::Vec2, 4>& quadCorners = m_framingActive      ? m_framingCorners
+                                                         : m_sampleAreaActive ? m_sampleAreaCorners
+                                                         : m_cropActive       ? m_cropCorners
+                                                         : ctlTextDots        ? m_textDotCorners
+                                                                              : m_handleCorners;
         // The crop channel's controls mode: the Crop tool's own box (3 with the rule-of-thirds
         // guides, 2 without), or one of the Image menu's preview flavours -- 7 the Image Size
         // resample (which adds the ghost outline of the CURRENT document frame, the only thing
@@ -3246,7 +3250,8 @@ bool WindowRenderer::drawFrame(common::Color8 clearColor, std::string& error) {
             .bgColor = {static_cast<float>(clearColor.r) / 255.0f,
                         static_cast<float>(clearColor.g) / 255.0f,
                         static_cast<float>(clearColor.b) / 255.0f,
-                        m_pixelGrid ? 1.0f : 0.0f}, // .a repurposed as the pixel-grid toggle (S19-c)
+                        m_pixelGrid ? 1.0f
+                                    : 0.0f}, // .a repurposed as the pixel-grid toggle (S19-c)
             .invR0 = {static_cast<float>(inv.m00), static_cast<float>(inv.m01)},
             .invR1 = {static_cast<float>(inv.m10), static_cast<float>(inv.m11)},
             .invT = {static_cast<float>(inv.m02), static_cast<float>(inv.m12)},
@@ -3254,10 +3259,12 @@ bool WindowRenderer::drawFrame(common::Color8 clearColor, std::string& error) {
             .outSize = {static_cast<float>(m_extent.width), static_cast<float>(m_extent.height)},
             .overlayCenter = {overlayCenter[0], overlayCenter[1]},
             .overlay = {overlay[0], overlay[1], overlay[2], overlay[3]},
-            // x encodes the ants mode: 0 off, 1 the default diagonal crawl, 2 the circulating tangent
-            // (§5). It stays 1.0 whenever circulate is off, so the default render is byte-unchanged.
+            // x encodes the ants mode: 0 off, 1 the default diagonal crawl, 2 the circulating
+            // tangent (§5). It stays 1.0 whenever circulate is off, so the default render is
+            // byte-unchanged.
             .ants = {m_antsEnabled ? (m_antsCirculate ? 2.0f : 1.0f) : 0.0f, m_antsPhase,
-                     m_lineGizmoActive   ? 5.0f // the Line shape gizmo (S26)
+                     m_framingActive      ? 9.0f // the Zoom tool's framing preview
+                     : m_lineGizmoActive  ? 5.0f // the Line shape gizmo (S26)
                      : m_sampleAreaActive ? 4.0f
                      : m_cropActive       ? cropMode
                      : m_handlesActive    ? 1.0f

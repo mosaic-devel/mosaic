@@ -37,6 +37,7 @@
 #include "core/texture/sky_estimate_commit.hpp" // the mask & harmonize commit shape (S55 phase 2)
 #include "core/texture/texture_layer_render.hpp"
 #include "core/vector/boolean.hpp" // makeBooleanObject (Layer -> Combine Paths, S53-b)
+#include "core/vector/extrude_shape.hpp" // 3D for shapes: the object -> solid builder
 #include "core/vector/flatten.hpp" // flatten + contourLength (Type -> Text on Selected Path)
 #include "core/vector/to_path.hpp" // pathFromGeometry (Layer -> Convert to Path)
 #include "io/document_profile.hpp" // profileDocument: what the Export modal's loss banner reads
@@ -1979,6 +1980,10 @@ public:
                     cancelRecomposeReview();
                 else
                     m_canvas->cancelCrop();
+            } else if (id == "fit") {
+                m_canvas->fitToWindow(); // the Zoom tool's bar: the two View-menu stops, in reach
+            } else if (id == "actualPixels") {
+                m_canvas->actualPixels();
             } else if (id == "recompose")
                 startRecompose();
             else if (id == "designer")
@@ -2201,9 +2206,19 @@ public:
         // through the SAME block funnel, so the canvas is the real preview and undo composes.
         m_type3dPanel = new Type3dPanel();
         m_type3dPanel->hide();
-        m_type3dPanel->setOnBlockEdit(
-            [this](const std::string& id, std::function<void(core::text::TextBlock&)> mut) {
-                applyTextBlockField(id, std::move(mut));
+        // One funnel, two subjects (docs/vector-model.md §11): the panel edits an optional
+        // Extrude and does not care whose. A vector-authoring tool routes it to the bound shape's
+        // object; everything else means the Type tool's edited block, which is the only other
+        // thing that can have opened this popup.
+        m_type3dPanel->setOnSetColor([this](common::ColorF c) { applyExtrudeSubjectColor(c); });
+        m_type3dPanel->setOnExtrudeEdit(
+            [this](const std::string& id,
+                   std::function<void(std::optional<core::text::Extrude>&)> mut) {
+                if (vectorExtrudeToolActive())
+                    applyShapeExtrudeField(id, std::move(mut));
+                else
+                    applyTextBlockField(
+                        id, [mut = std::move(mut)](core::text::TextBlock& b) { mut(b.extrude); });
             });
         // The viewport preview: the CURRENT block with the panel's params, through the full
         // renderTextF pipeline (mesh, camera, lighting, the GPU lane) fitted into the widget.
@@ -2211,6 +2226,8 @@ public:
             [this](const core::text::Extrude& e, int w, int h, double* fitScale) -> common::Image {
                 if (m_canvas == nullptr || w <= 0 || h <= 0)
                     return {};
+                if (vectorExtrudeToolActive())
+                    return shapeExtrudePreview(e, w, h, fitScale);
                 const core::text::TextBlock* b = m_canvas->textEditBlockForUi();
                 if (b == nullptr || b->utf8.empty())
                     return {};
@@ -2422,12 +2439,11 @@ public:
         m_panelColorFlyout->setUseForeground([this] { return m_colors.foreground(); });
         m_panelColorFlyout->setOnPick([this](common::Color8 c) {
             const common::ColorF f = colorToF(c);
-            if (m_type3dPanel != nullptr && m_type3dPanel->shown()) {
-                applyTextBlockField("extrude:albedo", [f](core::text::TextBlock& b) {
-                    if (b.extrude)
-                        b.extrude->material.albedo = {f.r, f.g, f.b, 1.0f};
-                });
-            } else if (m_typePanel != nullptr && m_typePanel->shown()) {
+            // The 3D panel no longer owns a colour of its own (§10.4): a solid shades with the
+            // run's paint, so a pick while it is up is the same edit the Style line makes, and
+            // both land on the run. That is what makes recolouring a 3D block work at all -- the
+            // old branch wrote a per-block albedo the run colours never saw.
+            if (m_typePanel != nullptr && m_typePanel->shown()) {
                 applyTextStyleField("style:color",
                                     [f](core::text::CharStyle& s) { s.setSolidFill(f); });
             } else if (m_imageOpsPanel != nullptr && m_imageOpsPanel->shown()) {
@@ -2540,8 +2556,21 @@ public:
                    m_optionsBar != nullptr && m_optionsBar->typePanelButton() != nullptr;
         });
         m_panelArbiter.addExplicit(kPanelType3d, [this] {
-            return m_canvas != nullptr && m_canvas->textEditTarget() != core::kInvalidLayerId &&
-                   m_optionsBar != nullptr && m_optionsBar->type3dButton() != nullptr;
+            // TWO possible subjects (docs/vector-model.md §11): the edited text block, or the
+            // vector object a shape/pen tool has bound. The popup sculpts whichever the active
+            // tool owns -- so demanding a text session, as this did, made the "3D…" button inert
+            // on every shape bar: the request evaporated on the very next resolve() and the panel
+            // never appeared.
+            if (m_optionsBar == nullptr || m_optionsBar->type3dButton() == nullptr)
+                return false;
+            // A vector tool's bar keeps the popup open whether or not a shape is bound -- the
+            // panel greys itself when there is nothing to sculpt and comes alive the moment one
+            // is selected, which is what the "Edit shape…" designer beside it already does. (The
+            // Type side keeps its stricter gate: its subject is a live editing SESSION, and there
+            // is no half-state where the panel usefully waits for one.)
+            if (vectorExtrudeToolActive())
+                return true;
+            return m_canvas != nullptr && m_canvas->textEditTarget() != core::kInvalidLayerId;
         });
         m_panelArbiter.addConditional(kPanelAdjustment, [this]() -> std::uint64_t {
             if (!m_document || m_layerPanel == nullptr)
@@ -2783,8 +2812,9 @@ public:
         // any failure (no Vulkan, device loss) falls back to the CPU lane silently per call.
         core::text::setExtrudeRenderOverride(
             [](common::ImageF& dst, const core::text::ExtrudeMesh& mesh,
-               const core::text::Extrude& ex, const common::Affine2D& toPixel, bool aa,
-               const core::text::ExtrudeEnv* env, const core::text::ExtrudeOverlay* overlay) {
+               const core::text::Extrude& ex, const core::text::ExtrudePalette& palette,
+               const common::Affine2D& toPixel, bool aa, const core::text::ExtrudeEnv* env,
+               const core::text::ExtrudeOverlay* overlay) {
                 static render::ExtrudeGpu* const gpu = []() -> render::ExtrudeGpu* {
                     std::string err;
                     std::unique_ptr<render::ExtrudeGpu> g =
@@ -2799,8 +2829,8 @@ public:
                     return raw;
                 }();
                 MOSAIC_PERF_SCOPE("3D text raster", Lane::Gpu);
-                const bool served =
-                    gpu != nullptr && gpu->render(dst, mesh, ex, toPixel, aa, env, overlay);
+                const bool served = gpu != nullptr &&
+                                    gpu->render(dst, mesh, ex, palette, toPixel, aa, env, overlay);
                 static bool logged = false; // one-time: which lane actually serves this machine
                 if (!logged && gpu != nullptr) {
                     logged = true;
@@ -6533,6 +6563,13 @@ public:
                 if (m_statusBar)
                     m_statusBar->setMetric(m_metric); // status-bar physical size updates live
             };
+            host.setLanguage = [this](const std::string& language) {
+                // Persist only. Every FLTK label in this window was resolved through _() when the
+                // widget was built, so there is nothing to re-translate short of rebuilding the
+                // whole UI; common/i18n.cpp picks the value up at the next start-up, and the
+                // control's caption tells the user exactly that.
+                persistSetting([&](common::Settings& s) { s.language = language; }, "language");
+            };
             host.setCmykProfile = [this](const std::string& cmyk) -> bool {
                 // Apply first; persist only what actually took effect, so a bad file never sticks.
                 bool ok = true;
@@ -7069,7 +7106,17 @@ public:
                     return false;
                 if (!m_type3dPanel->shownFor(anchor)) // ensure shown (idempotent), see kPanelStyle
                     m_type3dPanel->toggle(anchor);
-                reflectTextOptions(); // seed the controls + render the first viewport frame
+                // Seed the controls + render the first viewport frame. For text that rides
+                // reflectTextOptions (which refreshes the popup at its end); a shape has no such
+                // per-edit sync, so seed the popup directly -- and clear the guard first so the
+                // seed is not skipped as "already showing this target".
+                if (vectorExtrudeToolActive()) {
+                    m_shapeExtrudePanelTarget = core::kInvalidLayerId;
+                    m_shapeExtrudePanelRevision = 0;
+                    refreshType3dPanel();
+                } else {
+                    reflectTextOptions();
+                }
                 setType3dButtonOpen(true);
                 return true;
             }
@@ -7205,6 +7252,7 @@ public:
             requestRecomposite(/*fitView=*/false);
         m_blurScrubWasActive = scrub;
         syncCornerPanels();
+        syncShapeExtrudePanel();
         if (m_adjustmentPanel == nullptr || !m_adjustmentPanel->shown() || !m_document)
             return;
         core::Layer* l = m_document->find(m_layerPanel->activeLayer());
@@ -9863,9 +9911,279 @@ public:
     void refreshType3dPanel() {
         if (m_type3dPanel == nullptr || !m_type3dPanel->shown() || m_canvas == nullptr)
             return;
+        if (vectorExtrudeToolActive()) {
+            const core::vec::Object* o = boundShapeObject();
+            m_type3dPanel->reflect(o != nullptr ? o->extrude : std::optional<core::text::Extrude>{},
+                                   o != nullptr);
+            return;
+        }
         const core::text::TextBlock* b = m_canvas->textEditBlockForUi();
         m_type3dPanel->reflect(b != nullptr ? b->extrude : std::optional<core::text::Extrude>{},
                                b != nullptr);
+    }
+
+    // Per frame while a vector tool is active: re-seed the 3D popup when the SHAPE it is sculpting
+    // changes (a different shape selected, an undo, a designer edit). Guarded on (target, content
+    // revision) rather than run unconditionally -- reflect() re-renders the viewport, and doing
+    // that every frame for a state that almost never changes is exactly the churn the profiler
+    // rows in this file keep being added to catch. The Type side has no equivalent because its
+    // reflectTextOptions already fires on every caret/style/block change.
+    void syncShapeExtrudePanel() {
+        if (m_type3dPanel == nullptr || !m_type3dPanel->shown() || !vectorExtrudeToolActive() ||
+            m_canvas == nullptr)
+            return;
+        const core::LayerId id = vectorExtrudeTarget();
+        std::uint64_t rev = 0;
+        if (m_document != nullptr && id != core::kInvalidLayerId)
+            if (const core::Layer* l = m_document->find(id))
+                rev = l->contentRevision();
+        if (id == m_shapeExtrudePanelTarget && rev == m_shapeExtrudePanelRevision)
+            return;
+        m_shapeExtrudePanelTarget = id;
+        m_shapeExtrudePanelRevision = rev;
+        refreshType3dPanel();
+    }
+
+    // ---- 3D for shapes (docs/vector-model.md §11) --------------------------------------------
+    //
+    // The Type tool's 3D popup, pointed at a vec::Object instead of a TextBlock. Everything below
+    // is the adapter: which tools own an extrudable object, how to reach the bound one, how an
+    // edit lands as a command, and how to draw the popup's viewport. The panel, the mesher and
+    // both render lanes are shared verbatim -- there is no second 3D.
+
+    // Does the active tool author vector objects? (The five shapes and the Pen.) These are the
+    // bars that carry a "3D..." button, so this is also "did a shape open the popup".
+    [[nodiscard]] bool vectorExtrudeToolActive() const {
+        switch (m_tools.active()) {
+        case ToolId::RectShape:
+        case ToolId::EllipseShape:
+        case ToolId::PolygonShape:
+        case ToolId::StarShape:
+        case ToolId::LineShape:
+        case ToolId::Pen:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    // The layer the popup is sculpting. The shape tools bind theirs as the SHAPE edit target and
+    // the Pen binds its authored path as the PEN one -- two names for "the vector layer this tool
+    // currently has hold of", and both bars carry the "3D..." button, so both have to answer here.
+    [[nodiscard]] core::LayerId vectorExtrudeTarget() const {
+        if (m_canvas == nullptr)
+            return core::kInvalidLayerId;
+        const core::LayerId id = m_canvas->shapeEditTarget();
+        return id != core::kInvalidLayerId ? id : m_canvas->penEditTarget();
+    }
+
+    // The object the popup is sculpting (select-to-edit, the one a drag just created, or the pen
+    // path just authored). Null when nothing is bound, which greys the panel exactly as "no text
+    // session" does.
+    [[nodiscard]] const core::vec::Object* boundShapeObject() const {
+        if (!m_document)
+            return nullptr;
+        const core::LayerId id = vectorExtrudeTarget();
+        if (id == core::kInvalidLayerId)
+            return nullptr;
+        if (core::Layer* l = m_document->find(id))
+            if (auto* vl = l->as<core::VectorLayer>())
+                return vl->object();
+        return nullptr;
+    }
+
+    // The document-space band a layer's content occupies right now (its content box through the
+    // world transform, padded for the compositor's resample footprint), or an empty rect when it
+    // has none. What a REGION recomposite has to cover for an edit confined to that layer.
+    [[nodiscard]] common::Rect layerDocBand(core::LayerId id) const {
+        if (!m_document || id == core::kInvalidLayerId)
+            return {};
+        const core::Layer* l = m_document->find(id);
+        if (l == nullptr)
+            return {};
+        const std::optional<common::Rect> box = l->contentBounds();
+        if (!box || box->empty())
+            return {};
+        const common::Rect doc = core::worldTransform(*l).mapBounds(*box);
+        constexpr double kPad = 8.0; // the resample footprint, and slack for a rounded edge
+        return {doc.x - kPad, doc.y - kPad, doc.w + 2.0 * kPad, doc.h + 2.0 * kPad};
+    }
+
+    // Paint the 3D popup's SUBJECT. Colour is the layer's own now (§10.4), so "set the colour"
+    // means the same edit the Style line or the shape's fill swatch makes -- there is no material
+    // colour left to write. Used by the metal presets, which still carry a colour because a
+    // metal's reflectance is one.
+    void applyExtrudeSubjectColor(common::ColorF c) {
+        if (!m_document || m_canvas == nullptr)
+            return;
+        if (!vectorExtrudeToolActive()) {
+            applyTextStyleField("style:color",
+                                [c](core::text::CharStyle& st) { st.setSolidFill(c); });
+            return;
+        }
+        const core::LayerId target = vectorExtrudeTarget();
+        const core::vec::Object* cur = boundShapeObject();
+        if (cur == nullptr)
+            return;
+        const common::Rect before = layerDocBand(target);
+        core::vec::Object obj = *cur;
+        // The FILL is the solid's face colour (run 0). A stroked shape keeps its own stroke paint:
+        // a preset names one colour, and overwriting the outline with it would lose the contrast
+        // the outline exists for.
+        obj.fill = core::vec::SolidPaint{c};
+        if (obj == *cur)
+            return;
+        if (m_lastShapeExtrudeId != "extrude:presetColor") {
+            m_shapeExtrudeCoalesce = m_canvas->beginShapeEditSession();
+            m_lastShapeExtrudeId = "extrude:presetColor";
+        }
+        m_document->commands().push(std::make_unique<core::SetVectorObjectCommand>(
+            target, std::move(obj), _("Edit 3D"), m_shapeExtrudeCoalesce));
+        const common::Rect band = before.united(layerDocBand(target));
+        if (band.empty())
+            requestRecomposite(/*fitView=*/false);
+        else
+            recompositeRegion(band);
+    }
+
+    // applyTextBlockField's vector twin: read-modify-write the bound object's optional Extrude and
+    // land it as one coalescing SetVectorObjectCommand, so a dragged control is one undo step and
+    // the canvas is the live preview. A NEW `id` starts a new step, which is the same rule the
+    // bar and the Type panel follow.
+    void applyShapeExtrudeField(const std::string& id,
+                                std::function<void(std::optional<core::text::Extrude>&)> mutate) {
+        if (!m_document || m_canvas == nullptr)
+            return;
+        const core::LayerId target = vectorExtrudeTarget();
+        const core::vec::Object* cur = boundShapeObject();
+        if (cur == nullptr)
+            return;
+        // The band the solid occupies BEFORE the edit -- half of what the patch has to repair,
+        // because depth, orientation and perspective all MOVE the projected silhouette and the
+        // pixels it is vacating need repainting as much as the ones it is about to cover.
+        const common::Rect before = layerDocBand(target);
+        core::vec::Object obj = *cur;
+        mutate(obj.extrude);
+        // No colour is seeded here any more, and that removal is the fix rather than a tidy-up.
+        // Enabling 3D used to COPY the shape's fill into a material albedo, once -- so the solid
+        // was born the right colour and then never changed again, however often the fill did. The
+        // render lane now reads the fill itself on every composite (§10.4), so there is nothing to
+        // seed and nothing to go stale.
+        if (obj == *cur)
+            return; // a stale event that changed nothing: no undo step for it
+        if (id != m_lastShapeExtrudeId) {
+            m_shapeExtrudeCoalesce = m_canvas->beginShapeEditSession();
+            m_lastShapeExtrudeId = id;
+        }
+        m_document->commands().push(std::make_unique<core::SetVectorObjectCommand>(
+            target, std::move(obj), _("Edit 3D"), m_shapeExtrudeCoalesce));
+        // ⚠ A REGION patch, not a full canvas walk. Every one of these controls streams: an orbit
+        // drag, a depth scrub and a light-direction drag all fire one per tick, and a full
+        // recomposite of a 1920x1080 document is ~23 ms in release and ~67 ms in debug -- so the
+        // panel was capped at 43 fps on release and 15 on debug no matter how cheap the solid was.
+        // Measured: the 3D square itself costs 0.7 ms of that. The edit is confined to one layer,
+        // so the band it occupied plus the band it now occupies is the whole of what changed --
+        // the same argument (and the same queue) as the typing path's, which was the identical
+        // ~64 ms-per-keystroke bug.
+        const common::Rect band = before.united(layerDocBand(target));
+        if (band.empty())
+            requestRecomposite(/*fitView=*/false); // no measurable band: fall back, never skip
+        else
+            recompositeRegion(band);
+    }
+
+    // The popup's viewport for a shape: the bound object with the panel's params, through the SAME
+    // mesher and render lane the compositor uses, fitted into the widget -- so what is sculpted
+    // here is exactly what composites out there.
+    common::Image shapeExtrudePreview(const core::text::Extrude& e, int w, int h,
+                                      double* fitScale) {
+        const core::vec::Object* cur = boundShapeObject();
+        if (cur == nullptr)
+            return {};
+        core::vec::Object obj = *cur;
+        obj.extrude = e;
+        // Share the LAYER's mesh cache rather than meshing per viewport frame. The panel
+        // re-renders on every control tick, and a heavy solid costs tens of milliseconds to
+        // tessellate -- paying that per tick of an orbit drag is precisely the cost the cache
+        // exists to remove, and the canvas is about to want the very same mesh anyway. The key
+        // ignores the camera (§10.5), so an orbit reuses it and only a depth/bevel/geometry edit
+        // rebuilds -- once, here or on the canvas, whichever asks first.
+        core::VectorLayer* target = nullptr;
+        if (m_document != nullptr)
+            if (core::Layer* l = m_document->find(vectorExtrudeTarget()))
+                target = l->as<core::VectorLayer>();
+        const std::uint64_t key = core::vec::shapeExtrudeMeshKey(obj, e);
+        const core::text::ExtrudeMesh* cached =
+            target != nullptr ? target->cachedExtrudeMesh(key) : nullptr;
+        core::text::ExtrudeMesh built;
+        if (cached == nullptr) {
+            // ⚠ ONLY on a miss. shapeExtrudeDesignBounds is NOT the cheap flatten its name
+            // suggests for a STROKED shape: the stroke is a solid, so the query normalizes the
+            // stroker's overlapping pieces into a ribbon, and that boolean is 24 ms on a 41-lobe
+            // rosette. Asking for it before the cache lookup meant every tick of an orbit drag
+            // paid it behind a mesh cache that was hitting every time -- the exact cost the
+            // sharing above exists to remove. The fit reads the mesh's own designBounds instead
+            // (below), which is that same extent, already computed, and the one the render lane's
+            // camera actually pivots on.
+            const common::Rect seed = core::vec::shapeExtrudeDesignBounds(obj);
+            if (seed.empty())
+                return {};
+            const common::Rect box = seed.united(core::text::projectedExtrudeBounds(seed, e));
+            if (box.empty())
+                return {};
+            // A first-cut fit, only to set the tessellation's device scale; the real one is below.
+            const double s0 = std::min({(w - 6.0) / box.w, (h - 6.0) / box.h, 4.0});
+            const common::Affine2D seedToPixel =
+                common::Affine2D::translation((w - box.w * s0) * 0.5 - box.x * s0,
+                                              (h - box.h * s0) * 0.5 - box.y * s0) *
+                common::Affine2D::scaling(s0, s0);
+            built =
+                core::vec::buildShapeExtrudeMesh(obj, e, core::vec::kMeshTolerancePx, seedToPixel);
+            if (target != nullptr) {
+                target->setCachedExtrudeMesh(built, key);
+                cached = target->cachedExtrudeMesh(key);
+            }
+        }
+        const core::text::ExtrudeMesh& mesh = cached != nullptr ? *cached : built;
+        // The extent the SOLID was actually built over -- and the one ExtrudeCamera pivots on, so
+        // the viewport frames exactly what the render lane draws.
+        const common::Rect flat = mesh.designBounds;
+        if (flat.empty())
+            return {};
+        const common::Rect all = flat.united(core::text::projectedExtrudeBounds(flat, e));
+        if (all.empty())
+            return {};
+        const double sc = std::min({(w - 6.0) / all.w, (h - 6.0) / all.h, 4.0});
+        if (sc <= 0.0)
+            return {};
+        if (fitScale != nullptr)
+            *fitScale = sc; // the depth handle's gain reference
+        const common::Affine2D toPixel =
+            common::Affine2D::translation((w - all.w * sc) * 0.5 - all.x * sc,
+                                          (h - all.h * sc) * 0.5 - all.y * sc) *
+            common::Affine2D::scaling(sc, sc);
+        common::ImageF out(static_cast<std::uint32_t>(w), static_cast<std::uint32_t>(h));
+        if (!mesh.empty()) {
+            // The bound layer's reflect-canvas snapshot, so the viewport mirrors what the canvas
+            // mirrors rather than showing a differently-lit solid.
+            core::text::ExtrudeEnv env;
+            const core::text::ExtrudeEnv* envPtr = nullptr;
+            if (e.reflectCanvas && m_document != nullptr)
+                if (core::Layer* l = m_document->find(vectorExtrudeTarget()))
+                    if (auto* vl = l->as<core::VectorLayer>();
+                        vl != nullptr && vl->reflection().image() != nullptr) {
+                        env.image = vl->reflection().image();
+                        env.layerToEnv = vl->reflection().toEnv();
+                        envPtr = &env;
+                    }
+            // The viewport shades with the shape's own fill/stroke, exactly as the canvas does.
+            core::text::ExtrudePalette palette;
+            palette.runs = {core::vec::representativeColor(obj.fill),
+                            core::vec::representativeColor(obj.stroke.paint)};
+            core::text::renderExtrudeMeshF(out, mesh, e, palette, toPixel, /*antialias=*/true,
+                                           envPtr);
+        }
+        return common::toImage8(out);
     }
 
     void captureTextBarSnapshot() {
@@ -12328,12 +12646,17 @@ private:
             return;
         if (m_optionsBar->type3dButton() == nullptr)
             return;
-        if (!m_type3dPanel->shown() && m_canvas->textEditTarget() == core::kInvalidLayerId)
-            return; // the popup sculpts the edited text object; nothing to sculpt without one
+        // The Type side needs a live text session to sculpt; a vector tool's bar opens the popup
+        // either way and lets it grey itself (see the arbiter's validity predicate).
+        if (!m_type3dPanel->shown() && !vectorExtrudeToolActive() &&
+            m_canvas->textEditTarget() == core::kInvalidLayerId)
+            return;
+        m_lastShapeExtrudeId.clear(); // a fresh session starts a fresh undo step
         m_panelArbiter.toggle(kPanelType3d);
-        syncCornerPanels();
+        syncCornerPanels(); // resolves + shows, and showCornerPanel seeds the popup from here
     }
     void closeType3dPanel() {
+        m_lastShapeExtrudeId.clear();
         if (m_type3dPanel != nullptr && m_type3dPanel->shown())
             m_type3dPanel->hide();
         if (m_panelColorFlyout != nullptr)
@@ -12527,7 +12850,7 @@ private:
     // mid-gesture churn so a Move drag or brush stroke rebuilds once, on release.
     static constexpr std::uint32_t kReflectEnvMaxDim = 768;
     static constexpr double kReflectEnvSettleSec = 0.30;
-    [[nodiscard]] std::uint64_t reflectStackFingerprint(const core::TextLayer& target) {
+    [[nodiscard]] std::uint64_t reflectStackFingerprint(const core::Layer& target) {
         std::uint64_t h = 1469598103934665603ull;
         const auto mix = [&h](const void* data, std::size_t bytes) {
             const auto* p = static_cast<const unsigned char*>(data);
@@ -12622,7 +12945,13 @@ private:
                     break;
                 case core::LayerKind::Text:
                     if (auto* tl = child->as<core::TextLayer>())
-                        any |= refreshLayerReflection(*tl);
+                        any |= refreshLayerReflection(*tl, tl->reflection(), tl->block().extrude);
+                    break;
+                case core::LayerKind::Vector:
+                    // A 3D SHAPE mirrors the canvas exactly as 3D text does (§11) -- same
+                    // snapshot, same staleness rule, same one function below.
+                    if (auto* vl = child->as<core::VectorLayer>(); vl != nullptr && vl->hasObject())
+                        any |= refreshLayerReflection(*vl, vl->reflection(), vl->object()->extrude);
                     break;
                 default:
                     break; // every other kind: one enum compare and out
@@ -12645,20 +12974,26 @@ private:
         requestRecomposite(/*fitView=*/false);
     }
     // Returns true when the layer's snapshot (or its removal) changed something on screen.
-    bool refreshLayerReflection(core::TextLayer& tl) {
-        const auto& ex = tl.block().extrude;
+    //
+    // Kind-agnostic on purpose: a TextLayer's block and a VectorLayer's object can both carry an
+    // Extrude, and a mirror is a mirror. The three things it needs -- the layer (identity +
+    // placement), where the snapshot is stored, and whether the subject asked for one -- are
+    // exactly the three that differ between them, so they are parameters rather than a second
+    // copy of this function that would drift from the first.
+    bool refreshLayerReflection(core::Layer& tl, core::ReflectionEnv& renv,
+                                const std::optional<core::text::Extrude>& ex) {
         const bool wants = ex.has_value() && ex->reflectCanvas;
         if (!wants) {
             m_reflectPending.erase(tl.id());
-            if (tl.reflectionEnv() != nullptr) { // toggled off: free the snapshot + re-render
-                tl.setReflectionEnv(std::nullopt, common::Affine2D::identity());
+            if (renv.image() != nullptr) { // toggled off: free the snapshot + re-render
+                renv.set(std::nullopt, common::Affine2D::identity());
                 return true;
             }
             return false;
         }
         const std::uint64_t fp = reflectStackFingerprint(tl);
-        const bool missing = tl.reflectionEnv() == nullptr;
-        if (!missing && fp == tl.reflectionEnvFingerprint()) {
+        const bool missing = renv.image() == nullptr;
+        if (!missing && fp == renv.fingerprint()) {
             m_reflectPending.erase(tl.id()); // current: clear any half-armed settle
             return false;
         }
@@ -12701,10 +13036,10 @@ private:
             common::Affine2D::scaling(static_cast<double>(ew) / docW,
                                       static_cast<double>(eh) / docH) *
             tl.transform();
-        tl.setReflectionEnv(std::move(env), layerToEnv); // bumps revision -> cache re-renders
-        // Stamp the fingerprint AFTER the write: setReflectionEnv bumped the text layer's own
-        // revision, which the fingerprint deliberately ignores (mirror never sees the text).
-        tl.setReflectionEnvFingerprint(fp);
+        renv.set(std::move(env), layerToEnv); // bumps revision -> a text cache re-renders
+        // Stamp the fingerprint AFTER the write: set() bumped the env revision, which the
+        // fingerprint deliberately ignores (a mirror never sees its own subject).
+        renv.setFingerprint(fp);
         m_reflectPending.erase(tl.id());
         return true;
     }
@@ -13827,6 +14162,11 @@ private:
         nullptr;                               // left-toolbar overflow list (S16-o sub-window)
     ShapeDesigner* m_shapeDesigner = nullptr;  // shape-designer popover (S26-b §7.4 sub-window)
     std::uint64_t m_shapeDesignerCoalesce = 0; // one designer session = one undo step
+    std::uint64_t m_shapeExtrudeCoalesce = 0;  // ... and one 3D-popup control run (see
+    std::string m_lastShapeExtrudeId;          //     applyShapeExtrudeField)
+    // What the 3D popup was last seeded from, so syncShapeExtrudePanel re-seeds on change only.
+    core::LayerId m_shapeExtrudePanelTarget = core::kInvalidLayerId;
+    std::uint64_t m_shapeExtrudePanelRevision = 0;
     TypePanel* m_typePanel = nullptr;          // Type panel popover (S29-c §8 sub-window)
     Type3dPanel* m_type3dPanel = nullptr;      // the 3D popup (S30-d §8.4 sub-window)
     ColorFlyout* m_panelColorFlyout = nullptr; // the panels' shared colour bubble (chip "Edit…")

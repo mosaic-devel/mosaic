@@ -17,6 +17,7 @@ add_library(mosaic_common STATIC
     fs_path.cpp
     image.cpp
     image_svg.cpp
+    languages.cpp
     logging.cpp
     i18n.cpp
     profiler.cpp

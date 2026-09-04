@@ -82,6 +82,33 @@ struct NoPaint {
 
 using Paint = std::variant<NoPaint, SolidPaint, Gradient, Pattern>;
 
+// The single colour that best stands for a paint -- what a consumer that can only take ONE colour
+// per region should use. Solid is exact; a gradient answers with the average of its stops, which
+// is the honest summary of a ramp; a pattern and NoPaint answer transparent (nothing to stand for).
+//
+// Its caller is 3D (docs/type-tool.md §10.4): a solid's surface shades with one albedo per run, so
+// an extruded gradient run has to pick one. A gradient that must stay a gradient ON the face is
+// what the §12 Layer-Effects overlay is for -- it replaces the albedo per fragment -- and that
+// path is unaffected by this.
+[[nodiscard]] inline ColorF representativeColor(const Paint& p) noexcept {
+    if (const auto* solid = std::get_if<SolidPaint>(&p))
+        return solid->color;
+    if (const auto* g = std::get_if<Gradient>(&p)) {
+        if (g->stops.empty())
+            return ColorF{0.0f, 0.0f, 0.0f, 0.0f};
+        float r = 0.0f, gg = 0.0f, b = 0.0f, a = 0.0f;
+        for (const GradientStop& st : g->stops) {
+            r += st.color.r;
+            gg += st.color.g;
+            b += st.color.b;
+            a += st.color.a;
+        }
+        const float n = static_cast<float>(g->stops.size());
+        return ColorF{r / n, gg / n, b / n, a / n};
+    }
+    return ColorF{0.0f, 0.0f, 0.0f, 0.0f}; // NoPaint / Pattern: no ink of its own to name
+}
+
 // Is this paint a gradient? The one predicate that tells a GRADIENT layer from a plain shape layer
 // (docs/vector-model.md §1: both are a VectorLayer, they differ only in the paint), so the Gradient
 // tool and the Shape tool can each bind the objects they can actually express.

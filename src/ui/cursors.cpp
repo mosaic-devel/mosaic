@@ -2,14 +2,15 @@
 
 #include "common/image_svg.hpp"
 
+#include <algorithm>
 #include <assets/cursor_fit_text_svg.hpp> // generated: ...::cursor_fit_text_svg[] (apple hand2)
-#include <assets/cursor_grab_svg.hpp>     // generated: mosaic::assets::cursor_grab_svg[] (apple hand1)
+#include <assets/cursor_grab_svg.hpp> // generated: mosaic::assets::cursor_grab_svg[] (apple hand1)
 #include <assets/cursor_grabbing_svg.hpp> // generated: ...::cursor_grabbing_svg[] (apple move)
 #include <assets/move_cursor_svg.hpp>     // generated: ...::move_cursor_svg[] (apple all-scroll)
 #include <assets/rotate_cursor_svg.hpp>   // generated: ...::rotate_cursor_svg[] (Move-tool rotate)
 #include <assets/text_cursor_svg.hpp>     // generated: ...::text_cursor_svg[] (Type-tool I-beam)
-
-#include <algorithm>
+#include <assets/zoom_in_cursor_svg.hpp>  // generated: ...::zoom_in_cursor_svg[] (apple zoom-in)
+#include <assets/zoom_out_cursor_svg.hpp> // generated: ...::zoom_out_cursor_svg[] (apple zoom-out)
 #include <cmath>
 #include <cstddef>
 #include <string>
@@ -297,6 +298,44 @@ CursorImage moveCursor(bool darkMode, double scale) {
     const int hot = static_cast<int>(kMoveHotFrac * size + 0.5);
     const int logicalHot = static_cast<int>(kMoveHotFrac * kMoveSize + 0.5);
     return {std::move(img), hot, hot, kMoveSize, kMoveSize, logicalHot, logicalHot};
+}
+
+namespace {
+
+// The magnifiers are the vendored apple_cursor zoom-in / zoom-out glyphs, on the same 257 canvas
+// and in the same two placeholder colours as the arrows above. The lens is drawn UP-LEFT of the
+// canvas centre with its handle running down-right, so unlike every other cursor here the hotspot
+// is not the box centre -- it is the lens centre, read off each glyph's own circle (the `fill`
+// ellipse path: cx ~100.26/98.36 for zoom-in, ~100.46/100.92 for zoom-out).
+constexpr int kZoomSize = 26; // logical cursor box (the lens + its handle need the room)
+constexpr double kZoomInHotX = 100.26;
+constexpr double kZoomInHotY = 98.36;
+constexpr double kZoomOutHotX = 100.46;
+constexpr double kZoomOutHotY = 100.92;
+
+} // namespace
+
+CursorImage zoomCursor(bool out, bool darkMode, double scale) {
+    const int size = std::max(1, static_cast<int>(std::lround(kZoomSize * std::max(1.0, scale))));
+    std::string svg(reinterpret_cast<const char*>(out ? mosaic::assets::zoom_out_cursor_svg
+                                                      : mosaic::assets::zoom_in_cursor_svg),
+                    out ? mosaic::assets::zoom_out_cursor_svg_size
+                        : mosaic::assets::zoom_in_cursor_svg_size);
+    replaceAll(svg, "#0000FF", darkMode ? "#FFFFFF" : "#000000");
+    replaceAll(svg, "#00FF00", darkMode ? "#000000" : "#FFFFFF");
+    common::Image img = common::rasterizeSvg(reinterpret_cast<const unsigned char*>(svg.data()),
+                                             svg.size(), size, size);
+    if (img.rgba.empty())
+        return {common::Image{}, 0, 0}; // parse/raster failure: caller falls back to a stock cursor
+    const double hx = out ? kZoomOutHotX : kZoomInHotX;
+    const double hy = out ? kZoomOutHotY : kZoomInHotY;
+    // Device px and the logical box separately, each rounded once against the art -- the off-centre
+    // hotspot rule at CursorImage (a lens is exactly the case a device/logical mix-up shows up on).
+    const int hotX = static_cast<int>(hx / kAppleBox * size + 0.5);
+    const int hotY = static_cast<int>(hy / kAppleBox * size + 0.5);
+    const int logicalHotX = static_cast<int>(hx / kAppleBox * kZoomSize + 0.5);
+    const int logicalHotY = static_cast<int>(hy / kAppleBox * kZoomSize + 0.5);
+    return {std::move(img), hotX, hotY, kZoomSize, kZoomSize, logicalHotX, logicalHotY};
 }
 
 } // namespace mosaic::ui

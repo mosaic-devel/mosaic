@@ -1231,6 +1231,38 @@ private:
     void syncLayerMarqueeMask(); // per frame: rasterize the band into the selection-overlay lane
     [[nodiscard]] common::Rect layerMarqueeRect() const; // anchor..cursor, document px
 
+    // ---- The Zoom tool (ToolId::Zoom, ToolGroup::View) ---------------------------------------
+    //
+    // The traditional two-button tool: LEFT-click zooms in one step about the point clicked,
+    // RIGHT-click zooms out. No mode to set and no modifier to hold -- the two mouse buttons say
+    // it, which is the convention every editor's zoom tool follows.
+    //
+    // While the pointer is over the canvas the tool also PREVIEWS the result: the region a left
+    // click would bring into view is framed by the present pass's FRAMING PREVIEW (controls mode
+    // 9) -- the crop box's outside-shield and outline, with no handles, because nothing here is
+    // grabbable. It is an INDICATOR, not a gesture: there is nothing to drag and nothing to
+    // commit, and it is derived fresh from the view every frame, so there is no state to keep in
+    // step and nothing to restore when it goes away.
+    //
+    // ⚠ NOT the marching-ants / selection lane. Ants mean "this is selected", they are the one
+    // piece of canvas chrome that animates, and this box follows the pointer -- a crawling dashed
+    // rectangle chasing the cursor reads as a selection being dragged, which is the one thing it
+    // is not. It also left a live selection's own ants hidden for as long as the tool was active,
+    // since that lane holds exactly one mask. The controls-quad lane costs four screen-space
+    // corners a frame instead of a document-sized coverage buffer.
+    //
+    // Nothing here is undoable, because nothing here is a document edit -- the view is not
+    // document state (it is per-tab, saved in CanvasView::ViewState).
+public:
+    [[nodiscard]] bool zoomToolActive() const; // host: the options bar / cursor gating reads this
+private:
+    void clickZoom(bool out); // one step about the tracked pointer (left = in, right = out)
+    void syncZoomPreview();   // per frame: hand the framing quad to the renderer, or clear it
+    // The framing box a LEFT click would produce, as the four screen-space corners TL,TR,BR,BL the
+    // present pass wants -- or nullopt when the preview should not show at all. Derived by running
+    // the very same zoom on a copy of the view, so the box cannot disagree with the click.
+    [[nodiscard]] std::optional<std::array<common::Vec2, 4>> zoomPreviewQuad() const;
+
     // ---- S16 Crop tool ----
 public:
     [[nodiscard]] bool cropToolActive() const; // host: status-bar gating reads this
@@ -1892,6 +1924,17 @@ private:
     std::unique_ptr<Fl_RGB_Image> m_fitTextCursorImage;
     int m_fitTextCursorScale = 0;
 
+    // The Zoom tool's magnifiers (states 23 = in, 24 = out): the apple_cursor zoom glyphs,
+    // theme-recoloured. Two pieces of art rather than one orientation of one, so they cache as a
+    // pair keyed on the theme and the build scale, the way the pan hands do. "Out" shows only
+    // while the right button is actually DOWN -- there is no hover state for a right click, so
+    // the resting cursor is the "+" that the left button (and the preview box) promise.
+    void applyZoomCursor(bool out);
+    CursorImage m_zoomCursorPixels[2]; // [0] = in, [1] = out
+    std::unique_ptr<Fl_RGB_Image> m_zoomCursorImages[2];
+    double m_zoomCursorScale = 0.0; // 0 = nothing cached (a real build scale is always >= 1)
+    bool m_zoomCursorDark = true;
+
     // S33 DoF focus-band gizmo: the host callbacks + the in-flight handle drag. The drag latches
     // the press-time provider state and the parentToDoc INVERSE, so every drag event maps the
     // cursor into the same parent frame -- re-deriving it live would feed the edit back into
@@ -1991,6 +2034,11 @@ private:
     common::Vec2 m_layerMarqueeAnchor{};
     common::Vec2 m_layerMarqueeCursor{};
     std::vector<core::LayerId> m_layerMarqueeBase;
+
+    // Is the RIGHT button down over the Zoom tool? Tracked rather than read off Fl::event_state(),
+    // whose button bits at FL_RELEASE still describe the state BEFORE the release -- which left
+    // the "-" magnifier on screen after a right-click until the pointer happened to move.
+    bool m_zoomOutPressed = false;
 
     // S16 Crop tool.
     CropToolHost m_cropHost;

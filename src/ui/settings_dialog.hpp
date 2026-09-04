@@ -37,6 +37,11 @@ class Keymap; // Settings → Keybindings renders the LIVE keymap; see SettingsH
 // plain std::functions decouples the dialog from MainWindow.
 struct SettingsHost {
     std::function<void(const std::string& units)> setUnits; // "auto"|"metric"|"imperial"
+    // Persist the UI language ("" = follow the system locale, else a gettext selector: "de",
+    // "pt_BR", "ca@valencia"). Persist-only, no live apply: FLTK labels are built through _() when
+    // the widget is created, so the running window keeps the language it launched with -- the
+    // control's caption says so. common/i18n.cpp reads it back at the next start-up.
+    std::function<void(const std::string& language)> setLanguage;
     // Apply + persist the theme mode ("system"|"dark"|"light"); re-themes the whole UI live.
     std::function<void(const std::string& themeMode)> setThemeMode;
     // Apply + persist the Appearance "Selection & reticle line" overlay style ("classic"|"rim"|
@@ -274,6 +279,7 @@ private:
     void captureFromEvent();
     void resetKeyRow(int row);
     void onUnitsChanged();
+    void onLanguageChanged();
     void onTabletRange(); // Tablet: the raw-pressure clamp (both sliders share one callback)
     void onTabletSpeed(); // Tablet: the speed-sensor calibration (max speed + EMA window)
     void onTextLanguageChanged();
@@ -330,6 +336,8 @@ private:
     struct IconPreviewCache;
     std::unique_ptr<IconPreviewCache> m_iconPreviews;
     class Dropdown* m_units = nullptr;  // General: measurement system
+    class Dropdown* m_language = nullptr;     // General: UI language (applies at next start-up)
+    std::vector<std::string> m_languageCodes; // m_language row -> settings value ("" = system)
     Fl_Widget* m_cropSwitchTool = nullptr; // Tools: "switch tool after crop" checkbox (CheckBox)
     Fl_Widget* m_cropClearOnLeave = nullptr; // Tools: "clear crop selection on leave" checkbox
     Fl_Widget* m_lassoSmooth = nullptr;      // Tools/Lasso: "smooth freehand lasso" checkbox

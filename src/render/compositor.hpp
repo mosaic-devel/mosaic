@@ -252,6 +252,18 @@ struct WorkCounters {
     std::atomic<std::uint64_t> groupBuffers{0};      // group isolated buffers built
     std::atomic<std::uint64_t> groupBufferTexels{0}; // ...and their total area
     std::atomic<std::uint64_t> clearedTexels{0};     // texels zeroed into per-layer leaf buffers
+    // The 3D-shape lane (docs/vector-model.md §11). A vector layer has no pixel cache, so every
+    // one of these is work the walk repeats -- which is exactly why they are counted rather than
+    // trusted. `shapeMeshBuilds` is the expensive one (tessellate + earcut every contour, ~100 ms
+    // on a 41-lobe stroked rosette); it must be 1 for the first composite of a solid and 0 for
+    // every composite after it that did not change the geometry, depth or bevel.
+    // `shapeSolidRenders` is the z-buffered rasterizer, which no mesh cache spares -- it scales
+    // with the triangle count, so `shapeSolidTriangles` is where a regression in the MESHER shows.
+    std::atomic<std::uint64_t> shapeMeshBuilds{0};     // 3D-shape meshes tessellated
+    std::atomic<std::uint64_t> shapeMeshHits{0};       // ... and times the cached one was reused
+    std::atomic<std::uint64_t> shapeSolidRenders{0};   // 3D-shape rasterizer runs
+    std::atomic<std::uint64_t> shapeSolidTriangles{0}; // ... and the triangles they drew
+    std::atomic<std::uint64_t> shapeOverlayBakes{0};   // §12 per-face overlay map bakes
 
     void reset() noexcept {
         composites.store(0, std::memory_order_relaxed);
@@ -259,6 +271,11 @@ struct WorkCounters {
         groupBuffers.store(0, std::memory_order_relaxed);
         groupBufferTexels.store(0, std::memory_order_relaxed);
         clearedTexels.store(0, std::memory_order_relaxed);
+        shapeMeshBuilds.store(0, std::memory_order_relaxed);
+        shapeMeshHits.store(0, std::memory_order_relaxed);
+        shapeSolidRenders.store(0, std::memory_order_relaxed);
+        shapeSolidTriangles.store(0, std::memory_order_relaxed);
+        shapeOverlayBakes.store(0, std::memory_order_relaxed);
     }
 };
 

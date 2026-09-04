@@ -508,6 +508,19 @@ public:
         m_sampleAreaCorners = corners;
     }
 
+    // The Zoom tool's FRAMING PREVIEW (controls-mode lane, pc.ants.z == 9): the region a click is
+    // about to bring into view, drawn as an outside-shield + box outline -- no handles (nothing
+    // here is grabbable) and emphatically not the marching ants, which mean "selected", animate,
+    // and would crawl along behind the pointer. It is not cropOverlay's mode 8 either, close as
+    // that is: its green expansion hatch fires for anything outside the canvas, which is exactly
+    // what a zoom-OUT box looks like and means nothing here. Same lane and the same conventions as
+    // the crop/Move quad; the Zoom tool is never active alongside those, and it takes the lane
+    // when it is. `corners` are TL,TR,BR,BL in the canvas widget's *logical* px, pushed each frame.
+    void setFramingPreview(bool active, const std::array<common::Vec2, 4>& corners) noexcept {
+        m_framingActive = active;
+        m_framingCorners = corners;
+    }
+
     // One Smart Resize keep-region chip (S16-f): the region quad TL,TR,BR,BL in the canvas
     // widget's *logical* px (view-rotation aware, like the crop corners) + its live state
     // against the staged crop rect, which picks the drawn style (see keepChips in the shader).
@@ -1076,6 +1089,8 @@ private:
     CropChannel m_cropChannel = CropChannel::Crop;    // whose picture the channel draws (see above)
     bool m_sampleAreaActive = false;                  // inpaint sample-area preview (S39) this frame
     std::array<common::Vec2, 4> m_sampleAreaCorners{};
+    bool m_framingActive = false; // Zoom tool framing preview this frame
+    std::array<common::Vec2, 4> m_framingCorners{};
     bool m_cropHudActive = false;                     // crop size HUD (S16) this frame
     bool m_moveHudActive = false;                     // Move-tool transform HUD (S15) this frame
     bool m_pixelGrid = true;                          // pixel grid (S19-c); Photoshop default on

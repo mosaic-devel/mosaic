@@ -405,6 +405,6 @@ TEST_CASE("extrude defaults match the §10.1 spec (near-ortho, lit, one soft key
 
     // The override map + defaulted equality compose (a per-run material is a model change).
     Extrude gold = e;
-    gold.runMaterials[0] = Material{{1.0f, 0.85f, 0.1f, 1.0f}, 1.0f, 0.25f};
+    gold.runMaterials[0] = Material{1.0f, 0.25f};
     CHECK_FALSE(gold == e);
 }

@@ -1032,11 +1032,24 @@ std::optional<core::AdjustmentKind> adjustmentKindFromToken(const std::string& s
 
 // ---- vector object -----------------------------------------------------------------------------
 
+// The 3D solid an object may carry (docs/vector-model.md §11) shares its serialization with the
+// Type tool's, which is written further down beside the rest of the text block. Forward-declared
+// rather than moved, so the extrude codec stays in one piece next to the block that has always
+// used it and the two callers cannot drift into two encodings of one model.
+namespace {
+json extrudeToJson(const tx::Extrude& e);
+std::optional<tx::Extrude> extrudeFromJson(const json& j);
+} // namespace
+
 json vectorObjectToJson(const vc::Object& o) {
-    return json{{"geometry", geometryToJson(o.geometry)},
-                {"fill", paintToJson(o.fill)},
-                {"stroke", strokeToJson(o.stroke)},
-                {"paint_order", tokenOf(kPaintOrderTokens, o.paintOrder)}};
+    json out{{"geometry", geometryToJson(o.geometry)},
+             {"fill", paintToJson(o.fill)},
+             {"stroke", strokeToJson(o.stroke)},
+             {"paint_order", tokenOf(kPaintOrderTokens, o.paintOrder)}};
+    // Written only when set, so a flat shape's JSON is byte-identical to what it always was.
+    if (o.extrude.has_value())
+        out["extrude"] = extrudeToJson(*o.extrude);
+    return out;
 }
 
 std::optional<vc::Object> vectorObjectFromJson(const json& j) {
@@ -1057,6 +1070,11 @@ std::optional<vc::Object> vectorObjectFromJson(const json& j) {
     o.fill = std::move(*fill);
     o.stroke = std::move(*stroke);
     o.paintOrder = *order;
+    // Absent = flat, which is what every document written before §11 says. A malformed extrude
+    // block is dropped rather than failing the object: losing the 3D is recoverable, losing the
+    // shape is not.
+    if (const json* ex = getObj(j, "extrude"); ex != nullptr)
+        o.extrude = extrudeFromJson(*ex);
     return o;
 }
 
@@ -2039,19 +2057,27 @@ std::optional<vc::Contours> contoursFromJson(const json& j) {
     return out;
 }
 
+// A 3D material is the FINISH only. `albedo` was a field here until colour was unified with the
+// layer's own (docs/type-tool.md §10.4): a solid now shades with its text run's paint or its
+// shape's fill, read live at render time, so there is no colour to store beside it.
 json materialToJson(const tx::Material& m) {
-    return json{{"albedo", colorToJson(m.albedo)}, {"metalness", m.metalness},
-                {"roughness", m.roughness}};
+    return json{{"metalness", m.metalness}, {"roughness", m.roughness}};
 }
 
 std::optional<tx::Material> materialFromJson(const json& j) {
     if (!j.is_object())
         return std::nullopt;
     tx::Material m;
-    const auto albedo = colorField(j, "albedo");
-    if (!albedo || !getF(j, "metalness", m.metalness) || !getF(j, "roughness", m.roughness))
+    if (!getF(j, "metalness", m.metalness) || !getF(j, "roughness", m.roughness))
         return std::nullopt;
-    m.albedo = *albedo;
+    // ⚠ An "albedo" written by an older Mosaic is READ AND DROPPED, deliberately, and it is the
+    // one thing about this migration that is visible. Dropping it is a no-op for a SHAPE (its
+    // albedo was seeded from the fill it now reads directly), and for TEXT it is the fix: the
+    // stored albedo was a per-BLOCK grey that ignored the run colours entirely, so an old 3D text
+    // block reopens in the colours its own runs always carried. Writing it back into the layer to
+    // preserve the old pixels would mean overwriting those run colours with that grey, which
+    // destroys real information to preserve a bug. The field is tolerated rather than rejected so
+    // every existing .mosaic still opens.
     return m;
 }
 

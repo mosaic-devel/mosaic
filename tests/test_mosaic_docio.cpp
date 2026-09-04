@@ -131,13 +131,12 @@ core::text::TextBlock sampleTextBlock() {
     core::text::Extrude ex;
     ex.depth = 14.0f;
     ex.bevelFront = {core::text::Bevel::Profile::Concave, 2.0f, 5};
-    ex.material.albedo = {0.9f, 0.3f, 0.2f, 1.0f};
     ex.material.metalness = 0.8f;
     ex.orientation = {0.9, 0.1, 0.2, 0.05};
     ex.perspective = 25.0f;
     ex.lights.push_back({{0.1, -0.5, -0.8}, {1.0f, 0.4f, 0.4f, 1.0f}, 0.5f});
     ex.reflectCanvas = true;
-    ex.runMaterials[1] = {{0.1f, 0.9f, 0.1f, 1.0f}, 0.0f, 0.9f};
+    ex.runMaterials[1] = {0.0f, 0.9f}; // finish only: colour is the run's paint (§10.4)
     b.extrude = ex;
     return b;
 }
@@ -196,6 +195,20 @@ std::unique_ptr<core::Document> sampleDocument() {
     core::vec::Object starObj;
     starObj.geometry = core::vec::ParametricShape{core::vec::StarShape{7, 30, 12, 1.5, 0.5}};
     starObj.fill = core::vec::SolidPaint{{0.9f, 0.2f, 0.4f, 1.0f}};
+    // 3D on a SHAPE (docs/vector-model.md §11): the same Extrude a text block carries, on the
+    // object instead. Written only when set, so this is also the fixture that proves a flat
+    // shape (the "Blob" above) still round-trips with no extrude block at all.
+    core::text::Extrude starEx;
+    starEx.depth = 9.5f;
+    starEx.bevelBack = {core::text::Bevel::Profile::Convex, 1.25f, 4};
+    starEx.material.roughness = 0.15f;
+    starEx.orientation = {0.8, 0.3, 0.4, 0.1};
+    starEx.perspective = 32.0f;
+    starEx.reflectCanvas = true;
+    starEx.reflectSidesOnly = true;
+    starEx.runMaterials[1] = {1.0f,
+                              0.05f}; // the stroke's own metal (finish; colour = stroke paint)
+    starObj.extrude = starEx;
     star->setObject(starObj);
     group->addOnTop(std::move(star));
     auto emptyVector = doc->makeVector("No object yet");

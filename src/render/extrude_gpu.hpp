@@ -35,9 +35,11 @@ public:
     // `env` is the optional canvas-reflection snapshot (used only when params.reflectCanvas);
     // `overlay` the optional baked Layer-Effects overlay maps (S30-e §12) the front cap -- and,
     // with overlay->wrapSides, the walls/bevels -- shade with instead of the constant albedo.
+    // `palette` is the colour each run paints with: the LAYER's own colour, not stored state.
     bool render(common::ImageF& dst, const core::text::ExtrudeMesh& mesh,
-                const core::text::Extrude& params, const common::Affine2D& toPixel,
-                bool antialias, const core::text::ExtrudeEnv* env = nullptr,
+                const core::text::Extrude& params, const core::text::ExtrudePalette& palette,
+                const common::Affine2D& toPixel, bool antialias,
+                const core::text::ExtrudeEnv* env = nullptr,
                 const core::text::ExtrudeOverlay* overlay = nullptr);
 
 private:

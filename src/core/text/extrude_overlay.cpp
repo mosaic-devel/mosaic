@@ -72,8 +72,9 @@ bool extrudeOverlaysActive(const LayerEffects& fx) {
 }
 
 ExtrudeOverlay buildExtrudeOverlay(const LayerEffects& fx, const ExtrudeMesh& mesh,
-                                   const Extrude& params, const common::Rect& uvDomain,
-                                   double pixelScale, bool antialias) {
+                                   const Extrude& params, const ExtrudePalette& palette,
+                                   const common::Rect& uvDomain, double pixelScale,
+                                   bool antialias) {
     ExtrudeOverlay out;
     out.wrapSides = params.overlayWrapSides;
     if (mesh.empty() || uvDomain.empty() || !extrudeOverlaysActive(fx)) return out;
@@ -114,12 +115,12 @@ ExtrudeOverlay buildExtrudeOverlay(const LayerEffects& fx, const ExtrudeMesh& me
         wh = wdim(tDepth);
     }
 
-    // One map per DISTINCT resolved albedo across the mesh's ranges (metal/roughness don't feed
-    // the overlay blend, so albedo is the whole key); every run maps to its slot.
+    // One map per DISTINCT base colour across the mesh's ranges (metal/roughness don't feed the
+    // overlay blend, so the colour is the whole key); every run maps to its slot.
     std::vector<ColorF> albedos;
     for (const ExtrudeMeshRange& range : mesh.ranges) {
         if (out.runToMap.contains(range.runIndex)) continue;
-        const ColorF base = materialForRun(params, range.runIndex).albedo;
+        const ColorF base = palette.forRun(range.runIndex);
         std::size_t slot = albedos.size();
         for (std::size_t i = 0; i < albedos.size(); ++i)
             if (albedos[i] == base) {

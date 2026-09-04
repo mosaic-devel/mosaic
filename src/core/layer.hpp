@@ -1,5 +1,15 @@
 #pragma once
 
+#include "common/exif.hpp"
+#include "common/geometry.hpp"
+#include "common/image.hpp"
+#include "core/blend_mode.hpp"
+#include "core/layer_effects.hpp"
+#include "core/text/extrude_mesh.hpp" // the 3D solid a VectorLayer/TextLayer caches
+#include "core/text/text_model.hpp"
+#include "core/texture/texture_params.hpp"
+#include "core/vector/object.hpp"
+
 #include <array>
 #include <cstdint>
 #include <map>
@@ -8,15 +18,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include "common/exif.hpp"
-#include "common/geometry.hpp"
-#include "common/image.hpp"
-#include "core/blend_mode.hpp"
-#include "core/layer_effects.hpp"
-#include "core/text/text_model.hpp"
-#include "core/texture/texture_params.hpp"
-#include "core/vector/object.hpp"
 
 // The layer tree -- the heart of Mosaic's non-destructive document model (PLAN §3.7). A
 // document is a tree of layers; the composite is derived from it by the compositor (S7), so
@@ -462,6 +463,42 @@ private:
 };
 
 // ---------------------------------------------------------------------------------------------
+// The 3D canvas-reflection environment (S30-d follow-up), shared by every layer kind that can
+// carry an Extrude -- TextLayer's block and VectorLayer's object both do. A downsampled snapshot
+// of the document composited BELOW the layer, which the extrude render lanes sample when
+// Extrude::reflectCanvas is set (a lone key light reads as dark plastic; chrome needs something
+// to mirror). Render SUPPORT, not document content: no undo, and it is deliberately not part of
+// any layer's content revision -- see setReflectionEnv's warning about two mirrors facing each
+// other.
+// ---------------------------------------------------------------------------------------------
+class ReflectionEnv {
+public:
+    [[nodiscard]] const common::ImageF* image() const noexcept {
+        return m_image ? &*m_image : nullptr;
+    }
+    // layer-local design point -> env image pixel.
+    [[nodiscard]] const common::Affine2D& toEnv() const noexcept { return m_toEnv; }
+    // The backdrop fingerprint the stored snapshot mirrors (the app's staleness key) -- per layer,
+    // so mirrors refresh with or without an edit session on the layer (round 3).
+    [[nodiscard]] std::uint64_t fingerprint() const noexcept { return m_fingerprint; }
+    void setFingerprint(std::uint64_t fp) noexcept { m_fingerprint = fp; }
+    // ++ on every set(), so a consumer with a pixel cache can tell a mirror swap from a content
+    // edit (TextLayer::cacheCurrent keys on it; a VectorLayer has no cache and ignores it).
+    [[nodiscard]] std::uint64_t revision() const noexcept { return m_revision; }
+    void set(std::optional<common::ImageF> img, common::Affine2D layerToEnv) {
+        m_image = std::move(img);
+        m_toEnv = layerToEnv;
+        ++m_revision;
+    }
+
+private:
+    std::optional<common::ImageF> m_image;
+    common::Affine2D m_toEnv = common::Affine2D::identity();
+    std::uint64_t m_fingerprint = 0;
+    std::uint64_t m_revision = 0;
+};
+
+// ---------------------------------------------------------------------------------------------
 // Vector (S25) -- holds exactly one vec::Object (geometry + fill + stroke), in layer-local
 // space; the layer transform places it. "Shape/path/gradient layer" are all this one kind,
 // distinguished only by the object's contents (docs/vector-model.md §1). Mutating the object
@@ -485,6 +522,9 @@ public:
     }
 
     // The tight layer-local bbox of the flattened geometry (lazy; recomputed after invalidation).
+    // For an EXTRUDED object this is the solid's projected extent, not the flat path's -- a
+    // rotated, deep solid reaches well outside the outline it was built from, and the Move gizmo
+    // and the compositor both frame this.
     [[nodiscard]] std::optional<common::Rect> contentBounds() const override;
     void invalidateContentBounds() noexcept {
         m_boundsValid = false;
@@ -492,11 +532,37 @@ public:
     }
     [[nodiscard]] std::uint64_t contentRevision() const noexcept override { return m_contentRevision; }
 
+    // ---- 3D (docs/vector-model.md §11) --------------------------------------------------------
+    // The extruded mesh, cached, because a vector layer has NO pixel cache: it rasterizes live at
+    // target resolution on EVERY composite (see the compositor's Vector arm). Without this, a
+    // tessellate + earcut of every contour would run per composite -- and per frame of an orbit
+    // drag, where the mesh by construction never changes. `key` is vec::shapeExtrudeMeshKey, which
+    // mixes only the mesh-affecting inputs, so a rotate / relight / recolour hits the cache
+    // exactly as docs/type-tool.md §10.5 intends.
+    //
+    // Mutable + const, like the text pixel cache and for the same reason: it is derived state the
+    // render path fills in, not document content, so filling it is not a document mutation.
+    [[nodiscard]] const text::ExtrudeMesh* cachedExtrudeMesh(std::uint64_t key) const noexcept {
+        return m_meshCache && m_meshKey == key ? &*m_meshCache : nullptr;
+    }
+    void setCachedExtrudeMesh(text::ExtrudeMesh mesh, std::uint64_t key) const {
+        m_meshCache = std::move(mesh);
+        m_meshKey = key;
+    }
+
+    // The 3D canvas-reflection snapshot (ReflectionEnv above), for an object whose Extrude sets
+    // reflectCanvas. The app builds it; the compositor hands it to the render lane.
+    [[nodiscard]] const ReflectionEnv& reflection() const noexcept { return m_env; }
+    [[nodiscard]] ReflectionEnv& reflection() noexcept { return m_env; }
+
 private:
     std::optional<vec::Object> m_object;
     mutable std::optional<common::Rect> m_contentBounds;
     mutable bool m_boundsValid = false;
     std::uint64_t m_contentRevision = 0;
+    mutable std::optional<text::ExtrudeMesh> m_meshCache; // see cachedExtrudeMesh
+    mutable std::uint64_t m_meshKey = 0;
+    ReflectionEnv m_env;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -566,7 +632,7 @@ public:
         m_cacheClipped = clipped;
         m_cacheLinear = bakedLinear;
         m_cacheRevision = m_contentRevision;
-        m_cacheEnvRevision = m_envRevision;
+        m_cacheEnvRevision = m_env.revision();
         ++m_cacheGeneration;
     }
     // True when the pixel/bounds caches already reflect the current block (no re-render needed).
@@ -576,7 +642,7 @@ public:
     // them apart is what stops a mirror swap from reading as a content edit -- see
     // setReflectionEnv.
     [[nodiscard]] bool cacheCurrent() const noexcept {
-        return m_cacheRevision == m_contentRevision && m_cacheEnvRevision == m_envRevision;
+        return m_cacheRevision == m_contentRevision && m_cacheEnvRevision == m_env.revision();
     }
     // How many times the pixel cache has been REPLACED. Monotonic, and it moves on every
     // setCachedImage -- including the ones that put different pixels behind an UNCHANGED
@@ -635,13 +701,11 @@ public:
     // Extrude::reflectCanvas is set. Render support like the pixel cache (not document content;
     // no undo). The app builds/refreshes it (core cannot composite documents); setting it bumps
     // the content revision so the pixel cache re-renders with the fresh mirror.
-    [[nodiscard]] const common::ImageF* reflectionEnv() const noexcept {
-        return m_reflectionEnv ? &*m_reflectionEnv : nullptr;
-    }
+    [[nodiscard]] const common::ImageF* reflectionEnv() const noexcept { return m_env.image(); }
     [[nodiscard]] const common::Affine2D& reflectionEnvTransform() const noexcept {
-        return m_reflectionEnvToPx;  // layer-local design point -> env image pixel
+        return m_env.toEnv(); // layer-local design point -> env image pixel
     }
-    // ⚠ THIS BUMPS m_envRevision, NOT m_contentRevision, AND THAT IS THE WHOLE POINT.
+    // ⚠ THIS BUMPS THE ENV REVISION, NOT m_contentRevision, AND THAT IS THE WHOLE POINT.
     //
     // It used to call invalidateContentBounds(), which was right about the consequence (the pixel
     // cache must re-render with the fresh mirror) and wrong about the CAUSE: the env is render
@@ -658,16 +722,18 @@ public:
     // anyway. The bounds are deliberately not invalidated either: a mirror changes the colour of
     // the solid's faces, never its silhouette.
     void setReflectionEnv(std::optional<common::ImageF> img, common::Affine2D layerToEnv) {
-        m_reflectionEnv = std::move(img);
-        m_reflectionEnvToPx = layerToEnv;
-        ++m_envRevision;
+        m_env.set(std::move(img), layerToEnv);
     }
     // The backdrop fingerprint the stored snapshot mirrors (the app's staleness key) -- per layer,
     // so mirrors refresh with or without an edit session on this block (round 3).
     [[nodiscard]] std::uint64_t reflectionEnvFingerprint() const noexcept {
-        return m_reflectionEnvFp;
+        return m_env.fingerprint();
     }
-    void setReflectionEnvFingerprint(std::uint64_t fp) noexcept { m_reflectionEnvFp = fp; }
+    void setReflectionEnvFingerprint(std::uint64_t fp) noexcept { m_env.setFingerprint(fp); }
+    // The holder itself -- the seam the app's (kind-agnostic) mirror refresh writes through, the
+    // same one VectorLayer exposes. The four accessors above stay as the render path's spelling.
+    [[nodiscard]] const ReflectionEnv& reflection() const noexcept { return m_env; }
+    [[nodiscard]] ReflectionEnv& reflection() noexcept { return m_env; }
 
 private:
     text::TextBlock m_block;
@@ -681,10 +747,7 @@ private:
     mutable bool m_cacheClipped = false;  // was the cache clipped to the Area box? (cache-validity key)
     mutable std::array<OverlayEffect, 3> m_cacheOverlays{};  // baked 3D overlays (cache-validity key)
     mutable std::optional<common::Rect> m_cacheInkBounds;  // alpha>0 bbox, layer-local (see accessor)
-    std::optional<common::ImageF> m_reflectionEnv;  // 3D canvas-reflection snapshot (app-built)
-    common::Affine2D m_reflectionEnvToPx = common::Affine2D::identity();
-    std::uint64_t m_reflectionEnvFp = 0;            // the backdrop state the snapshot mirrors
-    std::uint64_t m_envRevision = 0;                // ++ per setReflectionEnv (see cacheCurrent)
+    ReflectionEnv m_env;                  // 3D canvas-reflection snapshot (app-built; see above)
     bool m_autoName = true;               // name tracks content until a manual rename (round-4 #5)
     std::uint64_t m_contentRevision = 0;
 };

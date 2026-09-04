@@ -428,7 +428,22 @@ int main(int argc, char** argv) {
     // is the S60 perf session.
     mallopt(M_MMAP_THRESHOLD, 256 * 1024 * 1024);
 #endif
-    common::i18n::init();  // best-effort; strings stay English until a catalog is installed
+    // The UI language has to be settled BEFORE the first _() -- gettext resolves the catalog once
+    // -- and the saved preference (Settings -> General) lives in the settings file, which the full
+    // argument parse below has not reached yet. So peek: scan argv for --config (the only flag that
+    // can move the file) and read the one field. $MOSAIC_LANG still outranks it inside init().
+    // The proper load at "Settings + logging" below is unchanged and remains the one the app uses.
+    std::string uiLanguage;
+    {
+        std::filesystem::path cfg;
+        for (int i = 1; i + 1 < argc; ++i)
+            if (std::string_view(argv[i]) == "--config")
+                cfg = argv[i + 1];
+        uiLanguage =
+            common::loadSettings(cfg.empty() ? common::defaultSettingsPath() : cfg).language;
+    }
+    // best-effort; strings stay English until a catalog is installed
+    common::i18n::init("mosaic", nullptr, uiLanguage.c_str());
     common::i18n::initDomain("motivate");  // the Annoyances one-liners' own catalog (Settings)
 
     bool headless = false;

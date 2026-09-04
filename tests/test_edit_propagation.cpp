@@ -362,11 +362,12 @@ core::LayerId addRaster(core::Document& doc) {
 // The block every 3D case extrudes: short (one solid, fast), big enough to read.
 text::TextBlock make3dBlock(const std::string& family) {
     text::TextBlock b =
-        text::makeBlock("Ag", styleOf(family, 56.0f, ColorF{0.9f, 0.9f, 0.9f, 1.0f}));
+        // The colour is the RUN's, not the material's (§10.4): a 3D solid shades with the same
+        // paint the flat block would fill with.
+        text::makeBlock("Ag", styleOf(family, 56.0f, ColorF{0.80f, 0.55f, 0.20f, 1.0f}));
     text::Extrude e;
     e.depth = 14.0f;
     e.bevelFront.size = 2.0f;
-    e.material.albedo = ColorF{0.80f, 0.55f, 0.20f, 1.0f};
     b.extrude = e;
     return b;
 }
@@ -416,8 +417,6 @@ TEST_CASE("every 3D type parameter reaches the canvas") {
              e.orientation = mosaic::common::Quat::fromAxisAngle({0.0, 1.0, 0.0}, 0.5);
          }},
         {"perspective FOV", [](text::Extrude& e) { e.perspective = 55.0f; }},
-        {"material albedo",
-         [](text::Extrude& e) { e.material.albedo = ColorF{0.1f, 0.6f, 0.9f, 1.0f}; }},
         {"material metalness",
          [](text::Extrude& e) {
              e.material.metalness = 1.0f;

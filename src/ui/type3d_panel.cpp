@@ -77,9 +77,15 @@ const char* coalesceId(Role r) {
 struct MaterialPreset {
     const char* name;
     float metal, rough;
-    bool setsAlbedo;
+    bool setsColor;
     float r, g, b;
 };
+// A metal's reflectance IS its colour, so the metals still carry one -- but they now write it to
+// the LAYER's colour (the run's paint, the shape's fill), which is the only colour there is
+// (§10.4). Picking "Gold" therefore paints the thing gold, exactly as it looked like it did when
+// the colour lived on the material; the difference is that the colour it sets is afterwards
+// editable, visible in the 2D fill, and survives turning 3D off. Plastic/Matte are finishes with
+// no colour of their own and leave yours alone.
 constexpr MaterialPreset kPresets[] = {
     {"Chrome", 1.0f, 0.04f, true, 0.95f, 0.96f, 0.97f},
     {"Gold", 1.0f, 0.15f, true, 1.00f, 0.77f, 0.34f},
@@ -95,21 +101,15 @@ int presetIndexFor(const txt::Extrude& e) {
     for (std::size_t i = 0; i < std::size(kPresets); ++i) {
         const MaterialPreset& p = kPresets[i];
         const auto close = [](float a, float b) { return std::abs(a - b) <= 0.005f; };
-        if (!close(m.metalness, p.metal) || !close(m.roughness, p.rough)) continue;
-        if (p.setsAlbedo &&
-            (!close(m.albedo.r, p.r) || !close(m.albedo.g, p.g) || !close(m.albedo.b, p.b)))
+        if (!close(m.metalness, p.metal) || !close(m.roughness, p.rough))
             continue;
         return static_cast<int>(i) + 1;
     }
     return 0;
 }
 
-Fl_Color toFl(common::Color8 c) { return fl_rgb_color(c.r, c.g, c.b); }
-common::Color8 to8(common::ColorF c) {
-    const auto q = [](float v) {
-        return static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f));
-    };
-    return {q(c.r), q(c.g), q(c.b), 255};
+Fl_Color toFl(common::Color8 c) {
+    return fl_rgb_color(c.r, c.g, c.b);
 }
 
 struct Binding {
@@ -466,7 +466,6 @@ struct Type3dPanel::State {
     CheckBox* overlayWrap = nullptr;
     Dropdown* profile = nullptr;
     Dropdown* preset = nullptr;
-    SwatchChip* albedoChip = nullptr;
     ScrubSlider* depth = nullptr;
     ScrubSlider* bevel = nullptr;
     ScrubSlider* perspective = nullptr;
@@ -506,10 +505,12 @@ void Type3dPanel::applyControl(int roleInt) {
     switch (role) {
     case Role::Enable: {
         const bool on = m_state->enable != nullptr && m_state->enable->checked();
-        if (m_onBlockEdit)
-            m_onBlockEdit(coalesceId(role), [on](txt::TextBlock& b) {
-                if (on && !b.extrude) b.extrude = txt::Extrude{};
-                if (!on) b.extrude.reset();
+        if (m_onExtrudeEdit)
+            m_onExtrudeEdit(coalesceId(role), [on](std::optional<txt::Extrude>& ex) {
+                if (on && !ex)
+                    ex = txt::Extrude{};
+                if (!on)
+                    ex.reset();
             });
         break;
     }
@@ -552,8 +553,10 @@ void Type3dPanel::applyControl(int roleInt) {
         commitExtrude(coalesceId(role), [p](txt::Extrude& e) {
             e.material.metalness = p.metal;
             e.material.roughness = p.rough;
-            if (p.setsAlbedo) e.material.albedo = {p.r, p.g, p.b, 1.0f};
         });
+        // ...and the metals paint the SUBJECT, because that is where colour lives now.
+        if (p.setsColor && m_onSetColor)
+            m_onSetColor(common::ColorF{p.r, p.g, p.b, 1.0f});
         break;
     }
     case Role::LightPower:
@@ -711,7 +714,7 @@ void Type3dPanel::build() {
         d->add("Custom");
         for (const MaterialPreset& p : kPresets) d->add(p.name);
         d->callback(onControlCb, bind(Role::Preset));
-        d->copy_tooltip("Material presets: metals set their own colour, Plastic/Matte keep yours");
+        d->copy_tooltip("Finish presets; the metals also set the colour");
         m_state->preset = d;
         m_state->needsExtrude.push_back(d);
         cy += kRowH + kRowGap;
@@ -722,21 +725,6 @@ void Type3dPanel::build() {
                                    "0 = polished (tight highlight), 1 = matte");
     m_state->lightPower = sliderRow("Intensity", Role::LightPower, 0, 3, 0.05, "",
                                     "Key light strength (the lamp on the little sphere)");
-
-    {
-        caption("Material", "The solid's colour");
-        auto* chip = new SwatchChip(kFieldLeft, cy, kFieldW, kRowH);
-        chip->setGroundColor(pal.panelBg);
-        chip->setInteractive(true);
-        chip->copy_tooltip("Material colour \xE2\x80\x94 click to edit");
-        chip->setOnClick([this, chip] {
-            if (m_onEditColor && m_hasSession && m_current)
-                m_onEditColor(chip, m_current->material.albedo);
-        });
-        m_state->albedoChip = chip;
-        m_state->needsExtrude.push_back(chip);
-        cy += kRowH + kRowGap;
-    }
 
     m_contentH = cy + kPad - kRowGap;
     content->size(content->w(), m_contentH);
@@ -764,10 +752,12 @@ void Type3dPanel::resizeToContent() {
 }
 
 void Type3dPanel::commitExtrude(const char* id, std::function<void(txt::Extrude&)> mutate) {
-    if (m_reflecting || !m_onBlockEdit) return;
-    m_onBlockEdit(id, [mutate = std::move(mutate)](txt::TextBlock& b) {
-        if (!b.extrude) return;  // 3D turned off mid-gesture: a stale event, dropped
-        mutate(*b.extrude);
+    if (m_reflecting || !m_onExtrudeEdit)
+        return;
+    m_onExtrudeEdit(id, [mutate = std::move(mutate)](std::optional<txt::Extrude>& ex) {
+        if (!ex)
+            return; // 3D turned off mid-gesture: a stale event, dropped
+        mutate(*ex);
     });
 }
 
@@ -795,8 +785,6 @@ void Type3dPanel::reflect(const std::optional<txt::Extrude>& ex, bool hasSession
     m_state->roughness->value(e.material.roughness);
     m_state->lightPower->value(e.lights.empty() ? txt::kDefaultKeyLight.intensity
                                                 : e.lights[0].intensity);
-    if (m_state->albedoChip != nullptr)
-        m_state->albedoChip->setColour(to8(e.material.albedo));
     const bool active = hasSession && ex.has_value();
     for (Fl_Widget* w : m_state->needsExtrude) {
         if (active)

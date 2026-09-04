@@ -247,6 +247,19 @@ mosaic_embed_asset(mosaic_ui
     SYMBOL text_cursor_svg
     FILE "${CMAKE_SOURCE_DIR}/third_party/apple_cursor/svg/xterm.svg")
 
+# The Zoom tool's magnifier cursors (ui::zoomCursor): the vendored apple_cursor zoom-in / zoom-out
+# glyphs, recoloured to the theme two-tone at runtime exactly like the rotate/move arrows (same
+# blue #0000FF outline / green #00FF00 inner placeholders, same 257 canvas). Two files rather than
+# one recoloured glyph, because in and out differ by their + / - sign, which is art, not colour.
+mosaic_embed_asset(mosaic_ui
+    NAMESPACE mosaic::assets
+    SYMBOL zoom_in_cursor_svg
+    FILE "${CMAKE_SOURCE_DIR}/third_party/apple_cursor/svg/zoom-in.svg")
+mosaic_embed_asset(mosaic_ui
+    NAMESPACE mosaic::assets
+    SYMBOL zoom_out_cursor_svg
+    FILE "${CMAKE_SOURCE_DIR}/third_party/apple_cursor/svg/zoom-out.svg")
+
 # The default tool icon pack "Smalti" (S52, assets/default_tools/): 39 tool SVGs + the pack
 # manifest, embedded like the rest of assets/ so the per-icon fallback pack can never be missing.
 # User packs are runtime folders (dataDir()/icon_packs/<pack>/); only the default is baked in.

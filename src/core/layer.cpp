@@ -1,11 +1,12 @@
 #include "core/layer.hpp"
 
+#include "core/text/extrude_render.hpp" // projectedExtrudeBounds: a 3D object's reach
+#include "core/vector/flatten.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <utility>
 #include <vector>
-
-#include "core/vector/flatten.hpp"
 
 namespace mosaic::core {
 
@@ -420,6 +421,12 @@ std::optional<common::Rect> MagicLayer::contentBounds() const {
 std::optional<common::Rect> VectorLayer::contentBounds() const {
     if (!m_boundsValid) {
         m_contentBounds = m_object ? vec::contentBounds(*m_object) : std::nullopt;
+        // An EXTRUDED object reaches outside its own outline: the solid has depth, it is rotated,
+        // and its bevels bulge. Swell the flat box to the projected extent of the solid, exactly
+        // as the text lane sizes its cache (text::projectedExtrudeBounds), or the Move gizmo would
+        // frame the path while the render spills past it.
+        if (m_contentBounds && m_object && m_object->extrude)
+            m_contentBounds = text::projectedExtrudeBounds(*m_contentBounds, *m_object->extrude);
         m_boundsValid = true;
     }
     return m_contentBounds;

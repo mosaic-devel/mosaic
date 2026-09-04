@@ -29,6 +29,16 @@ using mosaic::common::Vec2;
 namespace {
 
 constexpr double kPi = 3.14159265358979323846;
+// Colour is a RENDER INPUT now, not material state (§10.4): a solid shades with the layer's own
+// colour, so these cases hand the lane a palette where they used to set Material::albedo.
+namespace {
+ExtrudePalette paletteOf(ColorF c) {
+    ExtrudePalette p;
+    p.runs = {c, c}; // run 0 and run 1 (a shape's fill and stroke) unless a case says otherwise
+    return p;
+}
+const ExtrudePalette kPal = paletteOf(ColorF{0.9f, 0.9f, 0.9f, 1.0f});
+} // namespace
 
 GlyphSolidInput square10() {
     vec::Contour c;
@@ -62,19 +72,21 @@ Ink scan(const ImageF& img) {
     return s;
 }
 
+// "Red" is the LAYER's colour now, so it rides the palette rather than the extrude params.
+const ExtrudePalette kRedPal = paletteOf(ColorF{1.0f, 0.0f, 0.0f, 1.0f});
+
 Extrude flatRed(float perspective = 0.0f) {
     Extrude e;
     e.depth = 20.0f;
     e.perspective = perspective;   // 0 = true ortho
     e.lightingEnabled = false;     // flat self-lit: exact colour asserts
-    e.material.albedo = {1.0f, 0.0f, 0.0f, 1.0f};
     return e;
 }
 
-ImageF renderSquare(const Extrude& e) {
+ImageF renderSquare(const Extrude& e, const ExtrudePalette& p = kRedPal) {
     const ExtrudeMesh mesh = buildExtrudeMesh({square10()}, e);
     ImageF img(40, 40);
-    renderExtrudeMeshF(img, mesh, e, Affine2D::translation(15.0, 15.0), /*antialias=*/true);
+    renderExtrudeMeshF(img, mesh, e, p, Affine2D::translation(15.0, 15.0), /*antialias=*/true);
     return img;
 }
 
@@ -119,25 +131,25 @@ TEST_CASE("a quarter turn about Y shows the solid's depth as its width") {
 TEST_CASE("lighting responds to the light direction (front lit vs back lit)") {
     Extrude lit = flatRed();
     lit.lightingEnabled = true;
-    lit.material.albedo = {0.8f, 0.8f, 0.8f, 1.0f};
+    const ExtrudePalette pal = paletteOf(ColorF{0.8f, 0.8f, 0.8f, 1.0f});
     lit.ambient = {0.15f, 0.15f, 0.15f, 1.0f};
     lit.lights = {Light{{0.0, 0.0, -1.0}, {1, 1, 1, 1}, 1.0f}};  // travels INTO the screen: front-lit
-    const Ink front = scan(renderSquare(lit));
+    const Ink front = scan(renderSquare(lit, pal));
 
     lit.lights[0].direction = {0.0, 0.0, 1.0};  // travels toward the viewer: the face sees ambient only
-    const Ink back = scan(renderSquare(lit));
+    const Ink back = scan(renderSquare(lit, pal));
 
     CHECK(front.lum > back.lum * 2.0);
-    // And the lighting toggle actually gates all of it.
+    // And the lighting toggle actually gates all of it: unlit, the face IS the run's own colour.
     lit.lightingEnabled = false;
-    const Ink flat = scan(renderSquare(lit));
+    const Ink flat = scan(renderSquare(lit, pal));
     CHECK(flat.at.r == doctest::Approx(0.8f));
 }
 
 TEST_CASE("metalness tints and roughness spreads the highlight") {
     Extrude e = flatRed();
     e.lightingEnabled = true;
-    e.material.albedo = {0.9f, 0.5f, 0.1f, 1.0f};
+    const ExtrudePalette pal = paletteOf(ColorF{0.9f, 0.5f, 0.1f, 1.0f});
     e.material.roughness = 0.15f;
     // Tilt slightly so the face catches an off-axis highlight.
     e.orientation = Quat::fromAxisAngle({1.0, 0.0, 0.0}, 0.3);
@@ -158,7 +170,7 @@ TEST_CASE("a metal mirrors the studio: brighter sky-facing than floor-facing") {
     e.depth = 12.0f;
     e.perspective = 0.0f;
     e.lightingEnabled = true;
-    e.material.albedo = {0.9f, 0.9f, 0.9f, 1.0f};
+    const ExtrudePalette pal = paletteOf(ColorF{0.9f, 0.9f, 0.9f, 1.0f});
     e.material.metalness = 1.0f;
     e.material.roughness = 0.0f;
     e.lights.clear();  // isolate the environment term
@@ -176,7 +188,7 @@ TEST_CASE("reflectCanvas mirrors the snapshot; transparent snapshot falls throug
     e.depth = 12.0f;
     e.perspective = 0.0f;
     e.lightingEnabled = true;
-    e.material.albedo = {0.9f, 0.9f, 0.9f, 1.0f};
+    const ExtrudePalette pal = paletteOf(ColorF{0.9f, 0.9f, 0.9f, 1.0f});
     e.material.metalness = 1.0f;
     e.material.roughness = 0.0f;
     e.lights.clear();
@@ -194,10 +206,10 @@ TEST_CASE("reflectCanvas mirrors the snapshot; transparent snapshot falls throug
     const ExtrudeEnv env{&red, Affine2D::scaling(0.2, 0.2)};  // everything lands in the red image
 
     ImageF with(40, 40), without(40, 40);
-    renderExtrudeMeshF(with, mesh, e, Affine2D::translation(15.0, 15.0), true, &env);
+    renderExtrudeMeshF(with, mesh, e, pal, Affine2D::translation(15.0, 15.0), true, &env);
     Extrude off = e;
     off.reflectCanvas = false;
-    renderExtrudeMeshF(without, mesh, off, Affine2D::translation(15.0, 15.0), true, &env);
+    renderExtrudeMeshF(without, mesh, off, pal, Affine2D::translation(15.0, 15.0), true, &env);
     // The mirror is grey without the snapshot and red-tinted with it.
     double biasWith = 0.0, biasWithout = 0.0;
     for (std::uint32_t y = 0; y < 40; ++y)
@@ -212,7 +224,7 @@ TEST_CASE("reflectCanvas mirrors the snapshot; transparent snapshot falls throug
     ImageF clear(8, 8);  // zero-initialized: alpha 0
     const ExtrudeEnv clearEnv{&clear, Affine2D::scaling(0.2, 0.2)};
     ImageF viaClear(40, 40);
-    renderExtrudeMeshF(viaClear, mesh, e, Affine2D::translation(15.0, 15.0), true, &clearEnv);
+    renderExtrudeMeshF(viaClear, mesh, e, pal, Affine2D::translation(15.0, 15.0), true, &clearEnv);
     CHECK(viaClear.rgba == without.rgba);
 
     // reflectSidesOnly. Ortho geometry: a surface's reflected ray heads behind (into the canvas)
@@ -221,7 +233,7 @@ TEST_CASE("reflectCanvas mirrors the snapshot; transparent snapshot falls throug
     Extrude sides = e;
     sides.reflectSidesOnly = true;
     ImageF viaSides(40, 40);
-    renderExtrudeMeshF(viaSides, mesh, sides, Affine2D::translation(15.0, 15.0), true, &env);
+    renderExtrudeMeshF(viaSides, mesh, sides, pal, Affine2D::translation(15.0, 15.0), true, &env);
     CHECK(viaSides.rgba == without.rgba);
 
     // And at 0.6 rad (<45) the roles swap: only the WALL mirrors, so sides-only is byte-identical
@@ -234,10 +246,11 @@ TEST_CASE("reflectCanvas mirrors the snapshot; transparent snapshot falls throug
     Extrude shallowOff = shallow;
     shallowOff.reflectCanvas = false;
     ImageF full06(40, 40), sides06(40, 40), off06(40, 40);
-    renderExtrudeMeshF(full06, meshShallow, shallow, Affine2D::translation(15.0, 15.0), true, &env);
-    renderExtrudeMeshF(sides06, meshShallow, shallowSides, Affine2D::translation(15.0, 15.0), true,
+    renderExtrudeMeshF(full06, meshShallow, shallow, pal, Affine2D::translation(15.0, 15.0), true,
                        &env);
-    renderExtrudeMeshF(off06, meshShallow, shallowOff, Affine2D::translation(15.0, 15.0), true,
+    renderExtrudeMeshF(sides06, meshShallow, shallowSides, pal, Affine2D::translation(15.0, 15.0),
+                       true, &env);
+    renderExtrudeMeshF(off06, meshShallow, shallowOff, pal, Affine2D::translation(15.0, 15.0), true,
                        &env);
     CHECK(sides06.rgba == full06.rgba);
     CHECK(sides06.rgba != off06.rgba);  // the wall genuinely mirrors
@@ -279,7 +292,7 @@ TEST_CASE("projectedExtrudeBounds contains every inked pixel") {
     e.bevelFront.size = 1.5f;
     const ExtrudeMesh mesh = buildExtrudeMesh({square10()}, e);
     ImageF img(80, 80);
-    renderExtrudeMeshF(img, mesh, e, Affine2D::translation(35.0, 35.0), true);
+    renderExtrudeMeshF(img, mesh, e, kRedPal, Affine2D::translation(35.0, 35.0), true);
     const Ink ink = scan(img);
     REQUIRE(ink.count > 0);
 
@@ -304,7 +317,7 @@ TEST_CASE("overlay maps bake in design space: gradient direction, blend opacity,
     CHECK_FALSE(extrudeOverlaysActive(none));
     none.gradientOverlay.enabled = true;  // paint stays NoPaint
     CHECK_FALSE(extrudeOverlaysActive(none));
-    CHECK(buildExtrudeOverlay(none, mesh, e, mesh.designBounds, 1.0, true).empty());
+    CHECK(buildExtrudeOverlay(none, mesh, e, kRedPal, mesh.designBounds, 1.0, true).empty());
 
     // A linear left->right gradient (identity transform = across the normalised domain).
     mosaic::core::LayerEffects fx;
@@ -312,7 +325,8 @@ TEST_CASE("overlay maps bake in design space: gradient direction, blend opacity,
     vec::Gradient g;
     g.stops = {{0.0, ColorF{1, 0, 0, 1}}, {1.0, ColorF{0, 0, 1, 1}}};
     fx.gradientOverlay.paint = g;
-    const ExtrudeOverlay ov = buildExtrudeOverlay(fx, mesh, e, mesh.designBounds, 4.0, true);
+    const ExtrudeOverlay ov =
+        buildExtrudeOverlay(fx, mesh, e, kRedPal, mesh.designBounds, 4.0, true);
     REQUIRE(ov.maps.size() == 1);
     REQUIRE(ov.mapForRun(0) == &ov.maps[0]);
     const ImageF& map = ov.maps[0];
@@ -329,24 +343,29 @@ TEST_CASE("overlay maps bake in design space: gradient direction, blend opacity,
     half.colorOverlay.enabled = true;
     half.colorOverlay.paint = vec::SolidPaint{ColorF{0, 1, 0, 1}};
     half.colorOverlay.opacity = 0.5f;
-    const ExtrudeOverlay hov = buildExtrudeOverlay(half, mesh, e, mesh.designBounds, 1.0, true);
+    const ExtrudeOverlay hov =
+        buildExtrudeOverlay(half, mesh, e, kRedPal, mesh.designBounds, 1.0, true);
     REQUIRE(hov.maps.size() == 1);
     const ColorF mid = hov.maps[0].at(hov.maps[0].width / 2, hov.maps[0].height / 2);
     CHECK(mid.r == doctest::Approx(0.5f).epsilon(0.01));
     CHECK(mid.g == doctest::Approx(0.5f).epsilon(0.01));
     CHECK(mid.b == doctest::Approx(0.0f).epsilon(0.01));
 
-    // Per-run materials: distinct albedos get distinct maps; equal albedos share one.
+    // Per-run colour: distinct colours get distinct maps; equal colours share one.
     GlyphSolidInput second = square10();
     second.runIndex = 1;
     GlyphSolidInput third = square10();
     third.runIndex = 2;
     Extrude multi = e;
-    multi.runMaterials[1] = Material{{0.0f, 0.0f, 1.0f, 1.0f}, 0.0f, 0.5f};  // blue override
-    multi.runMaterials[2] = multi.material;  // same as the default red -> shares its map
+    multi.runMaterials[1] = Material{0.0f, 0.5f};
+    multi.runMaterials[2] = multi.material;
+    // The map key is the run's COLOUR (§10.4): run 1 is blue, run 2 shares run 0's red.
+    ExtrudePalette multiPal;
+    multiPal.runs = {ColorF{1.0f, 0.0f, 0.0f, 1.0f}, ColorF{0.0f, 0.0f, 1.0f, 1.0f},
+                     ColorF{1.0f, 0.0f, 0.0f, 1.0f}};
     const ExtrudeMesh meshMulti = buildExtrudeMesh({square10(), second, third}, multi);
     const ExtrudeOverlay mov =
-        buildExtrudeOverlay(half, meshMulti, multi, meshMulti.designBounds, 1.0, true);
+        buildExtrudeOverlay(half, meshMulti, multi, multiPal, meshMulti.designBounds, 1.0, true);
     CHECK(mov.maps.size() == 2);
     CHECK(mov.mapForRun(0) == mov.mapForRun(2));
     CHECK(mov.mapForRun(0) != mov.mapForRun(1));
@@ -372,7 +391,7 @@ TEST_CASE("the mesh rasteriser is banded by SCANLINE, so it stays deterministic 
     constexpr std::uint32_t kW = 420, kH = 380;
     const auto render = [&] {
         ImageF img(kW, kH);
-        renderExtrudeMeshF(img, mesh, e,
+        renderExtrudeMeshF(img, mesh, e, kRedPal,
                            Affine2D::translation(60.0, 40.0) * Affine2D::scaling(28.0, 28.0),
                            /*antialias=*/true);
         return img;
@@ -427,8 +446,10 @@ TEST_CASE(
     fx.gradientOverlay.paint = g;
     fx.gradientOverlay.opacity = 0.5f; // half, so the solid beneath it still shows through
 
-    const ExtrudeOverlay a = buildExtrudeOverlay(fx, mesh, e, mesh.designBounds, 8.0, true);
-    const ExtrudeOverlay b = buildExtrudeOverlay(fx, mesh, e, mesh.designBounds, 8.0, true);
+    const ExtrudeOverlay a =
+        buildExtrudeOverlay(fx, mesh, e, kRedPal, mesh.designBounds, 8.0, true);
+    const ExtrudeOverlay b =
+        buildExtrudeOverlay(fx, mesh, e, kRedPal, mesh.designBounds, 8.0, true);
     REQUIRE(a.maps.size() == 1);
     REQUIRE(b.maps.size() == 1);
     REQUIRE(a.wallMaps.size() == 1);
@@ -462,7 +483,8 @@ TEST_CASE(
     // The SOLID under the gradient is really in the result: drop it and the map must change.
     mosaic::core::LayerEffects gradOnly;
     gradOnly.gradientOverlay = fx.gradientOverlay;
-    const ExtrudeOverlay go = buildExtrudeOverlay(gradOnly, mesh, e, mesh.designBounds, 8.0, true);
+    const ExtrudeOverlay go =
+        buildExtrudeOverlay(gradOnly, mesh, e, kRedPal, mesh.designBounds, 8.0, true);
     REQUIRE(go.maps.size() == 1);
     REQUIRE(go.maps[0].rgba.size() == map.rgba.size());
     CHECK(go.maps[0].rgba != map.rgba);
@@ -479,13 +501,14 @@ TEST_CASE("the front face carries the overlay; walls join only in wrap mode; the
 
     const auto render = [&](const Extrude& params, const ExtrudeOverlay* ov) {
         ImageF img(60, 60);
-        renderExtrudeMeshF(img, mesh, params, Affine2D::translation(25.0, 25.0), true, nullptr,
-                           ov);
+        renderExtrudeMeshF(img, mesh, params, kRedPal, Affine2D::translation(25.0, 25.0), true,
+                           nullptr, ov);
         return img;
     };
 
     // Face-on ortho: the whole silhouette IS the front cap -- every inked pixel turns green.
-    const ExtrudeOverlay ov = buildExtrudeOverlay(fx, mesh, e, mesh.designBounds, 1.0, true);
+    const ExtrudeOverlay ov =
+        buildExtrudeOverlay(fx, mesh, e, kRedPal, mesh.designBounds, 1.0, true);
     const Ink front = scan(render(e, &ov));
     REQUIRE(front.count > 0);
     CHECK(front.at.g == doctest::Approx(1.0f));
@@ -498,18 +521,18 @@ TEST_CASE("the front face carries the overlay; walls join only in wrap mode; the
     const ExtrudeMesh meshSide = buildExtrudeMesh({square10()}, side);
     const auto renderSide = [&](const Extrude& params, const ExtrudeOverlay* o) {
         ImageF img(60, 60);
-        renderExtrudeMeshF(img, meshSide, params, Affine2D::translation(25.0, 25.0), true,
+        renderExtrudeMeshF(img, meshSide, params, kRedPal, Affine2D::translation(25.0, 25.0), true,
                            nullptr, o);
         return img;
     };
     const ExtrudeOverlay ovSide =
-        buildExtrudeOverlay(fx, meshSide, side, meshSide.designBounds, 1.0, true);
+        buildExtrudeOverlay(fx, meshSide, side, kRedPal, meshSide.designBounds, 1.0, true);
     const ImageF plainSide = renderSide(side, nullptr);
     CHECK(renderSide(side, &ovSide).rgba == plainSide.rgba);
     Extrude wrap = side;
     wrap.overlayWrapSides = true;
     const ExtrudeOverlay ovWrap =
-        buildExtrudeOverlay(fx, meshSide, wrap, meshSide.designBounds, 1.0, true);
+        buildExtrudeOverlay(fx, meshSide, wrap, kRedPal, meshSide.designBounds, 1.0, true);
     const Ink wrapped = scan(renderSide(wrap, &ovWrap));
     REQUIRE(wrapped.count > 0);
     CHECK(wrapped.at.g == doctest::Approx(1.0f));
@@ -522,11 +545,11 @@ TEST_CASE("the front face carries the overlay; walls join only in wrap mode; the
     back.orientation = Quat::fromAxisAngle({0.0, 1.0, 0.0}, kPi);
     const ExtrudeMesh meshBack = buildExtrudeMesh({square10()}, back);
     const ExtrudeOverlay ovBack =
-        buildExtrudeOverlay(fx, meshBack, back, meshBack.designBounds, 1.0, true);
+        buildExtrudeOverlay(fx, meshBack, back, kRedPal, meshBack.designBounds, 1.0, true);
     ImageF plainBack(60, 60), overlaidBack(60, 60);
-    renderExtrudeMeshF(plainBack, meshBack, back, Affine2D::translation(25.0, 25.0), true);
-    renderExtrudeMeshF(overlaidBack, meshBack, back, Affine2D::translation(25.0, 25.0), true,
-                       nullptr, &ovBack);
+    renderExtrudeMeshF(plainBack, meshBack, back, kRedPal, Affine2D::translation(25.0, 25.0), true);
+    renderExtrudeMeshF(overlaidBack, meshBack, back, kRedPal, Affine2D::translation(25.0, 25.0),
+                       true, nullptr, &ovBack);
     const Ink backInk = scan(overlaidBack);
     REQUIRE(backInk.count > 0);
     int differing = 0;
@@ -549,10 +572,10 @@ TEST_CASE("the front face carries the overlay; walls join only in wrap mode; the
     Extrude backWrap = back;
     backWrap.overlayWrapSides = true;
     const ExtrudeOverlay ovBackWrap =
-        buildExtrudeOverlay(fx, meshBack, backWrap, meshBack.designBounds, 1.0, true);
+        buildExtrudeOverlay(fx, meshBack, backWrap, kRedPal, meshBack.designBounds, 1.0, true);
     ImageF wrappedBack(60, 60);
-    renderExtrudeMeshF(wrappedBack, meshBack, backWrap, Affine2D::translation(25.0, 25.0), true,
-                       nullptr, &ovBackWrap);
+    renderExtrudeMeshF(wrappedBack, meshBack, backWrap, kRedPal, Affine2D::translation(25.0, 25.0),
+                       true, nullptr, &ovBackWrap);
     const Ink wrappedBackInk = scan(wrappedBack);
     REQUIRE(wrappedBackInk.count > 0);
     CHECK(wrappedBackInk.at.g == doctest::Approx(1.0f));
@@ -580,10 +603,12 @@ TEST_CASE("wrap mode tiles a pattern UNDISTORTED around the walls (no depth stre
     pp.scale = 4.0f;  // 4-design-px cells: several flips across the 24px depth
     fx.patternOverlay.paint = vec::Pattern{pp};
 
-    const ExtrudeOverlay ov = buildExtrudeOverlay(fx, mesh, e, mesh.designBounds, 2.0, true);
+    const ExtrudeOverlay ov =
+        buildExtrudeOverlay(fx, mesh, e, kRedPal, mesh.designBounds, 2.0, true);
     REQUIRE_FALSE(ov.wallMaps.empty());
     ImageF img(70, 70);
-    renderExtrudeMeshF(img, mesh, e, Affine2D::translation(30.0, 30.0), true, nullptr, &ov);
+    renderExtrudeMeshF(img, mesh, e, kRedPal, Affine2D::translation(30.0, 30.0), true, nullptr,
+                       &ov);
     const Ink ink = scan(img);
     REQUIRE(ink.count > 0);
     // March along the DEPTH axis (screen-x) across the wall's midline: the checker must flip.
@@ -615,9 +640,10 @@ TEST_CASE("renderTextF bakes layer overlays onto an extruded block; flat text ig
     st.setSolidFill({0, 0, 0, 1});
     TextBlock flat = makeBlock("Hi", st);
     TextBlock solid = flat;
+    st.setSolidFill({1, 0, 0, 1}); // the run's own red -- what the solid shades with (§10.4)
+    solid = mosaic::core::text::makeBlock(solid.utf8, st);
     solid.extrude = Extrude{};
     solid.extrude->lightingEnabled = false;
-    solid.extrude->material.albedo = {1.0f, 0.0f, 0.0f, 1.0f};
 
     mosaic::core::LayerEffects fx;
     fx.colorOverlay.enabled = true;
@@ -656,9 +682,10 @@ TEST_CASE("an effects edit re-renders an extruded block's pixel cache (and only 
     st.sizePx = 40.0f;
     st.setSolidFill({0, 0, 0, 1});
     TextBlock solid = makeBlock("Hi", st);
+    st.setSolidFill({1, 0, 0, 1}); // the run's own red -- what the solid shades with (§10.4)
+    solid = mosaic::core::text::makeBlock(solid.utf8, st);
     solid.extrude = Extrude{};
     solid.extrude->lightingEnabled = false;
-    solid.extrude->material.albedo = {1.0f, 0.0f, 0.0f, 1.0f};
     tl->setBlock(solid);
 
     CHECK(refreshTextCache(*tl, shaper, db));
@@ -704,10 +731,10 @@ TEST_CASE("renderTextF routes an extruded block through the 3D lane end to end")
     CharStyle st;
     st.font.family = db.defaultFamily();
     st.sizePx = 48.0f;
-    st.setSolidFill({0, 0, 0, 1});
+    st.setSolidFill({0.85f, 0.1f, 0.1f, 1.0f}); // a RED run
     TextBlock flat = makeBlock("Hi", st);
     TextBlock solid = flat;
-    solid.extrude = Extrude{};  // defaults: near-ortho, lit, grey material
+    solid.extrude = Extrude{}; // defaults: near-ortho, lit
 
     const ImageF img2d = renderTextF(shaper, flat, db, 300, 120, Affine2D::translation(20, 60));
     const ImageF img3d = renderTextF(shaper, solid, db, 300, 120, Affine2D::translation(20, 60));
@@ -715,8 +742,20 @@ TEST_CASE("renderTextF routes an extruded block through the 3D lane end to end")
     const Ink lit3d = scan(img3d);
     REQUIRE(flat2d.count > 0);
     REQUIRE(lit3d.count > 0);
-    // The 3D lane shades with the default grey material, not the run's black fill.
-    CHECK(lit3d.lum > flat2d.lum + 0.05);
+    // ⚠ The 3D lane shades with the RUN's own colour (§10.4), and this assertion used to say the
+    // exact opposite -- that a 3D block came out the material's grey whatever its runs said. That
+    // was the bug: enabling 3D repainted the text. So the test now asks what the feature promises,
+    // which is that the colour FOLLOWS the run: recolour the run, and the solid recolours with it.
+    CharStyle blueStyle = st;
+    blueStyle.setSolidFill({0.1f, 0.1f, 0.85f, 1.0f});
+    TextBlock blueSolid = makeBlock("Hi", blueStyle);
+    blueSolid.extrude = Extrude{};
+    const Ink blue3d =
+        scan(renderTextF(shaper, blueSolid, db, 300, 120, Affine2D::translation(20, 60)));
+    REQUIRE(blue3d.count > 0);
+    // Red and blue have very different luminance (0.2126 R vs 0.0722 B), so a solid that ignored
+    // the run -- the old behaviour -- would score identically for both.
+    CHECK(lit3d.lum > blue3d.lum + 0.05);
     // At identity orientation the solid sits where the flat text sat (scale-true z=0 plane):
     // the ink bboxes overlap substantially.
     CHECK(lit3d.minX < flat2d.maxX);

@@ -9,6 +9,9 @@
 #include "core/document.hpp"
 #include "core/layer.hpp"
 #include "core/layer_effects.hpp"
+#include "core/text/extrude_overlay.hpp"
+#include "core/text/extrude_render.hpp" // the 3D lane a Vector layer's Extrude renders through
+#include "core/vector/extrude_shape.hpp"
 #include "core/vector/flatten.hpp" // vec::contentBounds(Object) -- the merge-down vector route
 #include "core/vector/raster.hpp"
 #include "core/vector/to_path.hpp" // vec::pathFromGeometry / transformedPath (same route)
@@ -2380,6 +2383,96 @@ ImageF renderLayerRaw(const core::Layer& layer, const common::Affine2D& pre, std
         // The AA combo governs vector edges too (S26): an explicit Nearest filter hardens coverage
         // to crisp/aliased edges; Auto + every other kernel keep the analytic smooth AA.
         const bool antialias = rs.filter != ResampleFilter::Nearest;
+        // 3D (docs/vector-model.md §11): an extruded object renders as a SOLID instead of a flat
+        // fill -- through the same mesher and the same render lane 3D text uses, into the same
+        // full-window ImageF through the same `vplace`, so it composites, masks and blends exactly
+        // like the flat shape it replaces.
+        if (vlayer->object()->extrude) {
+            ImageF eout(w, h);
+            const core::text::Extrude& ex = *vlayer->object()->extrude;
+            // Flatten in DEVICE space (the same argument text_render makes for glyph curves): the
+            // placement's scale is already baked into `vplace`, so tolerating 0.25 px AFTER the
+            // bake is what stops a magnified shape from showing the facets of a coarse
+            // tessellation.
+            const core::text::ExtrudeMesh* mesh = nullptr;
+            const std::uint64_t key = core::vec::shapeExtrudeMeshKey(*vlayer->object(), ex);
+            if (const core::text::ExtrudeMesh* hit = vlayer->cachedExtrudeMesh(key)) {
+                mesh = hit;
+                workCounters().shapeMeshHits.fetch_add(1, std::memory_order_relaxed);
+            } else {
+                MOSAIC_PERF_SCOPE("3D shape mesh", common::Lane::Cpu);
+                workCounters().shapeMeshBuilds.fetch_add(1, std::memory_order_relaxed);
+                vlayer->setCachedExtrudeMesh(
+                    core::vec::buildShapeExtrudeMesh(*vlayer->object(), ex,
+                                                     core::vec::kMeshTolerancePx, vplace),
+                    key);
+                mesh = vlayer->cachedExtrudeMesh(key);
+            }
+            if (mesh != nullptr && !mesh->empty()) {
+                // The solid's colour is the OBJECT's colour: run 0 is the fill, run 1 the stroke
+                // (docs/vector-model.md §11 -- the same partition the mesher tags its solids with).
+                // Read live, every composite, so recolouring the shape recolours the solid; the
+                // 3D material carries only the finish now.
+                core::text::ExtrudePalette palette;
+                palette.runs = {core::vec::representativeColor(vlayer->object()->fill),
+                                core::vec::representativeColor(vlayer->object()->stroke.paint)};
+                core::text::ExtrudeEnv env;
+                const core::text::ExtrudeEnv* envPtr = nullptr;
+                if (ex.reflectCanvas && vlayer->reflection().image() != nullptr) {
+                    env.image = vlayer->reflection().image();
+                    env.layerToEnv = vlayer->reflection().toEnv();
+                    envPtr = &env;
+                }
+                // Layer-Effects overlays baked PER FACE (docs/type-tool.md §12), exactly as for a
+                // 3D text block: a colour/gradient/pattern overlay belongs on the solid's surface,
+                // not smeared over the rectangle its projection happens to occupy. Unlike the mesh
+                // this is rebuilt per composite -- a vector layer has no pixel cache to hang it on
+                // -- but `extrudeOverlaysActive` is false unless the layer really carries one, so
+                // only the shapes that use the feature pay for it.
+                core::text::ExtrudeOverlay overlay;
+                if (layer.hasEffects() && core::text::extrudeOverlaysActive(layer.effects())) {
+                    // Texel density follows the output, like the text lane's: the larger
+                    // basis-vector magnification of the placement, never below 1:1.
+                    const double bakeScale = std::max({1.0, std::hypot(vplace.m00, vplace.m10),
+                                                       std::hypot(vplace.m01, vplace.m11)});
+                    MOSAIC_PERF_SCOPE("3D shape overlay bake", common::Lane::Cpu);
+                    workCounters().shapeOverlayBakes.fetch_add(1, std::memory_order_relaxed);
+                    // The UV domain IS mesh->designBounds here: unlike renderTextF, nothing
+                    // re-bases it afterwards (a shape has no shaped-bounds pivot to prefer).
+                    overlay =
+                        core::text::buildExtrudeOverlay(layer.effects(), *mesh, ex, palette,
+                                                        mesh->designBounds, bakeScale, antialias);
+                }
+                MOSAIC_PERF_SCOPE("3D shape render", common::Lane::Cpu);
+                workCounters().shapeSolidRenders.fetch_add(1, std::memory_order_relaxed);
+                workCounters().shapeSolidTriangles.fetch_add(mesh->triangleCount(),
+                                                             std::memory_order_relaxed);
+                core::text::renderExtrudeMeshF(eout, *mesh, ex, palette, vplace, antialias, envPtr,
+                                               overlay.empty() ? nullptr : &overlay);
+            }
+            if (const core::RasterMask* m = layer.mask();
+                m != nullptr && m->enabled && !m->empty() && m->linked) {
+                if (const std::optional<common::Affine2D> inv =
+                        (vplace * core::maskPlacement(layer, *m)).inverse())
+                    foldMaskThrough(eout, *m, *inv);
+            }
+            foldUnlinkedMask(eout, layer, pre);
+            // Report the window the solid actually reached, so the blend walks that instead of
+            // every texel of the buffer. A small 3D badge on a 40 Mpx canvas otherwise costs a
+            // full-canvas blend per composite for the few thousand pixels it covers -- the same
+            // saving the flat arm gets for free from rasterizeObjectF's own bounds. Conservative
+            // by construction: projectedExtrudeBounds already swells the 2D box by the bevels'
+            // outward bulge and the rotated depth, and the pad covers the resample footprint.
+            if (written != nullptr && mesh != nullptr && !mesh->empty()) {
+                const common::Rect reach =
+                    vplace.mapBounds(core::text::projectedExtrudeBounds(mesh->designBounds, ex));
+                *written = common::Rect{reach.x - kMaxFootprintRadius - 1.0,
+                                        reach.y - kMaxFootprintRadius - 1.0,
+                                        reach.w + 2.0 * kMaxFootprintRadius + 2.0,
+                                        reach.h + 2.0 * kMaxFootprintRadius + 2.0};
+            }
+            return eout;
+        }
         // Scoped because this is re-run at TARGET resolution on EVERY composite -- there is no
         // rasterised cache for a vector layer, and a live BooleanCompound re-flattens and
         // re-resolves its operands each time. Cheap for a rounded rect, not obviously cheap for a
@@ -3663,10 +3756,17 @@ bool DragCompositeCache::rebuild(const core::Document& doc, core::LayerId target
         return false;  // not a top-level child: the general case belongs to S60-a's tiles
     const core::Layer& moved = root.child(idx);
     m_targetIsGroup = moved.kind() == core::LayerKind::Group;
+    // The kinds the replay below can produce per frame. Raster/Magic/Text/Texture each have
+    // CACHED PIXELS to re-place through the live transform; Vector has none -- it rasterises at
+    // target resolution every composite, which is what keeps it crisp at any zoom -- so it re-runs
+    // its own render arm instead (see the replay). Excluding it meant every frame of a shape drag
+    // fell back to a FULL canvas walk, which is the same ~23 ms (release) / ~50 ms (debug) at
+    // 1920x1080 whether the shape is a 12-triangle square or nothing at all: "even dragging the 2d
+    // shape around is very slow" (user 2026-08-28).
     if (!m_targetIsGroup && moved.as<core::RasterLayer>() == nullptr &&
         moved.as<core::MagicLayer>() == nullptr && moved.as<core::TextLayer>() == nullptr &&
-        moved.as<core::TextureLayer>() == nullptr)
-        return false;  // no cached pixels to re-place per frame (and no Move handles either)
+        moved.as<core::TextureLayer>() == nullptr && moved.as<core::VectorLayer>() == nullptr)
+        return false; // nothing this cache knows how to re-produce per frame
     // The moved layer is re-rasterised per frame BELOW without going through renderLayer, so its
     // own effects would be skipped; a group target's cached local buffer is also sized to plain
     // content bounds (no effect margin). Either way, fall back to the full composite (which
@@ -3862,6 +3962,20 @@ std::optional<common::Image> DragCompositeCache::composite(const core::Document&
                                    place, m_width, m_height,
                                    resolveFilter(m_filter, place, m_liveDrag));
             }
+        } else if (moved.as<core::VectorLayer>() != nullptr) {
+            // Vector: no cached pixels to place, so re-run the very SAME arm the full walk would,
+            // at pre = identity (this cache only ever targets a top-level child). Byte-identical
+            // by construction rather than by imitation -- which is what the four hand-written
+            // placements above have to be careful about, and what a fifth one would get wrong.
+            //
+            // It is worth a fresh raster per frame because that raster is BOUNDED: a flat shape to
+            // its own pixel bbox (rasterizeObjectF), a 3D one to the solid's projected reach, and
+            // a 3D one also reuses the layer's cached mesh. The whole stack below and above it
+            // stays cached, which is the entire point of this class and exactly what a shape drag
+            // was not getting.
+            const ResampleCtx rs{m_filter, m_liveDrag, /*reconstructPartitions=*/true};
+            m_replaySrc = renderLayer(moved, common::Affine2D::identity(), m_width, m_height,
+                                      compositeBufferOver, rs);
         } else {
             invalidate();  // the target's kind changed under us (rebuild filtered these)
             return std::nullopt;

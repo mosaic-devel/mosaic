@@ -633,6 +633,74 @@ TEST_CASE("underline adds ink below the baseline") {
     CHECK(u.maxY >= p.maxY - 0.5);   // and it reaches at/below the glyph baseline region
 }
 
+// The strikeout metrics now come from the face's OS/2 table (yStrikeoutPosition / yStrikeoutSize)
+// rather than from a fixed 0.26-em guess, and the underline position is only honoured when the
+// face states one. A units or sign slip in either would put the bar somewhere absurd, so assert
+// where the bar LANDS, not merely that it added pixels: a strike crosses the glyphs, which means
+// it must not reach past the ink the same text already had.
+TEST_CASE("a strikethrough bar crosses the glyphs instead of sitting outside them") {
+    mosaic::platform::FontDB db;
+    if (!fontsAvailable(db))
+        return;
+    TextShaper shaper;
+    const auto base = styleOf({0, 0, 0, 1}, 48.0f, db.defaultFamily());
+    auto struck = base;
+    struck.strikethrough = true;
+
+    // "xoxo" -- no ascenders, no descenders, so the ink box IS the x-height band and a bar that
+    // escaped it (above the cap line or below the baseline) grows the box measurably.
+    const InkStats p =
+        scan(renderTextF(shaper, makeBlock("xoxo", base), db, 300, 120, Affine2D::identity()));
+    const InkStats s =
+        scan(renderTextF(shaper, makeBlock("xoxo", struck), db, 300, 120, Affine2D::identity()));
+    REQUIRE(p.inked > 0);
+    CHECK(s.inked > p.inked);      // the bar is drawn at all
+    CHECK(s.minY >= p.minY - 0.5); // ... not floating above the letters
+    CHECK(s.maxY <= p.maxY + 0.5); // ... nor hanging below the baseline
+}
+
+// The 3D lane used to drop underline/strikethrough on the floor: an extruded block rendered
+// through the mesh path, which never looked at the decoration bars at all, so "U" and "S" were
+// silently inert the moment 3D was switched on (user 2026-08-28). Both now extrude as solids of
+// their own, so each must add ink to the SOLID exactly as it adds ink to the flat render.
+TEST_CASE("underline and strikethrough extrude with 3D text") {
+    mosaic::platform::FontDB db;
+    if (!fontsAvailable(db))
+        return;
+    TextShaper shaper;
+    const auto base = styleOf({0, 0, 0, 1}, 48.0f, db.defaultFamily());
+
+    // A shallow head-on solid: the decoration must be visible in the render, not hidden behind a
+    // steep rotation, and the default orientation is exactly head-on.
+    Extrude ex;
+    ex.depth = 6.0f;
+    ex.lightingEnabled = false; // flat self-lit faces: ink presence, not shading, is the question
+
+    auto blockWith = [&](bool underline, bool strike) {
+        auto st = base;
+        st.underline = underline;
+        st.strikethrough = strike;
+        TextBlock b = makeBlock("mm", st);
+        b.extrude = ex;
+        return b;
+    };
+
+    const InkStats plain3d =
+        scan(renderTextF(shaper, blockWith(false, false), db, 300, 160, Affine2D::identity()));
+    REQUIRE(plain3d.inked > 0); // the solid itself rendered at all
+    const InkStats ul3d =
+        scan(renderTextF(shaper, blockWith(true, false), db, 300, 160, Affine2D::identity()));
+    const InkStats st3d =
+        scan(renderTextF(shaper, blockWith(false, true), db, 300, 160, Affine2D::identity()));
+
+    CHECK(ul3d.inked > plain3d.inked);      // the underline bar is part of the solid
+    CHECK(ul3d.maxY >= plain3d.maxY - 0.5); // ... and it sits at/below the glyph bottoms
+    CHECK(st3d.inked > plain3d.inked);      // the strike bar is too
+    // A strike crosses the glyphs, so it widens the solid no further than the glyphs already do;
+    // what it must do is add ink strictly INSIDE the existing vertical span.
+    CHECK(st3d.maxY <= plain3d.maxY + 0.5);
+}
+
 // The display pipeline (S29-b): refreshTextCache populates the layer's pixel + bounds caches, and
 // the (font-free) compositor composites those cached pixels like a raster source (docs §5.4).
 TEST_CASE("a TextLayer composites its cached pixels into the document") {

@@ -79,6 +79,66 @@ void appendRect(vec::Path& path, double x0, double y0, double x1, double y1) {
     path.subpaths.push_back(std::move(sp));
 }
 
+// Underline / strikethrough placement: one bar per maximal same-run span on each line, handed to
+// `emit(runIndex, layer-space rect)` in line order.
+//
+// Shared by BOTH lanes on purpose. The 2D lane appends each bar to its run's fill path; the 3D lane
+// feeds it to the mesher as one more solid to extrude. They were not shared before, and the 3D lane
+// simply had no decorations at all -- underline and strikethrough silently did nothing the moment a
+// block was extruded (user 2026-08-28). A bar is a filled rectangle in the same layer space the
+// glyph outlines are in, so there is no reason for the two lanes to disagree about where it goes.
+template <typename Emit>
+void forEachDecorationBar(const ShapedBlock& sb, const TextBlock& block, TextShaper& shaper,
+                          const Emit& emit) {
+    // Bars are axis-aligned rectangles spanning the run's flat pen extent, so they only make sense
+    // on a straight baseline; a bent block (§9) skips them in v1 (per-glyph pens are warped, so a
+    // flat bar would cut across the arc). Following the arc with a swept quad strip is a later
+    // refinement.
+    if (block.bend != 0.0f)
+        return;
+    for (const ShapedLine& line : sb.lines) {
+        std::size_t i = line.begin;
+        while (i < line.end) {
+            const std::size_t run = sb.glyphs[i].runIndex;
+            std::size_t j = i;
+            double x0 = sb.glyphs[i].pen.x, x1 = x0;
+            while (j < line.end && sb.glyphs[j].runIndex == run) {
+                x0 = std::min(x0, sb.glyphs[j].pen.x);
+                x1 = std::max(x1, sb.glyphs[j].pen.x + sb.glyphs[j].advance);
+                ++j;
+            }
+            if (run < block.runs.size() && x1 > x0) {
+                const CharStyle& st = block.runs[run].style;
+                if (st.underline || st.strikethrough) {
+                    const auto dm = shaper.decorationMetrics(sb.glyphs[i].face, st.sizePx);
+                    if (st.underline) {
+                        const double y = line.baselineY + dm.underlineOffset;
+                        emit(run,
+                             common::Rect::fromCorners({x0, y}, {x1, y + dm.underlineThickness}));
+                    }
+                    if (st.strikethrough) {
+                        const double y = line.baselineY - dm.strikeoutOffset;
+                        emit(run, common::Rect::fromCorners({x0, y - dm.strikeoutThickness * 0.5},
+                                                            {x1, y + dm.strikeoutThickness * 0.5}));
+                    }
+                }
+            }
+            i = j;
+        }
+    }
+}
+
+// One decoration bar as a closed rectangular contour, for the 3D lane (the mesher consumes
+// vec::Contours, not vec::Path). Wound the same way appendRect winds its subpath; the mesher
+// derives ring roles from containment depth, so the winding is not load-bearing there -- it is
+// kept identical only so the two lanes cannot drift.
+[[nodiscard]] vec::Contours decorationContour(const common::Rect& r) {
+    vec::Contour c;
+    c.closed = true;
+    c.points = {{r.x, r.y}, {r.right(), r.y}, {r.right(), r.bottom()}, {r.x, r.bottom()}};
+    return {std::move(c)};
+}
+
 // Bilinear-sample a straight-alpha colour-glyph tile into `dst` through the layer->pixel transform.
 // The tile holds `pixelScale` tile-px per layer unit; we inverse-map each covered target pixel back
 // to layer space, then to tile space, so this handles scale/translation/rotation uniformly.
@@ -165,7 +225,7 @@ common::ImageF renderTextF(TextShaper& shaper, const TextBlock& block, const Fon
     // 3D (S30-c, docs/type-tool.md §10): an extruded block renders through the mesh lane instead
     // of the 2D fill -- into the same ImageF through the same toPixel bake, so it caches,
     // composites and thumbnails exactly like flat text. Colour glyphs (emoji) have no outlines to
-    // extrude and are skipped for now; 2D decorations (underline bars) don't apply to a solid.
+    // extrude and are skipped for now.
     if (block.extrude) {
         std::vector<GlyphSolidInput> solids;
         solids.reserve(sb.glyphs.size());
@@ -176,7 +236,25 @@ common::ImageF renderTextF(TextShaper& shaper, const TextBlock& block, const Fon
                     continue;
                 solids.push_back({shaper.glyphContours(g, glyphTol), g.runIndex});
             }
+            // Underline / strikethrough bars extrude as solids of their own, at the same depth and
+            // bevel, tagged with their run so they take that run's material (§10.4). A bar is a
+            // rectangle, which is exactly what the mesher already handles for a glyph outline -- so
+            // "U" on a 3D block now means the same thing it means on a flat one. They go in AFTER
+            // the glyphs rather than interleaved: the mesher merges adjacent same-run index ranges
+            // and is correct either way, and appending keeps the glyph ranges as contiguous as they
+            // were. Bars intersecting a descender fuse into one solid, which is what a real
+            // underlined letterform does.
+            forEachDecorationBar(sb, block, shaper, [&](std::size_t run, const common::Rect& bar) {
+                solids.push_back({decorationContour(bar), run});
+            });
         }
+        // The colour each run paints with -- the run's OWN paint, the same one the 2D arm below
+        // fills with, so a 3D block is its 2D block lit. This is what restores per-run colour to
+        // 3D text: the old single Material albedo could only say one colour for the whole block.
+        ExtrudePalette palette;
+        palette.runs.reserve(block.runs.size());
+        for (const StyleRun& r : block.runs)
+            palette.runs.push_back(vec::representativeColor(r.style.paint));
         ExtrudeMesh mesh;
         {
             MOSAIC_PERF_SCOPE("3D text mesh", common::Lane::Cpu);
@@ -195,13 +273,14 @@ common::ImageF renderTextF(TextShaper& shaper, const TextBlock& block, const Fon
         ExtrudeOverlay overlay;
         if (effects != nullptr && extrudeOverlaysActive(*effects)) {
             MOSAIC_PERF_SCOPE("3D text overlay bake", common::Lane::Cpu);
-            overlay = buildExtrudeOverlay(*effects, mesh, *block.extrude, uvDomain, bakeScale,
-                                          block.aa != AntiAlias::None);
+            overlay = buildExtrudeOverlay(*effects, mesh, *block.extrude, palette, uvDomain,
+                                          bakeScale, block.aa != AntiAlias::None);
         }
         {
             MOSAIC_PERF_SCOPE("3D text mesh render", common::Lane::Cpu);
-            renderExtrudeMeshF(result, mesh, *block.extrude, toPixel, block.aa != AntiAlias::None,
-                               env, overlay.empty() ? nullptr : &overlay);
+            renderExtrudeMeshF(result, mesh, *block.extrude, palette, toPixel,
+                               block.aa != AntiAlias::None, env,
+                               overlay.empty() ? nullptr : &overlay);
         }
         return result;
     }
@@ -227,40 +306,11 @@ common::ImageF renderTextF(TextShaper& shaper, const TextBlock& block, const Fon
         }
     }
 
-    // Underline / strikethrough: one bar per maximal same-run span on each line.
-    for (const ShapedLine& line : sb.lines) {
-        std::size_t i = line.begin;
-        while (i < line.end) {
-            const std::size_t run = sb.glyphs[i].runIndex;
-            std::size_t j = i;
-            double x0 = sb.glyphs[i].pen.x, x1 = x0;
-            while (j < line.end && sb.glyphs[j].runIndex == run) {
-                x0 = std::min(x0, sb.glyphs[j].pen.x);
-                x1 = std::max(x1, sb.glyphs[j].pen.x + sb.glyphs[j].advance);
-                ++j;
-            }
-            if (run < block.runs.size() && x1 > x0) {
-                const CharStyle& st = block.runs[run].style;
-                // Underline/strike bars are axis-aligned rectangles spanning the run's flat pen extent,
-                // so they only make sense on a straight baseline; a bent block (§9) skips them in v1
-                // (per-glyph pens are warped, so a flat bar would cut across the arc). Following the arc
-                // with a swept quad strip is a later refinement.
-                if ((st.underline || st.strikethrough) && block.bend == 0.0f) {
-                    const auto dm = shaper.decorationMetrics(sb.glyphs[i].face, st.sizePx);
-                    if (st.underline) {
-                        const double y = line.baselineY + dm.underlineOffset;
-                        appendRect(runPaths[run], x0, y, x1, y + dm.underlineThickness);
-                    }
-                    if (st.strikethrough) {
-                        const double y = line.baselineY - dm.strikeoutOffset;
-                        appendRect(runPaths[run], x0, y - dm.strikeoutThickness * 0.5, x1,
-                                   y + dm.strikeoutThickness * 0.5);
-                    }
-                }
-            }
-            i = j;
-        }
-    }
+    // Underline / strikethrough: one bar per maximal same-run span on each line, into that run's
+    // own fill path (so a bar takes the run's paint, gradient and all).
+    forEachDecorationBar(sb, block, shaper, [&](std::size_t run, const common::Rect& bar) {
+        appendRect(runPaths[run], bar.x, bar.y, bar.right(), bar.bottom());
+    });
 
     const bool antialias = block.aa != AntiAlias::None;  // Subpixel degrades to Grayscale in S29-a
     MOSAIC_PERF_SCOPE("Text fill (per run)", common::Lane::Cpu);

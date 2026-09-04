@@ -1,6 +1,7 @@
 #include "ui/settings_dialog.hpp"
 
 #include "common/i18n.hpp"
+#include "common/languages.hpp"        // the UI-language picker's display names
 #include "core/brush/stroke_state.hpp" // kMaxTiltDegrees -- the tilt full scale the test area draws against
 #include "core/retarget/credits.hpp"
 #include "ui/ask_or_tell_dialog.hpp"
@@ -18,9 +19,8 @@
 #include <FL/Fl_Image.H>
 #include <FL/Fl_Native_File_Chooser.H>
 #include <FL/Fl_Output.H>
-#include <FL/fl_draw.H>
 #include <FL/filename.H> // fl_open_uri (the pack link line)
-
+#include <FL/fl_draw.H>
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -1487,10 +1487,55 @@ SettingsDialog::SettingsDialog(SettingsHost host)
         caption(kInnerX, 64 + kRowH + 8, kInnerW, 36,
                 _("Measurement system for rulers and size readouts. Automatic follows your "
                   "system locale."));
+        // UI language (docs/i18n.md). The list is the languages a catalog is actually INSTALLED
+        // for -- offering one whose .mo is absent would silently do nothing -- so it is empty on an
+        // uninstalled build with no $MOSAIC_LOCALEDIR, and the control is then greyed rather than
+        // pretending. "System default" and "English" are always offered: the first is the empty
+        // setting, the second needs no catalog (the msgids ARE the English) and is the only way
+        // back to English on a non-English system.
+        const int ly = 64 + kRowH + 8 + 36 + 14;
+        fieldLabel(kInnerX, ly, kLabelW, _("Language"));
+        m_language = new Dropdown(kInnerX + kLabelW, ly, 200, kRowH);
+        m_languageCodes.emplace_back(""); // System default
+        m_language->add(_("System default"));
+        m_languageCodes.emplace_back("en");
+        m_language->add("English");
+        {
+            std::vector<const common::LanguageInfo*> installed;
+            for (const std::string& code : common::i18n::installedLanguages())
+                if (const common::LanguageInfo* li = common::findLanguage(code))
+                    installed.push_back(li);
+            // By ENGLISH name, not by endonym: a list sorted by endonym is sorted by an alphabet
+            // the reader may not have, and the endonym is what they scan for anyway (it is first
+            // in the label). Sorting the codes would put "cs" between "ca" and "da" for no reason
+            // a user can see.
+            std::sort(installed.begin(), installed.end(),
+                      [](const common::LanguageInfo* a, const common::LanguageInfo* b) {
+                          return std::string_view(a->english) < std::string_view(b->english);
+                      });
+            for (const common::LanguageInfo* li : installed) {
+                m_languageCodes.emplace_back(li->code);
+                // "Deutsch (German)" -- the endonym leads, because that is the word a speaker of
+                // the language recognises; the English name disambiguates for everyone else. No
+                // parenthetical when the two are the same word (Afrikaans, Esperanto, ...).
+                std::string label = li->endonym;
+                if (label != li->english)
+                    label += " (" + std::string(li->english) + ")";
+                m_language->add(label.c_str());
+            }
+            if (installed.empty())
+                m_language->deactivate(); // no catalogs: nothing to switch TO
+        }
+        m_language->callback(
+            [](Fl_Widget*, void* v) { static_cast<SettingsDialog*>(v)->onLanguageChanged(); },
+            this);
+        caption(kInnerX, ly + kRowH + 8, kInnerW, 44,
+                _("The language Mosaic's own menus and dialogs are written in. It applies the next "
+                  "time Mosaic starts -- the window is built in the language it launched with."));
         // The export-format breadth switch (docs/export-system-plan.md §0/§3). It gates only the
         // EXOTIC tier, which arrives at M7 -- until then it is honestly inert, and the caption does
         // not pretend otherwise. The curated set is always offered and this cannot hide it.
-        const int gy = 64 + kRowH + 8 + 36 + 14;
+        const int gy = ly + kRowH + 8 + 44 + 14;
         m_showAllExportFormats = new CheckBox(
             kInnerX, gy, kInnerW, 22, _("Show all export formats"), [this](bool on) {
                 if (m_host.setShowAllExportFormats)
@@ -2987,6 +3032,14 @@ void SettingsDialog::seed(const common::Settings& s) {
         static_cast<CheckBox*>(m_spellCheckAllCaps)->setChecked(s.spellCheckAllCaps);
     if (m_textLanguage != nullptr)
         m_textLanguage->value(textLanguageIndex(s.textLanguage));
+    if (m_language != nullptr) {
+        // 0 (System default) for "" AND for a saved language this build has no catalog for -- the
+        // dropdown must never show a row that is not in it, and "System default" is what the app
+        // is actually doing in that case.
+        const auto it = std::find(m_languageCodes.begin(), m_languageCodes.end(), s.language);
+        m_language->value(
+            it == m_languageCodes.end() ? 0 : static_cast<int>(it - m_languageCodes.begin()));
+    }
     if (m_emojiFont != nullptr) {
         int idx = 0;  // Automatic for "" or a family no longer installed
         for (int i = 0; i < static_cast<int>(m_host.emojiFamilies.size()); ++i)
@@ -3343,6 +3396,14 @@ void SettingsDialog::resetKeyRow(int row) {
 void SettingsDialog::onUnitsChanged() {
     if (m_units != nullptr && m_host.setUnits)
         m_host.setUnits(unitsKey(m_units->value()));
+}
+
+void SettingsDialog::onLanguageChanged() {
+    if (m_language == nullptr || !m_host.setLanguage)
+        return;
+    const int i = m_language->value();
+    if (i >= 0 && i < static_cast<int>(m_languageCodes.size()))
+        m_host.setLanguage(m_languageCodes[static_cast<std::size_t>(i)]);
 }
 
 void SettingsDialog::onTextLanguageChanged() {

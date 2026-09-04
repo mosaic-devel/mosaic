@@ -289,13 +289,14 @@ common::Rect projectedExtrudeBounds(const common::Rect& bounds2d, const Extrude&
 }
 
 void renderExtrudeMeshF(common::ImageF& dst, const ExtrudeMesh& mesh, const Extrude& params,
-                        const common::Affine2D& toPixel, bool antialias, const ExtrudeEnv* env,
-                        const ExtrudeOverlay* overlay) {
+                        const ExtrudePalette& palette, const common::Affine2D& toPixel,
+                        bool antialias, const ExtrudeEnv* env, const ExtrudeOverlay* overlay) {
     if (mesh.empty() || dst.width == 0 || dst.height == 0) return;
     if (overlay != nullptr && overlay->empty()) overlay = nullptr;  // nothing baked = no overlay
     // The Vulkan lane, when the app injected one and it can serve this render (§10.5); the CPU
     // rasterizer below stays the always-there fallback (headless tests, no-Vulkan machines).
-    if (g_override && g_override(dst, mesh, params, toPixel, antialias, env, overlay)) return;
+    if (g_override && g_override(dst, mesh, params, palette, toPixel, antialias, env, overlay))
+        return;
     const ExtrudeCamera cam = ExtrudeCamera::from(mesh.designBounds, params);
     EnvContext ec;
     ec.env = env;
@@ -353,6 +354,7 @@ void renderExtrudeMeshF(common::ImageF& dst, const ExtrudeMesh& mesh, const Extr
     // band -- a std::map lookup (materialForRun) and two overlay lookups each.
     struct RangeInfo {
         const Material* mat = nullptr;
+        ColorF color; // the run's own colour -- the layer's, via the palette
         float alpha = 0.0f;
         const common::ImageF* capMap = nullptr;  // the front-cap design map (§12)
         const common::ImageF* wallMap = nullptr; // the unrolled wall map (§12 wrap)
@@ -363,7 +365,8 @@ void renderExtrudeMeshF(common::ImageF& dst, const ExtrudeMesh& mesh, const Extr
         RangeInfo& ri = rinfo[i];
         const std::size_t run = mesh.ranges[i].runIndex;
         ri.mat = &materialForRun(params, run);
-        ri.alpha = std::clamp(ri.mat->albedo.a, 0.0f, 1.0f);
+        ri.color = palette.forRun(run);
+        ri.alpha = std::clamp(ri.color.a, 0.0f, 1.0f);
         ri.capMap = overlay != nullptr ? overlay->mapForRun(run) : nullptr;
         ri.wallMap = overlay != nullptr ? overlay->wallMapForRun(run) : nullptr;
         ri.sc = ShadeConst::from(params, *ri.mat);
@@ -614,7 +617,7 @@ void renderExtrudeMeshF(common::ImageF& dst, const ExtrudeMesh& mesh, const Extr
                         // coverage stays the material's), then shading proceeds unchanged, so the
                         // design is lit WITH the surface it sits on. Caps sample by design UV,
                         // walls/bevels (wrap mode) by their unrolled side coords.
-                        float mr = ri.mat->albedo.r, mg = ri.mat->albedo.g, mb = ri.mat->albedo.b;
+                        float mr = ri.color.r, mg = ri.color.g, mb = ri.color.b;
                         if (t.map != nullptr) {
                             const bool side = !t.cap;
                             const double uu = side ? (a.su * q0 + b.su * q1 + c.su * q2) * qs

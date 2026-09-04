@@ -973,3 +973,159 @@ successful load while losing live editability with no counter moving.
   SIGGRAPH 2007 (Valve) — SDF foundation. msdfgen (MIT) — https://github.com/Chlumsky/msdfgen
 </content>
 </invoke>
+
+---
+
+## 11. 3D extrusion on shapes (2026-08-28)
+
+A `vec::Object` may carry an `std::optional<core::text::Extrude>`. Set, the object renders as an
+extruded **solid** instead of a flat fill — the same watertight-solid model, bevels, per-run
+materials, lighting, orientation and camera that the Type tool's 3D gives a text block. `nullopt`
+is the default, so every existing object and every existing document is untouched (the field is
+written to `.mosaic` only when set).
+
+**It is one feature, not two.** The extrusion model lives under `core/text/` because that is where
+it was authored, but nothing in it is typographic: `core/text/extrude_mesh.hpp` takes
+**`vec::Contours`** as its input — the §2.1 flatten seam, read from the other side — and emits a
+mesh. Text is simply the *harder* caller (a lot of contours, tagged with runs); a shape is the
+easy one. So shapes share the mesher, both render lanes (CPU z-buffer and the Vulkan pass), the
+projected-bounds helper, the canvas-reflection environment and the 3D popup **verbatim**. Moving
+the `Extrude` type to a neutral namespace would be a rename across both lanes and would buy
+nothing.
+
+### What the solids are
+
+`core/vector/extrude_shape.hpp` is the only shape-specific piece, and it answers only the question
+a shape answers differently from a block — *which solids?*
+
+| run | solid | present when |
+|---|---|---|
+| 0 | the **fill** region (the object's flattened geometry) | the object is filled |
+| 1 | the **stroke** outline (`vec::strokeOutline`, so dashes and joins extrude as drawn) | the object is stroked |
+
+Two runs because `Extrude::runMaterials` is keyed by run: that is what lets a 3D shape carry a
+chrome outline around a matte face with no new machinery. An object that is neither filled nor
+stroked meshes to nothing — which is what it draws in 2D too.
+
+### The mesh cache
+
+A vector layer has **no pixel cache**: the compositor rasterizes it live, at target resolution, on
+every composite. Meshing tessellates and earcuts every contour, so a 3D shape would otherwise be
+re-meshed per frame — and per frame of an orbit drag, where the mesh by construction never
+changes. `VectorLayer::cachedExtrudeMesh` holds one mesh keyed by `vec::shapeExtrudeMeshKey`,
+which mixes the geometry, the stroke's own inputs and the depth/bevel pair **and deliberately not**
+the orientation, camera, lighting or materials — those are render-side uniforms
+(docs/type-tool.md §10.5). The 3D popup's viewport shares that same cache rather than meshing per
+control tick.
+
+### Cost, and how it is kept honest
+
+`render::workCounters()` grew a row per operation in this lane — `shapeMeshBuilds`,
+`shapeMeshHits`, `shapeSolidRenders`, `shapeSolidTriangles`, `shapeOverlayBakes` — because pixel
+parity cannot see a solid that looks right and re-tessellates itself sixty times a second.
+`tests/test_extrude_shape.cpp` asserts them: five composites of an unchanged solid build **one**
+mesh, an orbit/relight/recolour builds **none**, a depth edit builds exactly one.
+
+What an ordinary shape costs — the numbers `tests/test_extrude_shape.cpp` pins, because the mesher
+is shared with 3D text (hundreds of glyph contours) and it is easy for a change tuned there to make
+a rectangle expensive without anyone noticing:
+
+| shape | outline pts | triangles |
+|---|---|---|
+| square, no bevel | 4 | **12** |
+| square + round bevel (the panel's defaults) | 4 | 60 |
+| rounded square r=20 | 16 | 60 |
+| square + 4 px stroke | 4 | 44 |
+| ellipse r=100 | 23 | 88 |
+
+A 3D square on a 1920×1080 canvas composites in 10.9 ms against 9.1 ms for the same square flat —
+i.e. the solid costs about 1.8 ms, and the rest is the compositor's baseline for any layer at all.
+
+The pathological case is a *lot* of outline points, and three things came out of measuring one — a
+41-lobe stroked rosette with 6-segment bevels at both ends, on a 1920×1080 canvas:
+
+| | before | after |
+|---|---|---|
+| triangles | 78,888 | 31,260 |
+| mesh build | 96 ms (and wrong) | 45 ms |
+| light-solid composite overhead vs a flat shape | ~5 ms | ~0.5 ms |
+
+- **The stroke was 88% of the mesh, and structurally wrong.** `strokeOutline` emits one
+  *overlapping* piece per segment and per join — correct for a NonZero fill, which unions them for
+  free, and catastrophic as solid input, because the mesher turns each piece into its own
+  watertight box with its own caps and bevel rings. 656 pieces for a 328-point path → 69,708
+  triangles of little boxes z-fighting inside the ribbon. `normalizedContours` now unions them
+  into one ribbon boundary first.
+- **`kMeshTolerancePx` = 1.0**, not the 0.25 a 2D fill uses. An outline point on a fill buys a hard
+  edge against the backdrop; the same point on a solid buys a wall quad in *every* depth band and
+  the silhouette is then shaded and bevelled. The stroke's boolean union is superlinear in point
+  count, so the build gains more than the triangle count alone suggests.
+- **The blend is bounded to the solid's projected reach**, which the flat arm already got for free
+  from `rasterizeObjectF`. A small 3D badge on a large canvas was costing a full-canvas blend.
+
+What is *not* cached is the rasterization itself: `shapeSolidRenders` equals the composite count by
+design, because a vector layer keeps no pixels. In the app that pass is the Vulkan one
+(`setExtrudeRenderOverride`); the CPU lane is the bring-up/test path. A rendered-pixel cache
+mirroring `TextLayer`'s is the next lever if it is ever needed.
+
+### The thing that was actually slow
+
+None of the above was it. Measured on the reported scene — a 1080p document, a white raster
+background, one 3D shape layer:
+
+| | debug | release |
+|---|---|---|
+| white raster alone | 67.7 ms | 18.4 ms |
+| + a flat square | 65.0 ms | 22.8 ms |
+| + the same square in **3D** (96 triangles) | 67.5 ms | 23.6 ms |
+
+The solid costs **0.7 ms**. The whole bill is a full-canvas composite — and two paths were paying
+it per frame:
+
+- **Every tick of every 3D control.** `applyShapeExtrudeField` asked for a full recomposite, so an
+  orbit drag, a depth scrub or a light drag was capped at ~41 fps on release and ~15 on debug
+  regardless of the shape. It queues a **region patch** over the band the solid vacated ∪ the band
+  it now occupies instead: 23.6 → **5.3 ms** release, 52 → **8.0 ms** debug. Exactly the argument
+  (and the same `PendingRegion` queue) as the typing path's identical ~64 ms-per-keystroke bug.
+- **Every frame of a Move drag.** `render::DragCompositeCache` — which freezes the stack above and
+  below the dragged layer for the whole gesture — **excluded vector layers outright** ("no cached
+  pixels to re-place per frame"), so a shape drag silently fell back to the full walk. It now
+  re-runs the layer's own render arm at `pre = identity`, which is byte-identical to the full walk
+  by construction rather than by imitation: 50 → **17.5 ms** debug for a 3D shape, 13.8 ms flat.
+  This was pre-existing and affected *flat* shapes just as much.
+
+`DragCompositeCache` had no test at all, which is how a whole layer kind stayed excluded from it.
+`tests/test_drag_composite.cpp` now pins the byte-identity contract per kind, and asserts the
+freezing directly — a second 3D shape *below* the dragged one must be produced once at gesture
+start and never again.
+
+### Parity with 3D text
+
+Everything §10 of docs/type-tool.md describes works on a shape: depth, the two bevel profiles,
+per-run materials, lighting and the studio environment, orientation and perspective, the
+**canvas-reflection** mirror (`ReflectionEnv` moved out of `TextLayer` so both kinds hold one, and
+the app's mirror refresh is one kind-agnostic function), and the **§12 Layer-Effects overlays**
+baked per face rather than smeared over the projected rectangle. The overlay bake is the one thing
+that is *not* cached for a shape — a vector layer has no pixel cache to hang it on — but
+`extrudeOverlaysActive()` is false unless the layer really carries an overlay, so only the shapes
+that use the feature pay for it.
+
+### UI
+
+The Type bar's **"3D…"** button now sits on the five shape bars and the Pen bar too, and opens the
+same popup (`ui::Type3dPanel` — the class name is historical). The panel edits an
+`std::optional<Extrude>` and knows nothing about where it lives; the host binds it either to the
+edited `TextBlock`'s or to the bound shape's `vec::Object`, and supplies the matching preview
+renderer.
+
+The corner-panel arbiter's validity predicate for the popup had to learn about the second subject:
+it demanded a live *text session*, so on a shape bar the request evaporated on the very next
+`resolve()` and the panel never appeared. On a vector tool it is now valid unconditionally — the
+panel greys itself when no shape is bound and comes alive the moment one is selected, matching the
+"Edit shape…" designer beside it. (The Type side keeps the stricter gate: its subject is a live
+editing session, and there is no half-state where the panel usefully waits for one.) Edits land as one coalescing `SetVectorObjectCommand`, so a dragged control is a single
+undo step and the canvas is the live preview — the same rule the shape designer follows.
+
+Enabling 3D on a shape seeds `Extrude::material.albedo` from the shape's own solid fill. The
+default albedo is a neutral grey, which is right for text (painted per run, then re-lit) and wrong
+here: a red rectangle turning grey the instant you tick the box reads as a bug, not a default.

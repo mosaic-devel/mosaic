@@ -671,6 +671,28 @@ depth UI that would have produced both z-fighting and the fighter-jet cockpit. *
 relief" mode — runs at different depths joined by real connecting walls — is noted as a deferred
 possibility, explicitly out of scope to keep the solid watertight.)*
 
+### 10.4b Decorations extrude too (fix, 2026-08-28)
+
+Underline and strikethrough are **solids of their own**, at the block's shared depth and bevel and
+tagged with their run, so they take that run's material like everything else. Before this the 3D
+lane skipped the decoration bars entirely — the "U" and "S" toggles were silently inert the moment
+a block was extruded, which read as the toggles being broken rather than as the feature being
+absent. A bar is a rectangle, and a rectangle is exactly what the mesher already handles for a
+glyph outline, so the two lanes now compute the bars through one shared walk
+(`forEachDecorationBar` in `text_render.cpp`) and can no longer disagree about where they go. Bars
+that intersect a descender fuse into one solid — which is what a real underlined letterform does.
+
+The bent-block exclusion is unchanged in both lanes: a flat bar across an arc would cut through it,
+and a swept quad strip is a later refinement.
+
+Separately, the **metrics** behind those bars were partly guesswork. `underline_position` is now
+honoured only when the face actually states one — a `post` table with a zero there is an unfilled
+field, not a request for a bar on the baseline, and taking it literally drew the underline through
+the glyph bottoms on the faces that leave it unset. And strikeout now comes from the OS/2 table's
+`yStrikeoutPosition` / `yStrikeoutSize`, which FreeType does not surface on `FT_FaceRec` the way it
+surfaces the `post` underline pair; before this it was a fixed 0.26 em guess, which sits wrong on
+any face with an unusual x-height.
+
 ### 10.5 GPU residency (designed-in)
 
 - The **mesh lives in a GPU vertex/index buffer**, uploaded once and re-uploaded only on a
@@ -680,6 +702,14 @@ possibility, explicitly out of scope to keep the solid watertight.)*
   When the compositor becomes GPU-resident (S60), this target is **already a GPU texture** — no
   readback. The CPU mesh path (for headless golden tests / export) stays as the bring-up/test lane,
   the same dual-lane discipline as the 2D renderer.
+
+### 10.6 The same 3D on shapes (2026-08-28)
+
+None of §10 is typographic: the mesher's input is `vec::Contours`, the §5.1 seam. So a **shape**
+(and a pen path) extrudes through the identical mesher, render lanes, camera, materials,
+reflections and popup — see **docs/vector-model.md §11**, which covers the one shape-specific
+question (which solids an object contributes) and the mesh cache a cache-less vector layer needs.
+The `Extrude` type stays here; the "3D…" button and `ui::Type3dPanel` now serve both tools.
 
 ---
 

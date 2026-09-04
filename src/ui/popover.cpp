@@ -19,6 +19,7 @@
 #include <cstring>
 #include <optional>
 #include <utility>
+#include <vector>
 
 namespace mosaic::ui {
 namespace {
@@ -31,9 +32,19 @@ constexpr int kAnchorGap = 4;    // px between the anchor and a plain (non-bubbl
 constexpr int kBubbleGap = 11;   // bubble: equal left/bottom gap; native Wayland keeps this
 constexpr int kBubbleGapBump = 2; // bubble: Xwayland/X11 add this to both gaps (user 2026-06-22)
 
-// At most one popover is open at a time; tracked here so the main window can dismiss it on an
-// outside click and so a re-show / destroy keeps the slot honest.
-Popover* g_active = nullptr;
+// EVERY shown popover, oldest first -- not "the" one. A single slot was the original model and it
+// was wrong the moment two could be open at once: the toolbar's overflow popover holds tool-slot
+// buttons, and clicking one opens that slot's variant flyout ON TOP of it. The flyout took the
+// slot, the overflow popover was forgotten, and no outside click ever closed it again -- it just
+// sat there while the flyout came and went (user 2026-08-28).
+//
+// A vector rather than one pointer, so dismissal can act on all of them: clicking away closes the
+// whole stack at once, which is what a user means by "click away".
+std::vector<Popover*> g_shown;
+
+void forgetShown(Popover* p) {
+    g_shown.erase(std::remove(g_shown.begin(), g_shown.end(), p), g_shown.end());
+}
 
 } // namespace
 
@@ -58,8 +69,7 @@ void Popover::reapplyTheme() {
 }
 
 Popover::~Popover() {
-    if (g_active == this)
-        g_active = nullptr;
+    forgetShown(this);
 }
 
 void Popover::show() {
@@ -78,7 +88,8 @@ void Popover::showAnchored(const Fl_Widget* anchor) {
     m_anchor = anchor;
     place();
     show();
-    g_active = this;
+    forgetShown(this); // a re-show must not list it twice
+    g_shown.push_back(this);
 }
 
 void Popover::reanchor() {
@@ -184,7 +195,21 @@ void Popover::place() {
         // the same gap above it, else it tracks the anchor's top. Xwayland/X11 nudge the gap out +2px.
         const int gap = kBubbleGap + (m_bubble ? kBubbleGapBump : 0);
         const int margin = m_bubble ? kBubbleTri : 0; // the body is inset by the triangle margin only with a bubble
-        const int leftRef = m_toolbarRight > 0 ? m_toolbarRight : ax + m_anchorW;
+        // The left reference is the right edge of whatever the anchor SITS IN, not always the
+        // toolbar's. For an ordinary toolbar button the two are the same thing. But an anchor can
+        // live inside ANOTHER popover -- a tool-slot button inside the toolbar's overflow popover
+        // opens that slot's variant flyout -- and pinning both to m_toolbarRight put the flyout at
+        // the overflow popover's own x, one stacked exactly behind the other (user 2026-08-28).
+        // Referencing the anchor's host sub-window instead opens the second popover BESIDE the
+        // first, which is what a cascading menu does everywhere else.
+        int leftRef = m_toolbarRight > 0 ? m_toolbarRight : ax + m_anchorW;
+        if (const Fl_Window* host = m_anchor->window();
+            host != nullptr && host != m_anchor->top_window()) {
+            int hx = 0;
+            int hy = 0;
+            host->top_window_offset(hx, hy);
+            leftRef = std::max(leftRef, hx + host->w());
+        }
         int px = leftRef + gap - margin; // body-left = leftRef + gap; triangle (if any) occupies [px, px+margin]
         int py = m_statusBarH > 0 ? (ph - m_statusBarH - gap - H) : ay;
         px = std::clamp(px, 0, std::max(0, pw - W));
@@ -337,8 +362,7 @@ bool Popover::spansPoint(int winX, int winY) const {
 }
 
 void Popover::hide() {
-    if (g_active == this)
-        g_active = nullptr;
+    forgetShown(this);
     Fl_Double_Window::hide();
 }
 
@@ -376,32 +400,40 @@ int Popover::handle(int event) {
 }
 
 Popover* activePopover() {
-    return g_active;
+    return g_shown.empty() ? nullptr : g_shown.back(); // the topmost = the most recently shown
 }
 
 void reanchorActivePopover() {
-    if (g_active != nullptr)
-        g_active->reanchor();
+    // ALL of them: a window resize moves every anchor, not only the topmost popover's.
+    for (Popover* p : std::vector<Popover*>(g_shown))
+        p->reanchor();
 }
 
 void dismissActivePopoverOnOutsideClick(int winX, int winY) {
-    if (g_active == nullptr || g_active->pinned() || g_active->spansPoint(winX, winY))
-        return; // a pinned popover (the Type panel) ignores outside clicks -- closed explicitly instead
-    // A press that lands on the popover's own child pop-ups -- the themed Dropdown list or a text-
+    // A press that lands on a popover's own child pop-ups -- the themed Dropdown list or a text-
     // field context menu, both children of the *top-level* that can extend BEYOND the popover (over
-    // the canvas) -- is part of the popover's interaction and must not dismiss it. (winX/winY and the
-    // pop-ups' geometry are all in top-level coords.) Without this, on native Wayland the parent's
-    // handle() sees the press before it reaches the on-top pop-up child and closes the popover.
+    // the canvas) -- is part of the popover's interaction and must not dismiss anything. (winX/winY
+    // and the pop-ups' geometry are all in top-level coords.) Without this, on native Wayland the
+    // parent's handle() sees the press before it reaches the on-top pop-up child and closes the
+    // popover.
     if (const ContextMenu* m = activeContextMenu(); m != nullptr && m->spansHostPoint(winX, winY))
         return;
     if (const DropdownPopup* d = activeDropdownPopup(); d != nullptr && d->spansHostPoint(winX, winY))
         return;
-    g_active->hide();
+    // Every one that the click is outside of, not just the topmost -- clicking away means "close
+    // this lot". A popover the click landed ON is spared, which is what keeps a cascade working:
+    // clicking a tool-slot button inside the overflow popover closes the variant flyout hanging off
+    // the previous one and leaves the overflow itself open, because the click was inside it.
+    // (spansPoint spares a popover's ANCHOR rect too, so an opener can still toggle its own shut.)
+    for (Popover* p : std::vector<Popover*>(g_shown))
+        if (!p->pinned() && !p->spansPoint(winX, winY))
+            p->hide(); // a pinned popover (the Type panel) is closed explicitly instead
 }
 
 void dismissActivePopover() {
-    if (g_active != nullptr && !g_active->pinned())
-        g_active->hide();
+    for (Popover* p : std::vector<Popover*>(g_shown))
+        if (!p->pinned())
+            p->hide();
 }
 
 } // namespace mosaic::ui

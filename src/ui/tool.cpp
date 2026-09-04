@@ -177,8 +177,12 @@ ToolOption gradientStopsButton() {
     o.inlineFlow = true;
     return o;
 }
-// The Type bar's "3D…" button: opens the 3D-text popup (S30-d; docs/type-tool.md §8.4) -- the live
-// viewport with orbit/depth/bevel/light handles. Live now that the extrude engine landed (S30-c).
+// The "3D…" button: opens the 3D popup (S30-d; docs/type-tool.md §8.4) -- the live viewport with
+// orbit/depth/bevel/light handles. Carried by the Type bar AND by every vector-authoring bar
+// (the five shapes + the Pen), because the extrusion is a property of the SOLID, not of the text:
+// a shape extrudes through the same mesher and the same render lane a text block does
+// (docs/vector-model.md §11). The id and the panel class still read "type3d" for their history;
+// what they mean is "the extrude popup".
 ToolOption type3dButton() {
     auto o = button("type3d", _("3D…"), ToolAccent::None, _("3D extrusion (depth, bevel, lighting)"));
     o.inlineFlow = true;
@@ -527,17 +531,17 @@ std::vector<ToolOption> defaultOptionsFor(ToolId id) {
         // hot parameter is left here; buildShapeDraft() (shape_gesture) consumes it. The "Transform"
         // toggle (§7.1) picks what the selection-box handles do when a shape is selected.
         return {slider("radius", _("Corner"), 0, 2000, 1, 0, _("px"), _("Corner radius")),
-                shapeTransformToggle(), shapeDesignerButton()};
+                shapeTransformToggle(), type3dButton(), shapeDesignerButton()};
     case ToolId::EllipseShape:
-        return {shapeTransformToggle(), shapeDesignerButton()};
+        return {shapeTransformToggle(), type3dButton(), shapeDesignerButton()};
     case ToolId::PolygonShape:
         return {number("sides", _("Sides"), 3, 60, 1, 5, _("Number of polygon sides")),
-                shapeTransformToggle(), shapeDesignerButton()};
+                shapeTransformToggle(), type3dButton(), shapeDesignerButton()};
     case ToolId::StarShape:
         return {number("points", _("Points"), 3, 60, 1, 5, _("Number of star points")),
                 slider("inner", _("Inner"), 5, 95, 1, 50, _("%"),
                        _("Inner radius as a percentage of the outer")),
-                shapeTransformToggle(), shapeDesignerButton()};
+                shapeTransformToggle(), type3dButton(), shapeDesignerButton()};
     case ToolId::LineShape:
         // THE LINE EXCEPTION (S26-c): a line has no interior, so a fill cannot express it -- its
         // stroke IS the shape, and Weight + Cap therefore stay tool options where every other kind
@@ -548,7 +552,7 @@ std::vector<ToolOption> defaultOptionsFor(ToolId id) {
         return {slider("weight", _("Weight"), 1, 200, 1, 3, _("px"), _("Line thickness")),
                 choice("cap", _("Cap"), {_("Butt"), _("Round"), _("Square")}, 0,
                        _("How the line ends are drawn")),
-                shapeTransformToggle(), shapeDesignerButton()};
+                shapeTransformToggle(), type3dButton(), shapeDesignerButton()};
     case ToolId::Pen:
         // S28. The Pen is the ONE vector tool that still authors a stroke of its own: an open path
         // has no interior, so -- exactly like the Line shape (S26-c's single exception) -- a stroke
@@ -557,16 +561,17 @@ std::vector<ToolOption> defaultOptionsFor(ToolId id) {
         // (a closed path is a region), and with BOTH switched off ui::penPaintedObject forces the
         // stroke back on rather than leaving an invisible layer behind. An outline AROUND the whole
         // path is still a Layer Effects Stroke, as for every other kind.
-        return {toggle("fill", _("Fill"), true,
-                       _("Fill the finished path with the foreground color")),
-                toggle("stroke", _("Stroke"), true, _("Draw the path's outline")),
-                slider("weight", _("Weight"), 0.1, 200, 0.1, 2, _("px"), _("Stroke width")),
-                choice("cap", _("Cap"), {_("Butt"), _("Round"), _("Square")}, 1,
-                       _("How open ends are drawn")),
-                choice("join", _("Join"), {_("Miter"), _("Round"), _("Bevel")}, 1,
-                       _("How corners are drawn")),
-                choice("dash", _("Dash"), {_("Solid"), _("Dashed"), _("Dotted"), _("Dash-dot")}, 0,
-                       _("Stroke dash pattern"))};
+        return {
+            toggle("fill", _("Fill"), true, _("Fill the finished path with the foreground color")),
+            toggle("stroke", _("Stroke"), true, _("Draw the path's outline")),
+            slider("weight", _("Weight"), 0.1, 200, 0.1, 2, _("px"), _("Stroke width")),
+            choice("cap", _("Cap"), {_("Butt"), _("Round"), _("Square")}, 1,
+                   _("How open ends are drawn")),
+            choice("join", _("Join"), {_("Miter"), _("Round"), _("Bevel")}, 1,
+                   _("How corners are drawn")),
+            choice("dash", _("Dash"), {_("Solid"), _("Dashed"), _("Dotted"), _("Dash-dot")}, 0,
+                   _("Stroke dash pattern")),
+            type3dButton()};
     case ToolId::Text:
         // S29-c §8.2 (rev 1/2) -- the bar keeps only the two HOT type controls (Font + Size); Bold,
         // Italic, Align and everything else moved into the Type panel (the "Style…" button). The
@@ -574,26 +579,47 @@ std::vector<ToolOption> defaultOptionsFor(ToolId id) {
         // family list from the FontDB once it exists (the tool registry is built before the FontDB).
         // These edit the CURRENT selection's style (or the new-text defaults when none) via the
         // selection funnel (VulkanCanvas::applySelectionStyle), the Type twin of shape select-to-edit.
-        return {[] { auto o = choice("font", _("Font"), {_("Sans")}, 0, _("Font family"));
-                     o.kind = ToolOptionKind::Font; // open list previews each family in its own face
-                     return o; }(),
-                slider("size", _("Size"), 6, 400, 0.5, 48, _("pt"), // half-point steps (matches the panel)
-                       _("Font size")),
-                // B/I/U/S styled glyph toggles, flowing inline right before "Style…" (user 2026-07-01);
-                // they edit the selection (or the new-text defaults) exactly like Font/Size.
-                styleToggle("bold", _("Bold weight"), ToolGlyph::Bold),
-                styleToggle("italic", _("Italic / oblique"), ToolGlyph::Italic, /*joinPrev=*/true),
-                styleToggle("underline", _("Underline"), ToolGlyph::Underline, /*joinPrev=*/true),
-                styleToggle("strikethrough", _("Strikethrough"), ToolGlyph::Strike, /*joinPrev=*/true),
-                // Writing mode + Latin orientation live in the Type panel (below Language), not the bar
-                // -- a vertical-columns dropdown reads out of place inline with Font/Size (user 2026-07-01).
-                // Anti-alias moved into the panel's Advanced section too (R4): a block-level render
-                // property nobody flips mid-typing has no claim to bar space.
-                typePanelButton(), // "Style…"
-                type3dButton()};   // "3D…" -- reserved (greyed) beside it
+        return {
+            [] {
+                auto o = choice("font", _("Font"), {_("Sans")}, 0, _("Font family"));
+                o.kind = ToolOptionKind::Font; // open list previews each family in its own face
+                return o;
+            }(),
+            slider("size", _("Size"), 6, 400, 0.5, 48,
+                   _("pt"), // half-point steps (matches the panel)
+                   _("Font size")),
+            // B/I/U/S styled glyph toggles, flowing inline right before "Style…" (user 2026-07-01);
+            // they edit the selection (or the new-text defaults) exactly like Font/Size.
+            styleToggle("bold", _("Bold weight"), ToolGlyph::Bold),
+            styleToggle("italic", _("Italic / oblique"), ToolGlyph::Italic, /*joinPrev=*/true),
+            styleToggle("underline", _("Underline"), ToolGlyph::Underline, /*joinPrev=*/true),
+            styleToggle("strikethrough", _("Strikethrough"), ToolGlyph::Strike, /*joinPrev=*/true),
+            // Writing mode + Latin orientation live in the Type panel (below Language), not the bar
+            // -- a vertical-columns dropdown reads out of place inline with Font/Size (user
+            // 2026-07-01). Anti-alias moved into the panel's Advanced section too (R4): a
+            // block-level render property nobody flips mid-typing has no claim to bar space.
+            typePanelButton(), // "Style…"
+            type3dButton()};   // "3D…" -- the extrude popup, beside it
     case ToolId::Zoom:
-        return {choice("mode", _("Mode"), {_("In"), _("Out")}, 0,
-                       _("Click to zoom in or out"))};
+        // No In/Out mode: the two mouse buttons say it (left in, right out), which is what every
+        // editor's zoom tool does and what the on-canvas preview box promises. A mode combo beside
+        // that would be a second, contradicting answer to a question already settled.
+        //
+        // What the bar carries instead is the pair of view stops a zoom tool is reached for
+        // alongside the clicking -- both already on the View menu, neither within reach while the
+        // pointer is out on the canvas.
+        return {[] {
+                    auto o = button("fit", _("Fit on Screen"), ToolAccent::None,
+                                    _("Zoom and centre so the whole document fits the window"));
+                    o.inlineFlow = true; // beside each other at the left, not pinned right
+                    return o;
+                }(),
+                [] {
+                    auto o = button("actualPixels", _("100%"), ToolAccent::None,
+                                    _("Zoom to actual pixels (100%)"));
+                    o.inlineFlow = true;
+                    return o;
+                }()};
     }
     return {};
 }

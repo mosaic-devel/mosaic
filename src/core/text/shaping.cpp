@@ -11,6 +11,7 @@
 #include FT_FREETYPE_H
 #include FT_MULTIPLE_MASTERS_H
 #include FT_OUTLINE_H
+#include FT_TRUETYPE_TABLES_H // TT_OS2: the strikeout metrics FT_FaceRec omits
 
 #include <hb-ft.h>
 #include <hb.h>
@@ -1277,8 +1278,29 @@ DecorationMetrics TextShaper::decorationMetrics(const FontFace& face, float size
     if (ft->units_per_EM > 0 && FT_IS_SCALABLE(ft)) {
         const float toPx = sizePx / static_cast<float>(ft->units_per_EM) * sized.scale;
         if (ft->underline_thickness != 0) dm.underlineThickness = ft->underline_thickness * toPx;
-        // underline_position is below the baseline (negative in font space) -> positive-down offset.
-        dm.underlineOffset = -ft->underline_position * toPx;
+        // underline_position is below the baseline (negative in font space) -> positive-down
+        // offset.
+        //
+        // ⚠ ONLY when the face states one. A `post` table with underlinePosition == 0 is not a face
+        // asking for an underline ON the baseline -- it is a face that left the field unfilled, and
+        // plenty do. Taking it literally drew the bar straight through the glyph bottoms, where it
+        // reads as "underline does nothing on this font" (user 2026-08-28). The default above (one
+        // eighth of the em below the baseline) is the honest answer for a face that does not say.
+        if (ft->underline_position != 0)
+            dm.underlineOffset = -ft->underline_position * toPx;
+        // Strikeout comes from OS/2 (yStrikeoutPosition / yStrikeoutSize), which FT_FaceRec does
+        // not surface the way it surfaces the `post` underline pair -- so it has to be read off the
+        // table directly. Before this it was pure guesswork (0.26 em above the baseline), which
+        // lands too low on a large-x-height face and clips the glyph's waist on a small one; a face
+        // that states its own position is the only one that knows. Same rule as underline: a zero
+        // is an unfilled field, not a strike through the baseline.
+        if (const auto* os2 = static_cast<const TT_OS2*>(FT_Get_Sfnt_Table(ft, FT_SFNT_OS2));
+            os2 != nullptr && os2->version != 0xFFFFu) {
+            if (os2->yStrikeoutSize != 0)
+                dm.strikeoutThickness = os2->yStrikeoutSize * toPx;
+            if (os2->yStrikeoutPosition != 0)
+                dm.strikeoutOffset = os2->yStrikeoutPosition * toPx;
+        }
     }
     return dm;
 }

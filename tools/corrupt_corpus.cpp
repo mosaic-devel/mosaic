@@ -268,9 +268,12 @@ core::text::TextBlock titleBlock(const std::string& words, float depth) {
     base.sizePx = 180.0f;
     base.tracking = 6.0f;
     core::text::TextBlock b = core::text::makeBlock(words, base);
+    // Gold: the COLOUR is the run's paint now (§10.4 -- a 3D solid shades with the layer's own
+    // colour), the material carries only the finish.
+    for (core::text::StyleRun& r : b.runs)
+        r.style.paint = core::vec::SolidPaint{common::ColorF{0.85f, 0.70f, 0.20f, 1.0f}};
     core::text::Extrude ex;
     ex.depth = depth;
-    ex.material.albedo = {0.85f, 0.70f, 0.20f, 1.0f};
     ex.material.metalness = 0.6f;
     ex.perspective = 18.0f;
     b.extrude = ex;

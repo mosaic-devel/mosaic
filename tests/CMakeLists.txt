@@ -18,6 +18,7 @@ add_executable(mosaic_tests
     test_tile_grid.cpp
     test_arrange.cpp
     test_document.cpp
+    test_drag_composite.cpp
     test_layer_marquee.cpp
     test_layer_mask_grid.cpp
     test_commands.cpp
@@ -217,6 +218,7 @@ add_executable(mosaic_tests
     test_text_edit.cpp
     test_extrude_mesh.cpp
     test_extrude_render.cpp
+    test_extrude_shape.cpp
     test_extrude_gpu.cpp
     test_texture_gpu.cpp
     test_blur_gpu.cpp

@@ -880,11 +880,12 @@ TEST_CASE("3D text overlays apply once, per face; shadows still composite; flat 
     core::text::CharStyle st;
     st.font.family = db.defaultFamily();
     st.sizePx = 48.0f;
-    st.setSolidFill({0, 0, 0, 1});
+    // RED is the run's own paint: a 3D solid shades with the layer's colour (§10.4), so the
+    // "red material" this case is about is set the same way a flat block's colour would be.
+    st.setSolidFill({1, 0, 0, 1});
     core::text::TextBlock solid = core::text::makeBlock("HH", st);
     solid.extrude = core::text::Extrude{};
-    solid.extrude->lightingEnabled = false;  // flat self-lit: exact colour asserts
-    solid.extrude->material.albedo = {1.0f, 0.0f, 0.0f, 1.0f};
+    solid.extrude->lightingEnabled = false; // flat self-lit: exact colour asserts
     tl->setBlock(solid);
 
     // A HALF-opacity green overlay over the red material: one application = (128, 128, 0); a

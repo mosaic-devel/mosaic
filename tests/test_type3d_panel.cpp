@@ -1,12 +1,14 @@
+#include "core/text/extrude.hpp"
 #include "ui/type3d_panel.hpp"
 #include "ui/type_panel.hpp"
-
-#include <doctest/doctest.h>
 
 #include <FL/Fl_Group.H>
 #include <FL/Fl_Scroll.H>
 #include <FL/Fl_Window.H>
-
+#include <doctest/doctest.h>
+#include <functional>
+#include <optional>
+#include <string>
 #include <vector>
 
 namespace {
@@ -49,6 +51,66 @@ TEST_CASE("the 3D popup's built height hugs its content") {
     // has to fit every row -- but the default footprint still hugs the content when space allows.
     CHECK(panel.h() <= 635);
     CHECK(panel.h() >= 400);
+}
+
+// The panel edits an `std::optional<Extrude>` and knows nothing about where it lives -- that is
+// what lets ONE popup serve the Type tool (a TextBlock's) and the shape/pen tools (a
+// vec::Object's; docs/vector-model.md §11). Drive the controls through the public thunk and assert
+// the funnel is handed the optional itself.
+//
+// applyControl APPLIES the control's current state (it is the widget's callback, not a toggle),
+// and reflect() is what puts the controls into a state -- so each case reflects the state the user
+// would be looking at, then fires the control.
+TEST_CASE("the 3D popup's edit funnel writes through an optional Extrude") {
+    using Extrude = mosaic::core::text::Extrude;
+    mosaic::ui::Type3dPanel panel;
+    panel.reapplyTheme(); // build()
+
+    // The subject is any optional<Extrude> the host cares to own. Here it is a local, which is the
+    // whole point: the panel has no idea it is not a TextBlock's or a vec::Object's.
+    std::optional<Extrude> subject;
+    std::string lastId;
+    int edits = 0;
+    panel.setOnExtrudeEdit(
+        [&](const std::string& id, const std::function<void(std::optional<Extrude>&)>& mut) {
+            lastId = id;
+            ++edits;
+            mut(subject);
+        });
+
+    constexpr int kEnable = 0; // Role::Enable
+    constexpr int kDepth = 1;  // Role::Depth
+
+    // Enable OFF (the box reflects as unchecked) clears the optional.
+    subject = Extrude{};
+    panel.reflect(std::nullopt, /*hasSession=*/true);
+    panel.applyControl(kEnable);
+    CHECK(edits == 1);
+    CHECK_FALSE(subject.has_value());
+    CHECK(lastId == "extrude:on"); // every edit carries its coalescing id
+
+    // Enable ON (checked) creates one where there was none.
+    subject.reset();
+    panel.reflect(Extrude{}, /*hasSession=*/true);
+    panel.applyControl(kEnable);
+    CHECK(edits == 2);
+    CHECK(subject.has_value());
+
+    // A VALUE edit with 3D off is a stale event -- dropped, never resurrecting the optional.
+    subject.reset();
+    panel.reflect(std::nullopt, /*hasSession=*/true);
+    panel.applyControl(kDepth);
+    CHECK_FALSE(subject.has_value());
+
+    // ... and with 3D on it writes through to the value the controls were seeded from.
+    Extrude seeded;
+    seeded.depth = 37.5f;
+    subject = Extrude{}; // deliberately NOT the seeded one: the write must come from the control
+    panel.reflect(seeded, /*hasSession=*/true);
+    panel.applyControl(kDepth);
+    REQUIRE(subject.has_value());
+    CHECK(subject->depth == doctest::Approx(37.5f));
+    CHECK(lastId == "extrude:depth");
 }
 
 // S30-e feedback round ("style gets the inner controls pushed to the left while 3d shrinks them
