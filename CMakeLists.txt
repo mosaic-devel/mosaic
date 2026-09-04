@@ -17,7 +17,7 @@ project(Mosaic
     # has to be able to name a build. So the version now moves only when something is RELEASED,
     # which is what SemVer asks of it. The short git commit is still appended (0.3.0+g<rev>) and is
     # still the exact identifier; the number in front of it is now the human-facing one.
-    VERSION 0.3.4
+    VERSION 0.3.5
     DESCRIPTION "A professional, GPU-accelerated, cross-platform image editor"
     HOMEPAGE_URL "https://github.com/mosaic-devel/mosaic"
     LANGUAGES CXX)
